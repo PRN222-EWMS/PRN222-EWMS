@@ -55,3 +55,17 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+# ====================================
+# Visual Studio files & User specifics
+# ====================================
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.vsidx
+DocumentLayout.json
+
+# Rider / JetBrains (dành cho bạn nào trong team dùng Rider)
+.idea/
+*.sln.iml
