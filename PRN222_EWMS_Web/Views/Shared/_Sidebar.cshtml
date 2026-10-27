@@ -1,0 +1,97 @@
+@using System
+@using System.Linq
+@using System.Security.Claims
+@{
+    var signedIn = User.Identity?.IsAuthenticated == true;
+    var actualRole = signedIn ? User.FindFirst(ClaimTypes.Role)?.Value : null;
+    var role = actualRole ?? "";
+    var displayName = signedIn ? (User.Identity?.Name ?? "Nhân viên") : "Xem trước giao diện";
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    var action = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+    var sections = new (string Heading, (string Label, string Icon, string Controller, string Action, string[] Roles)[] Items)[]
+    {
+        ("Không gian làm việc", new[]
+        {
+            ("Tổng quan", "bi-grid-1x2", "Home", "Index", Array.Empty<string>()),
+            ("Thông báo", "bi-bell", "Notice", "Index", Array.Empty<string>())
+        }),
+        ("Quản trị", new[]
+        {
+            ("Người dùng", "bi-people", "User", "Index", new[] { "ADMIN" }),
+            ("Tạo tài khoản", "bi-person-plus", "User", "Create", new[] { "ADMIN" }),
+            ("Kho hàng", "bi-buildings", "Warehouse", "Index", new[] { "CEO", "MANAGER" })
+        }),
+        ("Danh mục & giao dịch", new[]
+        {
+            ("Sản phẩm", "bi-box-seam", "Product", "Index", new[] { "CEO", "MANAGER", "PURCHASING_STAFF" }),
+            ("Nhà cung cấp", "bi-truck", "Supplier", "Index", new[] { "PURCHASING_STAFF" }),
+            ("Đơn mua hàng", "bi-bag-plus", "PurchaseOrder", "Index", new[] { "PURCHASING_STAFF", "MANAGER" }),
+            ("Đơn bán hàng", "bi-receipt", "SalesOrder", "Index", new[] { "SALES_STAFF", "MANAGER" }),
+            ("Khách hàng", "bi-person-lines-fill", "Customer", "Index", new[] { "SALES_STAFF" })
+        }),
+        ("Vận hành kho", new[]
+        {
+            ("Nhập kho", "bi-box-arrow-in-down", "Inbound", "Index", new[] { "WAREHOUSE_STAFF", "MANAGER" }),
+            ("Xuất kho", "bi-box-arrow-up", "Outbound", "Index", new[] { "WAREHOUSE_STAFF", "MANAGER" }),
+            ("Chuyển kho", "bi-arrow-left-right", "Transfer", "Index", new[] { "MANAGER", "WAREHOUSE_STAFF" }),
+            ("Kiểm kê", "bi-clipboard-check", "Stocktake", "Index", new[] { "MANAGER", "WAREHOUSE_STAFF" }),
+            ("Duyệt điều chỉnh", "bi-check2-square", "InventoryAdjustment", "Index", new[] { "CEO" })
+        })
+    };
+}
+
+<aside class="ewms-sidebar" id="ewmsSidebar" aria-label="Điều hướng chính">
+    <div class="ewms-brand">
+        <div class="ewms-brand-icon" aria-hidden="true">📦</div>
+        <div class="ewms-brand-copy"><strong>EWMS</strong><small>Warehouse workspace</small></div>
+        <button class="ewms-icon-button ewms-sidebar-close" id="ewmsCloseSidebar" type="button" aria-label="Đóng menu"><i class="bi bi-x-lg"></i></button>
+    </div>
+
+    <nav class="ewms-nav" aria-label="Menu theo vai trò">
+        @foreach (var section in sections)
+        {
+            var allowedItems = section.Items.Where(i => i.Roles.Length == 0 || i.Roles.Contains(role, StringComparer.OrdinalIgnoreCase)).ToArray();
+            if (allowedItems.Length == 0) { continue; }
+            <div class="ewms-nav-section">
+                <div class="ewms-nav-heading">@(section.Heading)</div>
+                @foreach (var item in allowedItems)
+                {
+                    var active = string.Equals(controller, item.Controller, StringComparison.OrdinalIgnoreCase)
+                              && string.Equals(action, item.Action, StringComparison.OrdinalIgnoreCase);
+                    <a class="ewms-nav-link @(active ? "is-active" : "")"
+                       asp-controller="@item.Controller" asp-action="@item.Action"
+                       aria-current="@(active ? "page" : null)"
+                       title="@item.Label">
+                        <i class="bi @item.Icon" aria-hidden="true"></i>
+                        <span class="ewms-nav-label">@item.Label</span>
+                    </a>
+                }
+            </div>
+        }
+        @if (string.IsNullOrEmpty(role))
+        {
+            <p class="ewms-nav-empty">Đăng nhập để xem các chức năng phù hợp với vai trò của bạn.</p>
+        }
+    </nav>
+
+    <div class="ewms-sidebar-footer">
+        @if (signedIn)
+        {
+            <details class="ewms-account-menu" id="ewmsAccountMenu">
+                <summary class="ewms-account-trigger" aria-label="Mở menu tài khoản" title="Menu tài khoản">
+                    <span class="ewms-avatar" aria-hidden="true"><i class="bi bi-person"></i></span>
+                    <span class="ewms-profile-text"><strong>@displayName</strong><small>@role</small></span>
+                    <i class="bi bi-chevron-up ewms-account-chevron" aria-hidden="true"></i>
+                </summary>
+                <div class="ewms-account-popup">
+                    <a asp-controller="Account" asp-action="Profile"><i class="bi bi-person-circle" aria-hidden="true"></i>Profile</a>
+                    <form asp-controller="Authentication" asp-action="Logout" method="post">
+                        <button type="submit"><i class="bi bi-box-arrow-right" aria-hidden="true"></i>Đăng xuất</button>
+                    </form>
+                </div>
+            </details>
+        }
+    </div>
+</aside>
+<div id="ewmsSidebarOverlay" class="ewms-sidebar-overlay" aria-hidden="true"></div>
+

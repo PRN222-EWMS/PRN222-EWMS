@@ -1,8 +1,8 @@
-﻿@{
-    ViewData["Title"] = "Home Page";
+@{ ViewData["Title"] = "Tổng quan"; }
+<p class="eyebrow">EWMS WORKSPACE</p>
+<h1>Xin chào, @User.Identity?.Name</h1>
+<p class="muted">Chọn chức năng trong menu để bắt đầu làm việc.</p>
+@if (User.IsInRole("ADMIN"))
+{
+    <section class="workspace-card"><h2>Quản lý thành viên</h2><p class="muted">Tạo tài khoản và phân công vai trò cho đội ngũ.</p><a class="workspace-button" asp-controller="User" asp-action="Create">Tạo tài khoản</a></section>
 }
-
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
-</div>

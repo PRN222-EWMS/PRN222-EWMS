@@ -1,0 +1,13 @@
+@model List<PRN222_EWMS_Web.Models.User>
+@{ ViewData["Title"] = "Người dùng"; }
+<div class="workspace-heading"><div><p class="eyebrow">QUẢN TRỊ</p><h1>Người dùng</h1><p class="muted">Thành viên và vai trò trong hệ thống.</p></div><a class="workspace-button" asp-action="Create">Tạo tài khoản</a></div>
+@if (TempData["Success"] is string message) { <div class="workspace-notice" role="status">@message</div> }
+<div class="workspace-card table-wrap">
+<table class="workspace-table"><thead><tr><th>Thành viên</th><th>Tên đăng nhập</th><th>Vai trò</th><th>Kho</th><th>Trạng thái</th></tr></thead><tbody>
+@foreach (var account in Model)
+{
+<tr><td><strong>@account.FullName</strong><br /><span class="muted">@account.Email</span></td><td>@account.Username</td><td><span class="role-badge">@account.Role.RoleName</span></td><td>@(account.Warehouse?.WarehouseName ?? "—")</td><td>@account.Status</td></tr>
+}
+</tbody></table>
+@if (Model.Count == 0) { <p class="muted">Chưa có tài khoản.</p> }
+</div>

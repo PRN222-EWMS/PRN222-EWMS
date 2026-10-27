@@ -1,0 +1,48 @@
+@model PRN222_EWMS_Web.ViewModels.Authentication.LoginViewModel
+@{
+    Layout = "_LoginLayout";
+    ViewData["Title"] = "Đăng nhập";
+    ViewData["FullWidthAuth"] = true;
+}
+<section class="login-intro" aria-labelledby="login-intro-title">
+    <p class="login-eyebrow">ELECTRONICS WAREHOUSE MANAGEMENT</p>
+    <h1 id="login-intro-title">Mọi thứ.<br />Đúng chỗ.</h1>
+    <p class="login-description">Một không gian chung cho đơn mua hàng,<br />nhận hàng và vận hành kho mỗi ngày.</p>
+    <div class="login-art" aria-hidden="true">
+        <div class="login-document login-document-order">
+            <span class="login-sticker login-sticker-document">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v5h4M9 12h6M9 16h6" /></svg>
+            </span>
+            <strong>Đơn mua hàng</strong>
+            <span class="login-document-line"></span>
+            <span class="login-document-line login-document-line-short"></span>
+            <span class="login-document-state"><span></span>Sẵn sàng nhận hàng</span>
+        </div>
+        <div class="login-document login-document-stock">
+            <span class="login-sticker login-sticker-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m3 7 9-4 9 4v11l-9 4-9-4zM3 7l9 4 9-4M12 11v11M7.5 5l9 4" /></svg>
+            </span>
+            <strong>Đúng hàng. Đúng vị trí.</strong>
+            <span class="login-document-caption">Mỗi serial đều được theo dõi.</span>
+            <svg class="login-document-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 12 4 4L19 6" /></svg>
+        </div>
+    </div>
+</section>
+<section class="login-card" aria-labelledby="login-title">
+    <div class="login-card-icon" aria-hidden="true">📦</div>
+    <h2 id="login-title">Chào mừng trở lại.</h2>
+    <p class="login-card-description">Đăng nhập để tiếp tục công việc của bạn.</p>
+    @if (TempData["Success"] is string message)
+    {
+        <div class="workspace-notice" role="status">@message</div>
+    }
+    <form asp-action="Login" method="post" class="workspace-form login-form">
+        <input asp-for="ReturnUrl" type="hidden" />
+        <div asp-validation-summary="ModelOnly" class="validation-message" role="alert"></div>
+        <div><label asp-for="Username">Tài khoản</label><input asp-for="Username" autocomplete="username" autofocus /><span asp-validation-for="Username"></span></div>
+        <div><label asp-for="Password"></label><input asp-for="Password" autocomplete="current-password" /><span asp-validation-for="Password"></span></div>
+        <label class="checkbox-row"><input asp-for="RememberMe" /> Ghi nhớ đăng nhập</label>
+        <button class="workspace-button login-submit" type="submit">Đăng nhập<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6" /></svg></button>
+    </form>
+</section>
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

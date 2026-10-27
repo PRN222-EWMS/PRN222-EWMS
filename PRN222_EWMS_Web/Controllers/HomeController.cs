@@ -23,6 +23,7 @@ namespace PRN222_EWMS_Web.Controllers
             return View();
         }
 
+        [Microsoft.AspNetCore.Authorization.AllowAnonymous]
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
         public IActionResult Error()
         {

@@ -1,0 +1,27 @@
+@{ var fullWidth = ViewData["FullWidthAuth"] is true; }
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - EWMS</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/workspace.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/login.css" asp-append-version="true" />
+</head>
+<body class="@(fullWidth ? "login-page" : null)">
+    @if (fullWidth)
+    {
+        <header class="login-header">
+            <a class="login-brand" asp-controller="Authentication" asp-action="Login" aria-label="EWMS - Đăng nhập"><span class="login-brand-mark" aria-hidden="true">📦</span><strong>EWMS</strong></a>
+        </header>
+    }
+    <main class="@(fullWidth ? "login-shell" : "auth-wrap")" id="main-content">@RenderBody()</main>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/password-toggle.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
+
