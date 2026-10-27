@@ -1,0 +1,56 @@
+@model PRN222_EWMS_Web.ViewModels.Account.ProfileViewModel
+@{ ViewData["Title"] = "Profile"; }
+
+<div class="workspace-heading">
+    <div>
+        <p class="eyebrow">TÀI KHOẢN CỦA BẠN</p>
+        <h1>Profile</h1>
+        <p class="muted">Quản lý thông tin cá nhân và mật khẩu đăng nhập.</p>
+    </div>
+</div>
+@if (TempData["Success"] is string message)
+{
+    <div class="workspace-notice" role="status">@message</div>
+}
+<div class="profile-sections">
+    <section class="workspace-card" aria-labelledby="profile-heading">
+        <h2 id="profile-heading">Thông tin cá nhân</h2>
+        <dl class="profile-details">
+            <div><dt>Tên đăng nhập</dt><dd>@Model.Username</dd></div>
+            <div><dt>Vai trò</dt><dd><span class="role-badge">@Model.RoleName</span></dd></div>
+            @if (Model.RoleName == "WAREHOUSE_STAFF")
+            {
+                <div><dt>Kho làm việc</dt><dd>@(Model.WarehouseName ?? "Chưa phân công")</dd></div>
+            }
+        </dl>
+        <form asp-action="UpdateProfile" method="post" class="workspace-form">
+            <div asp-validation-summary="ModelOnly" class="validation-message" role="alert"></div>
+            <div class="form-grid">
+                <div><label asp-for="Profile.FullName"></label><input asp-for="Profile.FullName" autocomplete="name" /><span asp-validation-for="Profile.FullName"></span></div>
+                <div><label asp-for="Profile.Email"></label><input asp-for="Profile.Email" autocomplete="email" /><span asp-validation-for="Profile.Email"></span></div>
+                <div><label asp-for="Profile.Phone"></label><input asp-for="Profile.Phone" autocomplete="tel" /><span asp-validation-for="Profile.Phone"></span></div>
+            </div>
+            <div class="form-actions"><button class="workspace-button" type="submit">Lưu thông tin</button></div>
+        </form>
+    </section>
+    <section class="workspace-card" id="change-password" aria-labelledby="password-heading">
+        <h2 id="password-heading">Đổi mật khẩu</h2>
+        <p class="muted">Mật khẩu mới từ 8 đến 128 ký tự.</p>
+        <form asp-action="ChangePassword" method="post" class="workspace-form">
+            <div asp-validation-summary="ModelOnly" class="validation-message" role="alert"></div>
+            <div class="password-fields">
+                <div><label asp-for="Password.CurrentPassword"></label><input asp-for="Password.CurrentPassword" autocomplete="current-password" /><span asp-validation-for="Password.CurrentPassword"></span></div>
+                <div><label asp-for="Password.NewPassword"></label><input asp-for="Password.NewPassword" autocomplete="new-password" /><span asp-validation-for="Password.NewPassword"></span></div>
+                <div><label asp-for="Password.ConfirmPassword"></label><input asp-for="Password.ConfirmPassword" autocomplete="new-password" /><span asp-validation-for="Password.ConfirmPassword"></span></div>
+            </div>
+            <div class="form-actions"><button class="workspace-button" type="submit">Đổi mật khẩu</button></div>
+        </form>
+    </section>
+</div>
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    @if (ViewData["PasswordError"] is true)
+    {
+        <script>document.getElementById('change-password').scrollIntoView({ block: 'start' });</script>
+    }
+}

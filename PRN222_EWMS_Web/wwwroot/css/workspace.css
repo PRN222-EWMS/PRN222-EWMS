@@ -1,0 +1,24 @@
+:root{--workspace-blue:#0075de;--workspace-line:#e6e6e6;--workspace-muted:#615d59}
+body{margin:0;color:#31302e;font-family:Inter,"Segoe UI",system-ui,sans-serif;background:#f6f5f4}
+h1{font-size:40px;font-weight:700;line-height:1.1;letter-spacing:-1px;margin:0 0 16px}h2{font-size:26px;font-weight:700;letter-spacing:-.625px}
+.muted{color:var(--workspace-muted)}.eyebrow{font-size:12px;font-weight:600;letter-spacing:.125px;margin-bottom:12px}.workspace-mark{font-size:36px;margin-bottom:24px}
+.auth-wrap{width:calc(100% - 32px);max-width:460px;margin:10vh auto;background:#fff;border:1px solid var(--workspace-line);border-radius:12px;padding:32px}
+.workspace-form{display:grid;gap:24px;margin-top:28px}.workspace-form label{display:block;font-size:14px;font-weight:500;margin-bottom:8px}.workspace-form input:not([type=checkbox]),.workspace-form select{display:block;width:100%;padding:10px 12px;border:1px solid #d4d3d1;border-radius:4px;background:#fff;color:#31302e;font:inherit;min-height:44px}.workspace-form input:focus,.workspace-form select:focus{outline:2px solid var(--workspace-blue);outline-offset:2px}.workspace-form .checkbox-row{display:flex;gap:8px;align-items:center;margin:0}.checkbox-row input{width:16px;height:16px}
+.workspace-button{display:inline-flex;align-items:center;justify-content:center;background:var(--workspace-blue);color:#fff;border:0;border-radius:9999px;padding:10px 22px;text-decoration:none;font-weight:500;min-height:44px}.workspace-button:hover{background:#005bab;color:#fff}.workspace-button:focus-visible,.workspace-link:focus-visible{outline:2px solid #0075de;outline-offset:4px}.workspace-link{color:var(--workspace-muted);text-decoration:none;padding:10px}
+.workspace-heading{display:flex;justify-content:space-between;gap:24px;align-items:center;margin-bottom:28px}.workspace-card{background:#fff;border:1px solid var(--workspace-line);border-radius:12px;padding:24px;max-width:1000px}.workspace-card .workspace-form{margin:0}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}.form-actions{display:flex;align-items:center;gap:12px;border-top:1px solid var(--workspace-line);padding-top:24px}.field-validation-error,.validation-message{color:#b42318;font-size:14px}.validation-summary-valid,.field-validation-valid{display:none}.input-validation-error{border-color:#b42318!important}.workspace-notice{background:#eaf6ee;padding:16px;border-radius:8px;margin-bottom:24px}.table-wrap{overflow-x:auto}.workspace-table{width:100%;border-collapse:collapse;font-size:15px}.workspace-table th{background:#f6f5f4;font-size:12px;color:#615d59;font-weight:600}.workspace-table th,.workspace-table td{text-align:left;padding:16px;border-bottom:1px solid var(--workspace-line)}.role-badge{font-size:12px;border:1px solid var(--workspace-line);border-radius:999px;padding:4px 8px;color:#0075de;white-space:nowrap}
+@media(max-width:640px){h1{font-size:32px}.form-grid{grid-template-columns:1fr}.workspace-heading{align-items:flex-start;flex-direction:column}.auth-wrap{padding:24px;margin:5vh auto}.workspace-card{padding:16px}}
+
+.password-input { position: relative; }
+.workspace-form .password-input input { padding-right: 48px; }
+.password-toggle { position: absolute; top: 2px; right: 3px; display: grid; place-items: center; width: 40px; height: calc(100% - 4px); min-height: 40px; border: 0; border-radius: 4px; background: transparent; color: var(--workspace-muted); cursor: pointer; }
+.password-toggle:hover { color: #31302e; background: #f6f5f4; }
+.password-toggle:focus-visible { outline: 2px solid var(--workspace-blue); outline-offset: -2px; }
+.password-toggle svg { width: 20px; height: 20px; }
+.password-eye-slash { display: none; }
+.password-toggle[aria-pressed="true"] .password-eye-slash { display: block; }
+.profile-sections { display: grid; gap: 24px; }
+.profile-details { display: flex; flex-wrap: wrap; gap: 24px 48px; padding: 20px 0; margin-bottom: 24px; border-bottom: 1px solid var(--workspace-line); }
+.profile-details dt { font-size: 12px; font-weight: 400; color: var(--workspace-muted); margin-bottom: 8px; }
+.profile-details dd { margin: 0; overflow-wrap: anywhere; }
+.password-fields { display: grid; gap: 24px; max-width: 460px; }
+#change-password { scroll-margin-top: 24px; }
