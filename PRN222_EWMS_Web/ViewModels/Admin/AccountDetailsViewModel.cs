@@ -2,6 +2,8 @@ namespace PRN222_EWMS_Web.ViewModels.Admin;
 
 public class AccountDetailsViewModel
 {
+    public int UserId { get; set; }
+
     public string FullName { get; set; } = "";
 
     public string? Email { get; set; }

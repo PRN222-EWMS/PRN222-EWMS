@@ -62,19 +62,21 @@ Danh sách lọc phải bao gồm cả ba trạng thái. Chi tiết hiển thị
 
 ### Công việc đang xử lý
 
-- Không cho thay đổi `Role`, `Status` hoặc `Warehouse` nếu tài khoản đang có công việc cần tiếp tục, bàn giao hoặc hoàn tất. Hiển thị lỗi rõ ràng để Admin biết phải xử lý công việc trước.
-- Khi có công việc đang xử lý, vẫn cho phép lưu các thay đổi không làm thay đổi phân công: username, họ tên, email và số điện thoại.
+- Nếu workflow hiện hữu xác định rõ tài khoản đang có công việc cần tiếp tục, bàn giao hoặc hoàn tất, không cho thay đổi `Role`, `Status` hoặc `Warehouse`; hiển thị lỗi rõ ràng để Admin biết phải xử lý công việc trước.
+- Khi có công việc đang xử lý, vẫn cho phép lưu các thay đổi không làm thay đổi phân công: họ tên, email và số điện thoại.
 - Chỉ kiểm tra các công việc đang hoạt động/được phân công cho user; không coi mọi chứng từ lịch sử có `UserId` là công việc đang xử lý.
 - Trước khi triển khai kiểm tra này, rà các workflow, entity, trạng thái và quan hệ đang có trong repo cùng tài liệu nghiệp vụ. Dùng đúng trạng thái đang được định nghĩa cho từng workflow; không tự thêm trạng thái hoặc suy diễn trạng thái hoàn tất.
+- Chỉ chặn thay đổi phân công khi code hiện hữu xác định rõ công việc active theo trạng thái/quan hệ của workflow đó. Không suy diễn trạng thái từ chứng từ lịch sử hoặc chỉ từ navigation của entity.
 - Các module xử lý nghiệp vụ chưa có code thì không được giả lập rằng hệ thống đã phát hiện đầy đủ công việc. Không thêm bảng/schema để lấp chỗ trống. Ghi rõ trong kết quả triển khai các workflow đã kiểm tra được và giới hạn còn lại nếu schema/code hiện hữu không đủ căn cứ.
+- Tại thời điểm cập nhật tài liệu này, repo chưa có workflow/service để xác định công việc active được giao cho user. Vì vậy, không tuyên bố đã chặn thay đổi role/status/warehouse theo điều kiện công việc dở dang; đây là giới hạn đã biết cho tới khi các workflow liên quan có logic trạng thái đủ căn cứ.
 
 ## Chức năng 1: Danh sách tài khoản
 
 ### Tìm kiếm
 
-- Có một ô tìm kiếm tra đồng thời `Username`, `FullName` và `Email`.
+- Có một ô tìm kiếm tra đồng thời `FullName` và `Email`.
 - So khớp chuỗi con, không phân biệt hoa thường. Với email null thì bỏ qua field đó.
-- Search và các filter kết hợp theo AND; trong điều kiện search, ba field kết hợp theo OR.
+- Search và các filter kết hợp theo AND; trong điều kiện search, họ tên và email kết hợp theo OR.
 - Submit search mới đưa trang về trang đầu.
 
 ### Bộ lọc
@@ -95,7 +97,7 @@ Danh sách lọc phải bao gồm cả ba trạng thái. Chi tiết hiển thị
 
 ### Nội dung và thao tác
 
-- Hiển thị tối thiểu họ tên, username, email, role, kho và trạng thái.
+- Hiển thị tối thiểu họ tên, email, role, kho và trạng thái.
 - Mỗi dòng có thao tác mở Details và Edit. Giữ nút tạo tài khoản hiện có.
 - Empty state phân biệt “chưa có tài khoản” với “không có kết quả khớp điều kiện” khi phù hợp.
 - Không đưa thông tin password/hash vào danh sách.
@@ -103,7 +105,7 @@ Danh sách lọc phải bao gồm cả ba trạng thái. Chi tiết hiển thị
 ## Chức năng 2: Chi tiết tài khoản
 
 - Mở bằng mã tài khoản; nếu không tồn tại, trả `NotFound`.
-- Hiển thị các thông tin account có ý nghĩa với Admin: User ID, username, họ tên, email, số điện thoại, role, trạng thái, kho làm việc nếu có và thời điểm tạo.
+- Hiển thị các thông tin account có ý nghĩa với Admin: họ tên, email, số điện thoại, role, trạng thái, kho làm việc nếu có và thời điểm tạo.
 - Với tài khoản không phải `WAREHOUSE_STAFF`, trình bày kho là không áp dụng; không hiển thị giá trị kho sai lệch.
 - Với tài khoản `WAREHOUSE_STAFF`, hiển thị kho đã gán; nếu không có kho do dữ liệu cũ, nêu rõ chưa được phân công.
 - Không hiển thị `PasswordHash`, cookie, claims hoặc `RowVersion` dạng dữ liệu người dùng.
@@ -113,8 +115,7 @@ Danh sách lọc phải bao gồm cả ba trạng thái. Chi tiết hiển thị
 
 ### Field được sửa
 
-- `Username`, `FullName`, `Email`, `Phone`, `RoleId`, `Status`, `WarehouseId`.
-- Username được sửa; phải tuân theo quy tắc ký tự/độ dài hiện có và duy nhất, loại trừ chính tài khoản đang sửa.
+- `FullName`, `Email`, `Phone`, `RoleId`, `Status`, `WarehouseId`.
 - Email là tùy chọn, phải hợp lệ và duy nhất nếu có giá trị; giá trị rỗng lưu thành `NULL` theo quy ước hiện có.
 - Họ tên bắt buộc. Số điện thoại tùy chọn và dùng validation hiện có.
 - Mật khẩu không có trong form và không bị thay đổi khi lưu Edit.
@@ -124,10 +125,10 @@ Danh sách lọc phải bao gồm cả ba trạng thái. Chi tiết hiển thị
 
 - Validate ở server kể cả khi giao diện đã validate phía client.
 - Khi role là `WAREHOUSE_STAFF`, yêu cầu chọn kho active. Khi role khác, xóa `WarehouseId` phía server bất kể request gửi gì.
-- Từ chối role `ADMIN`, trạng thái không hợp lệ, role không tồn tại, kho không tồn tại/ngừng hoạt động, username trùng hoặc email trùng.
-- Bắt lỗi unique constraint SQL Server để xử lý trường hợp hai request cùng lưu username/email; trả lỗi thân thiện, không lộ SQL.
+- Không cho gán mới role `ADMIN`; tài khoản hiện là Admin được giữ role hiện tại hoặc đổi sang role khác. Từ chối trạng thái không hợp lệ, role không tồn tại, kho không tồn tại/ngừng hoạt động hoặc email trùng.
+- Bắt lỗi unique constraint SQL Server cho email để xử lý trường hợp hai request cùng lưu; trả lỗi thân thiện, không lộ SQL.
 - Đưa `RowVersion` vào ViewModel dưới dạng giá trị ẩn và dùng nó để phát hiện cập nhật đồng thời. Nếu bản ghi đổi sau khi form được mở, không ghi đè âm thầm; báo dữ liệu đã thay đổi và yêu cầu tải lại.
-- Kiểm tra công việc đang xử lý ngay trước lúc lưu. Nếu một field phân công bị thay đổi và điều kiện chặn áp dụng, từ chối lưu thay đổi phân công. Các field liên hệ được phép cập nhật vẫn có thể lưu nếu không vi phạm validation.
+- Ngay trước lúc lưu, dùng bộ kiểm tra công việc active nếu repo có workflow với trạng thái/quan hệ đủ căn cứ. Nếu một field phân công bị thay đổi và điều kiện chặn áp dụng, từ chối lưu thay đổi phân công. Các field liên hệ được phép cập nhật vẫn có thể lưu nếu không vi phạm validation.
 - Sau khi lưu, dùng Post/Redirect/Get, báo thành công bằng notice theo style hiện có và giữ đường quay lại danh sách.
 - Khi validation/lưu lỗi, giữ giá trị hợp lệ đã nhập, tải lại danh sách role/kho và không trả lại password/hash.
 
@@ -148,7 +149,7 @@ Triển khai trong shell và component hiện có: `Views/Shared/_Layout.cshtml`
 - Controller hiện tại: `Controllers/Admin/UserController.cs`, đã có `[Authorize(Roles = "ADMIN")]`, Index và Create.
 - Service hiện tại: `Services/Admin/IUserService.cs`, `Services/Admin/UserService.cs`.
 - Repository hiện tại: `Repositories/User/IUserRepository.cs`, `Repositories/User/UserRepository.cs`.
-- Entity là `Models/Entities/User.cs`; role và warehouse được nối qua navigation. EF context có unique index cho Username, Email có giá trị và RowVersion concurrency.
+- Entity là `Models/Entities/User.cs`; role và warehouse được nối qua navigation. EF context có unique index cho Email có giá trị và RowVersion concurrency.
 - View hiện tại ở `Views/User/Index.cshtml` và `Views/User/Create.cshtml`. ViewModel tạo tài khoản nằm trong `ViewModels/Admin/`.
 - Mở rộng các tầng và DI hiện có, giữ controller mỏng; query/filter/page thuộc repository/service thay vì để Razor xử lý.
 - Danh sách nên dùng query model và DTO/ViewModel phân trang thay vì trả toàn bộ entity. Giữ `AsNoTracking` cho truy vấn đọc.
@@ -159,13 +160,13 @@ Triển khai trong shell và component hiện có: `Views/Shared/_Layout.cshtml`
 ## Tiêu chí nghiệm thu
 
 1. Người không phải Admin không thể truy cập list/details/edit bằng URL hoặc POST trực tiếp.
-2. Admin tìm được tài khoản theo username, họ tên hoặc email bằng chuỗi con; kết quả không phân biệt hoa thường.
+2. Admin tìm được tài khoản theo họ tên hoặc email bằng chuỗi con; kết quả không phân biệt hoa thường.
 3. Role, trạng thái và kho lọc độc lập và kết hợp đồng thời; trạng thái/kho không hoạt động vẫn tìm được tài khoản cũ.
 4. Danh sách phân trang 10 dòng, mới tạo trước, giữ query khi chuyển trang và khi quay lại từ details/edit.
 5. Details hiển thị role, status và warehouse phù hợp; không lộ password/hash.
-6. Edit cập nhật được các field đã chốt, username/email được kiểm tra duy nhất, role ADMIN bị từ chối ở server và mật khẩu không đổi.
+6. Edit cập nhật được các field đã chốt, email được kiểm tra duy nhất, không cho gán mới role ADMIN ở server và mật khẩu không đổi.
 7. Warehouse Staff luôn cần kho ACTIVE; đổi sang role khác luôn xóa warehouse assignment.
-8. Không thể đổi role/status/warehouse khi user còn công việc đang xử lý; các field liên hệ không gây đổi phân công vẫn sửa được.
+8. Chặn đổi role/status/warehouse khi có căn cứ từ workflow hiện hữu cho thấy user còn công việc đang xử lý; các field liên hệ không gây đổi phân công vẫn sửa được. Nếu repo chưa có workflow đủ căn cứ, phải nêu rõ giới hạn thay vì suy diễn trạng thái.
 9. Lỗi validation, trùng dữ liệu và concurrency được phản hồi rõ; không ghi đè dữ liệu đồng thời âm thầm.
 10. Giao diện nhất quán với `DESIGN-notion.md` và các component EWMS hiện có, hoạt động trên màn hình nhỏ và có thể thao tác bằng bàn phím.
 

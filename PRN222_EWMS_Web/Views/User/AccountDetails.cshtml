@@ -9,13 +9,20 @@
         <h1>Chi tiết tài khoản</h1>
         <p class="muted">Thông tin hồ sơ, vai trò và trạng thái tài khoản.</p>
     </div>
-    <a class="workspace-link" asp-controller="AccountList" asp-action="Index"
-       asp-route-search="@Model.ReturnFilter.Search" asp-route-roleId="@Model.ReturnFilter.RoleId"
-       asp-route-status="@Model.ReturnFilter.Status" asp-route-warehouseId="@Model.ReturnFilter.WarehouseId"
-       asp-route-page="@Model.ReturnFilter.Page">
-        <i class="bi bi-arrow-left" aria-hidden="true"></i> Quay lại danh sách
-    </a>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="workspace-button" asp-controller="AccountList" asp-action="Edit" asp-route-id="@Model.UserId" asp-route-search="@Model.ReturnFilter.Search" asp-route-roleId="@Model.ReturnFilter.RoleId" asp-route-status="@Model.ReturnFilter.Status" asp-route-warehouseId="@Model.ReturnFilter.WarehouseId" asp-route-page="@Model.ReturnFilter.Page">
+            <i class="bi bi-pencil" aria-hidden="true"></i> Chỉnh sửa
+        </a>
+        <a class="workspace-link" asp-controller="AccountList" asp-action="Index" asp-route-search="@Model.ReturnFilter.Search" asp-route-roleId="@Model.ReturnFilter.RoleId" asp-route-status="@Model.ReturnFilter.Status" asp-route-warehouseId="@Model.ReturnFilter.WarehouseId" asp-route-page="@Model.ReturnFilter.Page">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i> Quay lại danh sách
+        </a>
+    </div>
 </div>
+
+@if (TempData["Success"] is string message)
+{
+    <div class="workspace-notice" role="status">@message</div>
+}
 
 <section class="workspace-card" aria-label="Thông tin tài khoản">
     <div class="workspace-heading">

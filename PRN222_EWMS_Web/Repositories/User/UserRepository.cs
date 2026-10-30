@@ -19,9 +19,7 @@ public class UserRepository(EwmsDbContext db) : IUserRepository
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search!;
-            query = query.Where(u =>
-                EF.Functions.Collate(u.Username, "Latin1_General_100_CI_AS").Contains(term)
-                || EF.Functions.Collate(u.FullName, "Latin1_General_100_CI_AS").Contains(term)
+            query = query.Where(u => EF.Functions.Collate(u.FullName, "Latin1_General_100_CI_AS").Contains(term)
                 || (u.Email != null && EF.Functions.Collate(u.Email, "Latin1_General_100_CI_AS").Contains(term)));
         }
         if (roleId.HasValue) query = query.Where(u => u.RoleId == roleId.Value);

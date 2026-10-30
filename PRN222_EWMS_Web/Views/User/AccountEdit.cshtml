@@ -1,0 +1,79 @@
+@model PRN222_EWMS_Web.ViewModels.Admin.EditAccountViewModel
+@{
+    ViewData["Title"] = "Chỉnh sửa tài khoản";
+    var warehouseRoleId = Model.Roles.FirstOrDefault(role => role.Text == "WAREHOUSE_STAFF")?.Value;
+    var isWarehouseStaff = warehouseRoleId is not null && Model.RoleId.ToString() == warehouseRoleId;
+}
+
+<div class="workspace-heading">
+    <div>
+        <p class="eyebrow">QUẢN TRỊ / TÀI KHOẢN</p>
+        <h1>Chỉnh sửa tài khoản</h1>
+        <p class="muted">Cập nhật thông tin, vai trò, trạng thái và kho làm việc.</p>
+    </div>
+    <a class="workspace-link" asp-controller="AccountList" asp-action="Details" asp-route-id="@Model.UserId" asp-route-search="@Model.ReturnFilter.Search" asp-route-roleId="@Model.ReturnFilter.RoleId" asp-route-status="@Model.ReturnFilter.Status" asp-route-warehouseId="@Model.ReturnFilter.WarehouseId" asp-route-page="@Model.ReturnFilter.Page">
+        <i class="bi bi-arrow-left" aria-hidden="true"></i> Hủy
+    </a>
+</div>
+
+<section class="workspace-card" aria-label="Chỉnh sửa tài khoản">
+    <form asp-controller="AccountList" asp-action="Edit" asp-route-id="@Model.UserId" method="post" class="workspace-form mt-0" data-warehouse-role-id="@warehouseRoleId">
+        <input asp-for="UserId" type="hidden" />
+        <input asp-for="RowVersion" type="hidden" />
+        <input asp-for="ReturnFilter.Search" type="hidden" />
+        <input asp-for="ReturnFilter.RoleId" type="hidden" />
+        <input asp-for="ReturnFilter.Status" type="hidden" />
+        <input asp-for="ReturnFilter.WarehouseId" type="hidden" />
+        <input asp-for="ReturnFilter.Page" type="hidden" />
+
+        <div asp-validation-summary="All" class="validation-message" role="alert"></div>
+        <div class="form-grid">
+            <div>
+                <label asp-for="FullName"></label>
+                <input asp-for="FullName" autocomplete="name" />
+                <span asp-validation-for="FullName"></span>
+            </div>
+            <div>
+                <label asp-for="Email"></label>
+                <input asp-for="Email" autocomplete="email" />
+                <span asp-validation-for="Email"></span>
+            </div>
+            <div>
+                <label asp-for="Phone"></label>
+                <input asp-for="Phone" autocomplete="tel" />
+                <span asp-validation-for="Phone"></span>
+            </div>
+            <div>
+                <label asp-for="RoleId"></label>
+                <select asp-for="RoleId" asp-items="Model.Roles">
+                    <option value="">Chọn vai trò</option>
+                </select>
+                <span asp-validation-for="RoleId"></span>
+            </div>
+            <div>
+                <label asp-for="Status"></label>
+                <select asp-for="Status" asp-items="Model.Statuses">
+                    <option value="">Chọn trạng thái</option>
+                </select>
+                <span asp-validation-for="Status"></span>
+            </div>
+            <div>
+                <label asp-for="WarehouseId"></label>
+                <select asp-for="WarehouseId" asp-items="Model.Warehouses" disabled="@(!isWarehouseStaff)" required="@isWarehouseStaff" aria-describedby="warehouse-help">
+                    <option value="">@(isWarehouseStaff ? "Chọn kho làm việc" : "Chỉ dành cho nhân viên kho")</option>
+                </select>
+                <span asp-validation-for="WarehouseId"></span>
+                <small class="muted" id="warehouse-help">Chỉ áp dụng cho WAREHOUSE_STAFF.</small>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button class="workspace-button" type="submit">Lưu thay đổi</button>
+            <a class="workspace-link" asp-controller="AccountList" asp-action="Details" asp-route-id="@Model.UserId" asp-route-search="@Model.ReturnFilter.Search" asp-route-roleId="@Model.ReturnFilter.RoleId" asp-route-status="@Model.ReturnFilter.Status" asp-route-warehouseId="@Model.ReturnFilter.WarehouseId" asp-route-page="@Model.ReturnFilter.Page">Hủy</a>
+        </div>
+    </form>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/create-account.js" asp-append-version="true"></script>
+}

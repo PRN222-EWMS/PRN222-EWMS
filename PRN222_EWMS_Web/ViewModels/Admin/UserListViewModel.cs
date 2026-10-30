@@ -48,10 +48,7 @@ public class UserListViewModel
         new("Ngừng hoạt động", "INACTIVE")
     ];
 
-    public bool IsFiltered => !string.IsNullOrWhiteSpace(Search)
-        || RoleId.HasValue
-        || !string.IsNullOrWhiteSpace(Status)
-        || WarehouseId.HasValue;
+    public bool IsFiltered => !string.IsNullOrWhiteSpace(Search) || RoleId.HasValue || !string.IsNullOrWhiteSpace(Status) || WarehouseId.HasValue;
 
     public int FirstItemNumber => TotalCount == 0 ? 0 : ((Page - 1) * PageSize) + 1;
 

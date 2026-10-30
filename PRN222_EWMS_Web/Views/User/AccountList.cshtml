@@ -9,6 +9,7 @@
         <h1>Tài khoản</h1>
         <p class="muted">Tìm kiếm và xem tài khoản nội bộ, vai trò, trạng thái và kho làm việc.</p>
     </div>
+    <a class="workspace-button" asp-controller="User" asp-action="Create">Tạo tài khoản</a>
 </div>
 
 <section class="workspace-card" aria-label="Danh sách tài khoản">
@@ -16,8 +17,7 @@
         <div class="row g-3 align-items-end">
             <div class="col-12 col-xl-4">
                 <label for="Search">Tìm tài khoản</label>
-                <input id="Search" name="Search" type="search" value="@Model.Search"
-                       placeholder="Họ tên hoặc email" autocomplete="off" />
+                <input id="Search" name="Search" type="search" value="@Model.Search" placeholder="Họ tên hoặc email" autocomplete="off" />
             </div>
             <div class="col-12 col-sm-6 col-xl-2">
                 <label for="RoleId">Vai trò</label>
@@ -92,10 +92,11 @@
                         <td><span class="badge rounded-pill @account.StatusClass">@account.StatusLabel</span></td>
                         <td>@account.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</td>
                         <td>
-                            <a class="workspace-link" asp-controller="AccountList" asp-action="Details" asp-route-id="@account.UserId"
-                               asp-route-search="@Model.Search" asp-route-roleId="@Model.RoleId" asp-route-status="@Model.Status"
-                               asp-route-warehouseId="@Model.WarehouseId" asp-route-page="@Model.Page">
+                            <a class="workspace-link" asp-controller="AccountList" asp-action="Details" asp-route-id="@account.UserId" asp-route-search="@Model.Search" asp-route-roleId="@Model.RoleId" asp-route-status="@Model.Status" asp-route-warehouseId="@Model.WarehouseId" asp-route-page="@Model.Page">
                                 <i class="bi bi-eye" aria-hidden="true"></i> Chi tiết
+                            </a>
+                            <a class="workspace-link" asp-controller="AccountList" asp-action="Edit" asp-route-id="@account.UserId" asp-route-search="@Model.Search" asp-route-roleId="@Model.RoleId" asp-route-status="@Model.Status" asp-route-warehouseId="@Model.WarehouseId" asp-route-page="@Model.Page">
+                                <i class="bi bi-pencil" aria-hidden="true"></i> Sửa
                             </a>
                         </td>
                     </tr>
@@ -123,9 +124,7 @@
                 }
                 @for (var pageNumber = Math.Max(1, Model.Page - 2); pageNumber <= Math.Min(Model.TotalPages, Model.Page + 2); pageNumber++)
                 {
-                    <a class="workspace-link @(pageNumber == Model.Page ? "fw-semibold text-primary" : "")"
-                       asp-controller="AccountList" asp-action="Index" asp-route-search="@Model.Search" asp-route-roleId="@Model.RoleId" asp-route-status="@Model.Status" asp-route-warehouseId="@Model.WarehouseId" asp-route-page="@pageNumber"
-                       aria-current="@(pageNumber == Model.Page ? "page" : null)">@pageNumber</a>
+                    <a class="workspace-link @(pageNumber == Model.Page ? "fw-semibold text-primary" : "")" asp-controller="AccountList" asp-action="Index" asp-route-search="@Model.Search" asp-route-roleId="@Model.RoleId" asp-route-status="@Model.Status" asp-route-warehouseId="@Model.WarehouseId" asp-route-page="@pageNumber" aria-current="@(pageNumber == Model.Page ? "page" : null)">@pageNumber</a>
                 }
                 @if (Model.Page < Model.TotalPages)
                 {
