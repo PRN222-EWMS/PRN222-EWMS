@@ -69,3 +69,6 @@ DocumentLayout.json
 # Rider / JetBrains (dành cho bạn nào trong team dùng Rider)
 .idea/
 *.sln.iml
+
+# Local developer configuration overrides
+appsettings.Local.json
