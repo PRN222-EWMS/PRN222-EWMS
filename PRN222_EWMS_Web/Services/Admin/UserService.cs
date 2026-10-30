@@ -40,6 +40,7 @@ public class UserService(IUserRepository users, IPasswordHasher<User> hasher) : 
             TotalPages = page.TotalPages,
             Accounts = page.Items.Select(account => new UserListItemViewModel
             {
+                UserId = account.UserId,
                 FullName = account.FullName,
                 Email = account.Email,
                 RoleName = account.RoleName,
@@ -55,6 +56,27 @@ public class UserService(IUserRepository users, IPasswordHasher<User> hasher) : 
         };
     }
 
+    public async Task<AccountDetailsViewModel?> GetAccountDetailsAsync(int userId)
+    {
+        var account = await users.FindByIdAsync(userId);
+        if (account is null) return null;
+
+        var isWarehouseStaff = account.Role.RoleName == "WAREHOUSE_STAFF";
+        return new AccountDetailsViewModel
+        {
+            FullName = account.FullName,
+            Email = account.Email,
+            Phone = account.Phone,
+            RoleName = account.Role.RoleName,
+            StatusLabel = GetAccountStatusLabel(account.Status),
+            StatusClass = GetAccountStatusClass(account.Status),
+            WarehouseDisplay = !isWarehouseStaff
+                ? "Không áp dụng"
+                : account.Warehouse?.WarehouseName ?? "Chưa được phân công",
+            CreatedAt = account.CreatedAt
+        };
+    }
+
     private static string GetAccountStatusLabel(string status) => status switch
     {
         "ACTIVE" => "Đang hoạt động",
@@ -65,10 +87,10 @@ public class UserService(IUserRepository users, IPasswordHasher<User> hasher) : 
 
     private static string GetAccountStatusClass(string status) => status switch
     {
-        "ACTIVE" => "active",
-        "LOCKED" => "locked",
-        "INACTIVE" => "inactive",
-        _ => "unknown"
+        "ACTIVE" => "bg-success",
+        "LOCKED" => "bg-warning text-dark",
+        "INACTIVE" => "bg-secondary",
+        _ => "bg-light text-dark"
     };
 
     public async Task PopulateOptionsAsync(CreateAccountViewModel model)

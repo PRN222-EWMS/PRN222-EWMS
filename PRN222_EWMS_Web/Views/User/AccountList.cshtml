@@ -79,24 +79,25 @@
                     <th scope="col">Kho làm việc</th>
                     <th scope="col">Trạng thái</th>
                     <th scope="col">Ngày tạo</th>
+                    <th scope="col"><span class="visually-hidden">Thao tác</span></th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var account in Model.Accounts)
                 {
-                    var statusBadgeClass = account.StatusClass switch
-                    {
-                        "active" => "bg-success",
-                        "locked" => "bg-warning text-dark",
-                        "inactive" => "bg-secondary",
-                        _ => "bg-light text-dark"
-                    };
                     <tr>
                         <td><strong>@account.FullName</strong><br /><span class="muted">@(string.IsNullOrWhiteSpace(account.Email) ? "Chưa có email" : account.Email)</span></td>
                         <td><span class="role-badge">@account.RoleName</span></td>
                         <td>@(account.WarehouseName ?? "—")</td>
-                        <td><span class="badge rounded-pill @statusBadgeClass">@account.StatusLabel</span></td>
+                        <td><span class="badge rounded-pill @account.StatusClass">@account.StatusLabel</span></td>
                         <td>@account.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                        <td>
+                            <a class="workspace-link" asp-controller="AccountList" asp-action="Details" asp-route-id="@account.UserId"
+                               asp-route-search="@Model.Search" asp-route-roleId="@Model.RoleId" asp-route-status="@Model.Status"
+                               asp-route-warehouseId="@Model.WarehouseId" asp-route-page="@Model.Page">
+                                <i class="bi bi-eye" aria-hidden="true"></i> Chi tiết
+                            </a>
+                        </td>
                     </tr>
                 }
             </tbody>

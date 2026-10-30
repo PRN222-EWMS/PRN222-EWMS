@@ -7,6 +7,7 @@ public interface IUserService
 {
     Task<List<User>> GetAllAsync();
     Task<UserListViewModel> GetAccountListAsync(UserListFilter filter);
+    Task<AccountDetailsViewModel?> GetAccountDetailsAsync(int userId);
     Task PopulateOptionsAsync(CreateAccountViewModel model);
     Task<Dictionary<string, string>> CreateAsync(CreateAccountViewModel model);
 }

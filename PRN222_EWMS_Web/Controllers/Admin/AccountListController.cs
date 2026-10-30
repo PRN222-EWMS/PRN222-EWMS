@@ -14,4 +14,14 @@ public class AccountListController(IUserService users) : Controller
         var model = await users.GetAccountListAsync(filter);
         return View("~/Views/User/AccountList.cshtml", model);
     }
+
+    [HttpGet]
+    public async Task<IActionResult> Details(int id, [FromQuery] UserListFilter returnFilter)
+    {
+        var model = await users.GetAccountDetailsAsync(id);
+        if (model is null) return NotFound();
+
+        model.ReturnFilter = returnFilter;
+        return View("~/Views/User/AccountDetails.cshtml", model);
+    }
 }

@@ -35,6 +35,7 @@ public class UserRepository(EwmsDbContext db) : IUserRepository
             .Skip((normalizedPage - 1) * pageSize).Take(pageSize)
             .Select(u => new UserListRecord
             {
+                UserId = u.UserId,
                 FullName = u.FullName,
                 Email = u.Email,
                 RoleName = u.Role.RoleName,
