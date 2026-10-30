@@ -10,7 +10,66 @@ namespace PRN222_EWMS_Web.Services.Admin;
 
 public class UserService(IUserRepository users, IPasswordHasher<User> hasher) : IUserService
 {
+    private const int AccountListPageSize = 10;
+    private static readonly string[] AccountStatuses = ["ACTIVE", "LOCKED", "INACTIVE"];
+
     public Task<List<User>> GetAllAsync() => users.GetAllAsync();
+
+    public async Task<UserListViewModel> GetAccountListAsync(UserListFilter filter)
+    {
+        var search = string.IsNullOrWhiteSpace(filter.Search) ? null : filter.Search.Trim();
+        var roleId = filter.RoleId is > 0 ? filter.RoleId : null;
+        var status = filter.Status is not null && AccountStatuses.Contains(filter.Status, StringComparer.Ordinal)
+            ? filter.Status
+            : null;
+        var warehouseId = filter.WarehouseId is > 0 ? filter.WarehouseId : null;
+
+        var page = await users.GetPageAsync(search, roleId, status, warehouseId, filter.Page, AccountListPageSize);
+        var roles = await users.GetRolesAsync();
+        var warehouses = await users.GetWarehousesAsync();
+
+        return new UserListViewModel
+        {
+            Search = search,
+            RoleId = roleId,
+            Status = status,
+            WarehouseId = warehouseId,
+            Page = page.PageNumber,
+            PageSize = AccountListPageSize,
+            TotalCount = page.TotalCount,
+            TotalPages = page.TotalPages,
+            Accounts = page.Items.Select(account => new UserListItemViewModel
+            {
+                FullName = account.FullName,
+                Email = account.Email,
+                RoleName = account.RoleName,
+                WarehouseName = account.WarehouseName,
+                StatusLabel = GetAccountStatusLabel(account.Status),
+                StatusClass = GetAccountStatusClass(account.Status),
+                CreatedAt = account.CreatedAt
+            }).ToList(),
+            Roles = roles.Select(role => new SelectListItem(role.RoleName, role.RoleId.ToString())).ToList(),
+            Warehouses = warehouses.Select(warehouse => new SelectListItem(
+                warehouse.WarehouseName + (warehouse.Status == "ACTIVE" ? "" : " (Ngừng hoạt động)"),
+                warehouse.WarehouseId.ToString())).ToList()
+        };
+    }
+
+    private static string GetAccountStatusLabel(string status) => status switch
+    {
+        "ACTIVE" => "Đang hoạt động",
+        "LOCKED" => "Bị khóa",
+        "INACTIVE" => "Ngừng hoạt động",
+        _ => status
+    };
+
+    private static string GetAccountStatusClass(string status) => status switch
+    {
+        "ACTIVE" => "active",
+        "LOCKED" => "locked",
+        "INACTIVE" => "inactive",
+        _ => "unknown"
+    };
 
     public async Task PopulateOptionsAsync(CreateAccountViewModel model)
     {
