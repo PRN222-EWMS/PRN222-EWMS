@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace PRN222_EWMS_Web.Models;
+namespace PRN222_EWMS_Web.Models.Entities;
 
 public partial class Role
 {
