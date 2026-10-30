@@ -1,0 +1,5 @@
+@model PRN222_EWMS_Web.ViewModels.Sales.CustomerFormViewModel
+@{ ViewData["Title"] = "Tạo khách hàng"; }
+<div class="sales-page"><div class="workspace-heading"><div><p class="eyebrow">KHÁCH HÀNG / TẠO MỚI</p><h1>Tạo khách hàng</h1><p class="muted">Bổ sung khách hàng vào danh mục dùng chung.</p></div></div>
+<section class="workspace-card"><form asp-action="Create" method="post" class="workspace-form"><partial name="_Form" model="Model" /><div class="form-actions"><button type="submit" class="workspace-button">Tạo khách hàng</button><a class="workspace-button sales-button-secondary" asp-action="Index">Hủy</a></div></form></section></div>
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

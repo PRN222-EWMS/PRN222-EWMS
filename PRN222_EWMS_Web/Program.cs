@@ -11,8 +11,10 @@ using PRN222_EWMS_Web.Services.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews(options => options.Filters.Add(new Microsoft.AspNetCore.Mvc.ResponseCacheAttribute { NoStore = true, Location = Microsoft.AspNetCore.Mvc.ResponseCacheLocation.None }));
-builder.Services.AddDbContext<EwmsDbContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("MyCnn")));
+builder.Services.AddDbContext<EwmsDbContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("DBDefault")));
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Sales.ISalesRepository, PRN222_EWMS_Web.Repositories.Sales.SalesRepository>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.Sales.ISalesService, PRN222_EWMS_Web.Services.Sales.SalesService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Authentication.IAuthenticationService, AuthenticationService>();
