@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
-namespace PRN222_EWMS_Web.Models.Entities;
+namespace PRN222_EWMS_Web.Models;
 
 public partial class InboundItem
 {
@@ -45,3 +45,4 @@ public partial class InboundItem
 
     public virtual SerialItem? SerialItemNavigation { get; set; }
 }
+

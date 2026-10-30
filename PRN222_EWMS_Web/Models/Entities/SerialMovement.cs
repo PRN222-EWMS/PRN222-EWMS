@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
-namespace PRN222_EWMS_Web.Models.Entities;
+namespace PRN222_EWMS_Web.Models;
 
 public partial class SerialMovement
 {
@@ -77,3 +77,4 @@ public partial class SerialMovement
 
     public virtual TransferReceipt? TransferReceipt { get; set; }
 }
+

@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
-namespace PRN222_EWMS_Web.Models.Entities;
+namespace PRN222_EWMS_Web.Models;
 
 public partial class ReturnReceiptItem
 {
@@ -39,3 +39,4 @@ public partial class ReturnReceiptItem
 
     public virtual ReturnReceipt ReturnReceiptNavigation { get; set; } = null!;
 }
+

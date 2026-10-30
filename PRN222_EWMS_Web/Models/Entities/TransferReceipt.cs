@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
-namespace PRN222_EWMS_Web.Models.Entities;
+namespace PRN222_EWMS_Web.Models;
 
 public partial class TransferReceipt
 {
@@ -41,3 +41,4 @@ public partial class TransferReceipt
 
     public virtual ICollection<TransferReceiptItem> TransferReceiptItemTransferReceipts { get; set; } = new List<TransferReceiptItem>();
 }
+

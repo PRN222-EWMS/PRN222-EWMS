@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
-namespace PRN222_EWMS_Web.Models.Entities;
+namespace PRN222_EWMS_Web.Models;
 
 public partial class TransferOrderLine
 {
@@ -27,3 +27,4 @@ public partial class TransferOrderLine
 
     public virtual TransferOrder TransferOrder { get; set; } = null!;
 }
+

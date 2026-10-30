@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
-namespace PRN222_EWMS_Web.Models.Entities;
+namespace PRN222_EWMS_Web.Models;
 
 public partial class ZoneStorageRule
 {
@@ -19,3 +19,4 @@ public partial class ZoneStorageRule
 
     public virtual StorageLocation ZoneLocation { get; set; } = null!;
 }
+

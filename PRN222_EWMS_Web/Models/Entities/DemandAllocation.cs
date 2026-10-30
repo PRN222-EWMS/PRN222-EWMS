@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
-namespace PRN222_EWMS_Web.Models.Entities;
+namespace PRN222_EWMS_Web.Models;
 
 public partial class DemandAllocation
 {
@@ -37,3 +37,4 @@ public partial class DemandAllocation
 
     public virtual TransferDispatch? TransferDispatch { get; set; }
 }
+

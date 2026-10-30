@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
-namespace PRN222_EWMS_Web.Models.Entities;
+namespace PRN222_EWMS_Web.Models;
 
 public partial class PickingClaim
 {
@@ -23,3 +23,4 @@ public partial class PickingClaim
 
     public virtual SerialItem SerialItem { get; set; } = null!;
 }
+

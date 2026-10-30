@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
-namespace PRN222_EWMS_Web.Models.Entities;
+namespace PRN222_EWMS_Web.Models;
 
 public partial class TransferDispatchItem
 {
@@ -55,3 +55,4 @@ public partial class TransferDispatchItem
 
     public virtual ICollection<TransferReceiptItem> TransferReceiptItemTransferDispatchItems { get; set; } = new List<TransferReceiptItem>();
 }
+

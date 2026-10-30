@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
-namespace PRN222_EWMS_Web.Models.Entities;
+namespace PRN222_EWMS_Web.Models;
 
 public partial class TransferDispatch
 {
@@ -49,3 +49,4 @@ public partial class TransferDispatch
 
     public virtual TransferOrder TransferOrder { get; set; } = null!;
 }
+

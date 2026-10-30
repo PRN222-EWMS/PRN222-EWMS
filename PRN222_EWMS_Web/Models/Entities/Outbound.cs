@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
-namespace PRN222_EWMS_Web.Models.Entities;
+namespace PRN222_EWMS_Web.Models;
 
 public partial class Outbound
 {
@@ -61,3 +61,4 @@ public partial class Outbound
 
     public virtual ICollection<SerialMovement> SerialMovements { get; set; } = new List<SerialMovement>();
 }
+

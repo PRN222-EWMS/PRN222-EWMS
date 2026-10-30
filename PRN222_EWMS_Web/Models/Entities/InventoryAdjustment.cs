@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
-namespace PRN222_EWMS_Web.Models.Entities;
+namespace PRN222_EWMS_Web.Models;
 
 public partial class InventoryAdjustment
 {
@@ -47,3 +47,4 @@ public partial class InventoryAdjustment
 
     public virtual ICollection<SupplySource> SupplySources { get; set; } = new List<SupplySource>();
 }
+
