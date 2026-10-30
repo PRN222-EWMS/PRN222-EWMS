@@ -15,6 +15,7 @@ namespace PRN222_EWMS_Web.Controllers
 
         public IActionResult Index()
         {
+            if (User.IsInRole("SALES_STAFF")) return RedirectToAction("Index", "SalesDashboard");
             return View();
         }
 

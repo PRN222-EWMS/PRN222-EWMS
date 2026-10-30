@@ -38,6 +38,22 @@
             ("Duyệt điều chỉnh", "bi-check2-square", "InventoryAdjustment", "Index", new[] { "CEO" })
         })
     };
+    if (role == "SALES_STAFF")
+    {
+        sections = new (string Heading, (string Label, string Icon, string Controller, string Action, string[] Roles)[] Items)[]
+        {
+            ("Tổng quan", new[] { ("Dashboard", "bi-grid-1x2", "SalesDashboard", "Index", Array.Empty<string>()) }),
+            ("Đơn bán hàng", new[] {
+                ("Danh sách đơn bán hàng", "bi-receipt", "SalesOrder", "Index", Array.Empty<string>()),
+                ("Tạo đơn bán hàng", "bi-plus-circle", "SalesOrder", "Create", Array.Empty<string>()) }),
+            ("Đơn trả hàng", new[] {
+                ("Danh sách đơn trả hàng", "bi-arrow-return-left", "CustomerReturnOrder", "Index", Array.Empty<string>()),
+                ("Tạo đơn trả hàng", "bi-plus-circle", "CustomerReturnOrder", "Create", Array.Empty<string>()) }),
+            ("Khách hàng", new[] {
+                ("Danh sách khách hàng", "bi-people", "Customer", "Index", Array.Empty<string>()),
+                ("Tạo khách hàng", "bi-person-plus", "Customer", "Create", Array.Empty<string>()) })
+        };
+    }
 }
 
 <aside class="ewms-sidebar" id="ewmsSidebar" aria-label="Điều hướng chính">
@@ -57,9 +73,10 @@
                 @foreach (var item in allowedItems)
                 {
                     var active = string.Equals(controller, item.Controller, StringComparison.OrdinalIgnoreCase)
-                              && string.Equals(action, item.Action, StringComparison.OrdinalIgnoreCase);
+                              && (string.Equals(action, item.Action, StringComparison.OrdinalIgnoreCase)
+                                  || (item.Action == "Index" && (action == "Details" || action == "Edit")));
                     <a class="ewms-nav-link @(active ? "is-active" : "")"
-                       asp-controller="@item.Controller" asp-action="@item.Action"
+                       href="@($"/{item.Controller}/{item.Action}")"
                        aria-current="@(active ? "page" : null)"
                        title="@item.Label">
                         <i class="bi @item.Icon" aria-hidden="true"></i>
