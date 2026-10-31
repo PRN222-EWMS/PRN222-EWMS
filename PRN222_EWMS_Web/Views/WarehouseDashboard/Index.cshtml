@@ -1,0 +1,233 @@
+@model PRN222_EWMS_Web.ViewModels.WarehouseStaff.WarehouseDashboardViewModel
+@{
+    ViewData["Title"] = "Bàn làm việc Thủ kho";
+}
+
+<div class="wh-page">
+    <!-- Header -->
+    <div class="wh-header">
+        <div>
+            <h1 class="wh-title">Bàn làm việc Vận hành Kho</h1>
+            <p class="wh-subtitle">Xin chào <strong>@Model.UserFullName</strong> (@Model.Username), theo dõi hàng đợi và công việc tiếp nhận, xếp kệ, xuất kho tại kho được phân công.</p>
+        </div>
+        <div>
+            <a asp-controller="Inbound" asp-action="PurchaseOrders" class="wh-btn wh-btn-primary">
+                <i class="bi bi-box-arrow-in-down"></i> Tiếp nhận đơn mua hàng
+            </a>
+        </div>
+    </div>
+
+    <!-- Warehouse Info Hero Banner -->
+    <div class="wh-banner">
+        <div class="wh-banner-info">
+            <div class="wh-banner-icon">
+                <i class="bi bi-buildings"></i>
+            </div>
+            <div class="wh-banner-details">
+                <h3>
+                    @Model.WarehouseName
+                    @if (Model.IsRental)
+                    {
+                        <span class="wh-badge wh-badge-amber">Kho thuê</span>
+                    }
+                    else
+                    {
+                        <span class="wh-badge wh-badge-blue">Kho sở hữu</span>
+                    }
+                </h3>
+                <p><i class="bi bi-geo-alt"></i> @Model.Address</p>
+                @if (Model.RentalEndDate.HasValue)
+                {
+                    <small class="text-muted"><i class="bi bi-calendar-event"></i> Thời hạn thuê: @Model.RentalStartDate?.ToString("dd/MM/yyyy") - @Model.RentalEndDate?.ToString("dd/MM/yyyy")</small>
+                }
+            </div>
+        </div>
+        <div>
+            <span class="wh-badge wh-badge-green"><i class="bi bi-check-circle-fill"></i> Kho hoạt động</span>
+        </div>
+    </div>
+
+    @if (Model.IsRentalExpiringSoon && !string.IsNullOrEmpty(Model.LeaseAlertMessage))
+    {
+        <div class="wh-lease-alert">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <div>
+                <strong>Cảnh báo thời hạn thuê kho:</strong> @Model.LeaseAlertMessage
+            </div>
+        </div>
+    }
+
+    @if (Model.ActiveStocktakeCount > 0)
+    {
+        <div class="wh-lease-alert" style="background: #fde8e8; border-color: #f8b4b4; color: #9b1c1c;">
+            <i class="bi bi-clipboard-x-fill" style="color: #c92a2a;"></i>
+            <div>
+                <strong>Cảnh báo kiểm kê:</strong> Hiện đang có <strong>@Model.ActiveStocktakeCount</strong> đợt kiểm kê đang diễn ra tại kho này (@string.Join(", ", Model.ActiveStocktakeCodes)). Các phân khu trong phạm vi kiểm kê tạm thời bị khóa thao tác dịch chuyển.
+            </div>
+        </div>
+    }
+
+    <!-- Operation Queues Grid -->
+    <div class="wh-grid-cards">
+        <!-- 1. Hàng đợi Nhận hàng mua -->
+        <div class="wh-card">
+            <div>
+                <div class="wh-card-header">
+                    <span class="wh-card-label">Nhận hàng mua</span>
+                    <div class="wh-card-icon blue"><i class="bi bi-box-arrow-in-down"></i></div>
+                </div>
+                <div class="wh-card-value">@Model.ReceivablePoCount</div>
+                <div class="wh-card-hint">
+                    Đơn mua đã xác nhận chờ nhận
+                    @if (Model.DraftInboundCount > 0)
+                    {
+                        <span class="text-warning d-block">(@Model.DraftInboundCount phiếu Inbound nháp)</span>
+                    }
+                </div>
+            </div>
+            <a asp-controller="Inbound" asp-action="PurchaseOrders" class="wh-card-action">
+                Xem PO cần nhận <i class="bi bi-arrow-right"></i>
+            </a>
+        </div>
+
+        <!-- 2. Hàng đợi Lưu kho / Xếp kệ -->
+        <div class="wh-card">
+            <div>
+                <div class="wh-card-header">
+                    <span class="wh-card-label">Lưu kho / Xếp kệ</span>
+                    <div class="wh-card-icon amber"><i class="bi bi-boxes"></i></div>
+                </div>
+                <div class="wh-card-value">@Model.AwaitingPutawayCount</div>
+                <div class="wh-card-hint">Thiết bị serial chờ xếp lên kệ</div>
+            </div>
+            <a href="javascript:void(0)" onclick="alert('Chức năng Xếp kệ hàng (Putaway) thuộc phân hệ quản lý vị trí kho.')" class="wh-card-action">
+                Xếp hàng lên kệ <i class="bi bi-arrow-right"></i>
+            </a>
+        </div>
+
+        <!-- 3. Hàng đợi Xuất hàng -->
+        <div class="wh-card">
+            <div>
+                <div class="wh-card-header">
+                    <span class="wh-card-label">Xuất đơn bán hàng</span>
+                    <div class="wh-card-icon green"><i class="bi bi-box-arrow-up"></i></div>
+                </div>
+                <div class="wh-card-value">@Model.PendingPickingOrderCount</div>
+                <div class="wh-card-hint">
+                    Đơn bán SUBMITTED chờ bốc hàng
+                    @if (Model.MyActivePickingCount > 0)
+                    {
+                        <span class="text-primary d-block">(@Model.MyActivePickingCount phiếu bốc đang thực hiện)</span>
+                    }
+                </div>
+            </div>
+            <a href="javascript:void(0)" onclick="alert('Chức năng Bốc hàng xuất kho (Outbound Picking) thuộc phân hệ xuất hàng.')" class="wh-card-action">
+                Xem danh sách bốc hàng <i class="bi bi-arrow-right"></i>
+            </a>
+        </div>
+
+        <!-- 4. Hàng đợi Chuyển kho -->
+        <div class="wh-card">
+            <div>
+                <div class="wh-card-header">
+                    <span class="wh-card-label">Chuyển kho</span>
+                    <div class="wh-card-icon purple"><i class="bi bi-arrow-left-right"></i></div>
+                </div>
+                <div class="wh-card-value">@(Model.TransferDispatchCount + Model.TransferInTransitCount)</div>
+                <div class="wh-card-hint">
+                    @Model.TransferDispatchCount lệnh cần gửi đi • @Model.TransferInTransitCount lệnh đang tới
+                </div>
+            </div>
+            <a href="javascript:void(0)" onclick="alert('Chức năng Chuyển kho (Transfer) thuộc phân hệ luân chuyển hàng.')" class="wh-card-action">
+                Xem lệnh chuyển kho <i class="bi bi-arrow-right"></i>
+            </a>
+        </div>
+    </div>
+
+    <!-- Recent Receivable POs Table -->
+    <div class="wh-section">
+        <div class="wh-section-title">
+            <span><i class="bi bi-clock-history"></i> Đơn mua hàng cần tiếp nhận sớm nhất</span>
+            <a asp-controller="Inbound" asp-action="PurchaseOrders" class="wh-btn wh-btn-outline wh-btn-sm">
+                Xem tất cả đơn (@Model.ReceivablePoCount)
+            </a>
+        </div>
+
+        @if (Model.RecentReceivableOrders.Count == 0)
+        {
+            <div class="text-center py-4 text-muted">
+                <i class="bi bi-inbox fs-2 d-block mb-2 text-secondary"></i>
+                Hiện không có đơn mua hàng nào đang chờ tiếp nhận tại kho này.
+            </div>
+        }
+        else
+        {
+            <div class="wh-table-container">
+                <table class="wh-table">
+                    <thead>
+                        <tr>
+                            <th>Mã PO</th>
+                            <th>Nhà cung cấp</th>
+                            <th>Ngày dự kiến đến</th>
+                            <th class="text-center">Số lượng đặt</th>
+                            <th class="text-center">Đã nhận</th>
+                            <th class="text-center">Còn lại</th>
+                            <th>Trạng thái</th>
+                            <th class="text-end">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var po in Model.RecentReceivableOrders)
+                        {
+                            <tr>
+                                <td>
+                                    <strong class="text-primary font-monospace">@po.Pocode</strong>
+                                </td>
+                                <td>@po.SupplierName</td>
+                                <td>
+                                    @if (po.ExpectedArrivalDate.HasValue)
+                                    {
+                                        <span>@po.ExpectedArrivalDate.Value.ToString("dd/MM/yyyy")</span>
+                                        @if (po.IsOverdue)
+                                        {
+                                            <span class="wh-badge wh-badge-red ms-1">Quá hạn</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Chưa hẹn ngày</span>
+                                    }
+                                </td>
+                                <td class="text-center fw-semibold">@po.TotalOrdered</td>
+                                <td class="text-center text-success">@po.TotalReceived</td>
+                                <td class="text-center fw-bold text-primary">@po.TotalRemaining</td>
+                                <td>
+                                    @if (po.Status == "CONFIRMED")
+                                    {
+                                        <span class="wh-badge wh-badge-blue">CONFIRMED</span>
+                                    }
+                                    else if (po.Status == "PARTIALLY_RECEIVED")
+                                    {
+                                        <span class="wh-badge wh-badge-amber">PARTIAL</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="wh-badge wh-badge-gray">@po.Status</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    <a asp-controller="Inbound" asp-action="PurchaseOrderDetails" asp-route-id="@po.PurchaseOrderId" class="wh-btn wh-btn-outline wh-btn-sm" title="Đối chiếu chi tiết đơn mua hàng">
+                                        <i class="bi bi-eye"></i> Đối chiếu
+                                    </a>
+                                    <a asp-controller="Inbound" asp-action="Create" asp-route-purchaseOrderId="@po.PurchaseOrderId" class="wh-btn wh-btn-primary wh-btn-sm ms-1" title="Bắt đầu nhận hàng">
+                                        <i class="bi bi-box-arrow-in-down"></i> Nhận hàng
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

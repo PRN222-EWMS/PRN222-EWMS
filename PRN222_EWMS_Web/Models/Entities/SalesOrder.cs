@@ -47,7 +47,7 @@ public partial class SalesOrder
 
     public virtual ICollection<CustomerReturnOrder> CustomerReturnOrders { get; set; } = new List<CustomerReturnOrder>();
 
-    public virtual Outbound? Outbound { get; set; }
+    public virtual ICollection<Outbound> Outbounds { get; set; } = new List<Outbound>();
 
     public virtual ICollection<OutboundItem> OutboundItems { get; set; } = new List<OutboundItem>();
 

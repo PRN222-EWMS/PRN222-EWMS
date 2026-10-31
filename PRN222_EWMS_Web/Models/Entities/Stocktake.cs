@@ -41,7 +41,7 @@ public partial class Stocktake
 
     public virtual ICollection<StocktakeObservation> StocktakeObservations { get; set; } = new List<StocktakeObservation>();
 
-    public virtual StocktakeRound? StocktakeRound { get; set; }
+    public virtual ICollection<StocktakeRound> StocktakeRounds { get; set; } = new List<StocktakeRound>();
 
     public virtual ICollection<StocktakeScope> StocktakeScopeStocktakeNavigations { get; set; } = new List<StocktakeScope>();
 

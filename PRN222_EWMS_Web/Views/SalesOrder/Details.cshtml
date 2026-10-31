@@ -1,0 +1,147 @@
+@model PRN222_EWMS_Web.ViewModels.Sales.SalesOrderDetailsViewModel
+@using PRN222_EWMS_Web.ViewModels.Sales
+@{ ViewData["Title"] = "Chi tiết " + Model.Code; }
+
+<div class="sales-page">
+<div class="workspace-heading">
+    <div>
+        <p class="eyebrow">BÁN HÀNG / CHI TIẾT ĐƠN</p>
+        <h1>@Model.Code</h1>
+        <div class="d-flex align-items-center gap-2 mt-2">
+            <span class="sales-status">@SalesDisplay.Status(Model.Status)</span>
+            @if (Model.HasShortage)
+            {
+                <span class="stock-badge badge-stock-zero">Thiếu nguồn đáp ứng</span>
+            }
+        </div>
+    </div>
+    <div class="sales-toolbar">
+        @if (Model.CanEdit && User.IsInRole("SALES_STAFF"))
+        {
+            <a class="workspace-button" asp-action="Edit" asp-route-id="@Model.Id">
+                <i class="bi bi-pencil-square me-1"></i> Chỉnh sửa đơn
+            </a>
+        }
+        <a class="workspace-button sales-button-secondary" asp-action="Index">← Danh sách đơn bán hàng</a>
+    </div>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="sales-alert sales-alert-success" role="status">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="sales-warning" role="alert">@TempData["Error"]</div>
+}
+
+@if (Model.HasShortage)
+{
+    <div class="sales-warning" role="status">
+        <i class="bi bi-exclamation-triangle-fill me-1"></i> Đơn hàng đang có sản phẩm thiếu nguồn đáp ứng giữ chỗ. Cần kiểm tra các đợt nhập hàng hoặc bổ sung nguồn cung.
+    </div>
+}
+
+@if (User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value != Model.CreatedByUserId.ToString())
+{
+    <p class="sales-muted-small mb-0">Bạn đang xem đơn của Sales khác. Chỉ người tạo đơn được phép chỉnh sửa khi đơn còn đủ điều kiện.</p>
+}
+else if (!Model.CanEdit)
+{
+    <p class="sales-muted-small mb-0">Đơn của bạn hiện không còn đủ điều kiện chỉnh sửa. Đơn đã có phiếu xuất được lưu sẽ khóa sửa thông tin đơn.</p>
+}
+
+<section class="workspace-card">
+    <h2>Thông tin đơn hàng</h2>
+    <dl class="sales-details">
+        <div><dt>Khách hàng</dt><dd class="fw-semibold">@Model.CustomerName</dd></div>
+        <div><dt>Điện thoại</dt><dd>@(Model.CustomerPhone ?? "—")</dd></div>
+        <div><dt>Địa chỉ</dt><dd>@(Model.CustomerAddress ?? "—")</dd></div>
+        <div><dt>Kho xuất</dt><dd>@Model.WarehouseName</dd></div>
+        <div><dt>Người tạo</dt><dd>@Model.CreatedByName</dd></div>
+        <div><dt>Ngày đơn</dt><dd>@Model.OrderDate.ToString("dd/MM/yyyy")</dd></div>
+        <div><dt>Ngày yêu cầu xuất</dt><dd>@(Model.RequestedDate?.ToString("dd/MM/yyyy") ?? "—")</dd></div>
+        <div><dt>Thời điểm gửi (UTC)</dt><dd>@(Model.SubmittedAt?.ToString("dd/MM/yyyy HH:mm") ?? "—")</dd></div>
+        <div><dt>Thời điểm đóng (UTC)</dt><dd>@(Model.ClosedAt?.ToString("dd/MM/yyyy HH:mm") ?? "—")</dd></div>
+    </dl>
+    @if (!string.IsNullOrWhiteSpace(Model.Note))
+    {
+        <h3 class="h6 mt-4">Ghi chú</h3>
+        <p class="sales-note">@Model.Note</p>
+    }
+    @if (!string.IsNullOrWhiteSpace(Model.CloseReason))
+    {
+        <h3 class="h6 mt-4">Lý do đóng</h3>
+        <p class="sales-note">@Model.CloseReason</p>
+    }
+</section>
+
+<section class="workspace-card">
+    <h2>Sản phẩm yêu cầu</h2>
+    <p class="muted">Đã xuất chỉ tính các serial hợp lệ thuộc phiếu xuất hoàn tất.</p>
+    <div class="table-wrap">
+        <table class="workspace-table">
+            <thead>
+                <tr>
+                    <th>Mã sản phẩm</th>
+                    <th>Sản phẩm</th>
+                    <th style="text-align: right;">Yêu cầu</th>
+                    <th style="text-align: right;">Đã xuất</th>
+                    <th style="text-align: right;">Đã hủy/đóng</th>
+                    <th style="text-align: right;">Còn phải xuất</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var line in Model.Lines)
+                {
+                    <tr>
+                        <td><code>@line.ProductCode</code></td>
+                        <td>@line.ProductName</td>
+                        <td style="text-align: right;">@line.RequestedQuantity</td>
+                        <td style="text-align: right;">@line.IssuedQuantity</td>
+                        <td style="text-align: right;">@line.CancelledQuantity</td>
+                        <td style="text-align: right;"><strong>@line.RemainingQuantity</strong></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    @if (Model.Lines.Count == 0)
+    {
+        <p class="sales-empty">Đơn chưa có sản phẩm.</p>
+    }
+</section>
+
+<section class="workspace-card">
+    <h2>Các đợt xuất hàng (Outbounds)</h2>
+    <div class="table-wrap">
+        <table class="workspace-table">
+            <thead>
+                <tr>
+                    <th>Mã phiếu</th>
+                    <th>Ngày xuất</th>
+                    <th>Trạng thái</th>
+                    <th>Số serial trên phiếu</th>
+                    <th>Hoàn tất (UTC)</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var receipt in Model.Outbounds)
+                {
+                    <tr>
+                        <td><code>@receipt.Code</code></td>
+                        <td>@receipt.IssueDate.ToString("dd/MM/yyyy")</td>
+                        <td><span class="sales-status">@SalesDisplay.Status(receipt.Status)</span></td>
+                        <td>@receipt.Quantity</td>
+                        <td>@(receipt.CompletedAt?.ToString("dd/MM/yyyy HH:mm") ?? "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    @if (Model.Outbounds.Count == 0)
+    {
+        <p class="sales-empty">Chưa có phiếu xuất cho đơn này.</p>
+    }
+</section>
+</div>

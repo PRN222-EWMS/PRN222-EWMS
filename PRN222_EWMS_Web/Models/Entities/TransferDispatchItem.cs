@@ -43,7 +43,7 @@ public partial class TransferDispatchItem
 
     public virtual TransferOrderLine TransferLine { get; set; } = null!;
 
-    public virtual TransferLossRequestItem? TransferLossRequestItemDispatchItem { get; set; }
+    public virtual ICollection<TransferLossRequestItem> TransferLossRequestItemDispatchItems { get; set; } = new List<TransferLossRequestItem>();
 
     public virtual ICollection<TransferLossRequestItem> TransferLossRequestItemTransferDispatchItems { get; set; } = new List<TransferLossRequestItem>();
 
@@ -51,7 +51,7 @@ public partial class TransferDispatchItem
 
     public virtual TransferOrderLine TransferOrderLine { get; set; } = null!;
 
-    public virtual TransferReceiptItem? TransferReceiptItemDispatchItem { get; set; }
+    public virtual ICollection<TransferReceiptItem> TransferReceiptItemDispatchItems { get; set; } = new List<TransferReceiptItem>();
 
     public virtual ICollection<TransferReceiptItem> TransferReceiptItemTransferDispatchItems { get; set; } = new List<TransferReceiptItem>();
 }

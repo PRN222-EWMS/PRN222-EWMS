@@ -33,7 +33,7 @@ public partial class OutboundItem
 
     public virtual Outbound OutboundNavigation { get; set; } = null!;
 
-    public virtual ReturnReceiptItem? ReturnReceiptItemOutboundItem { get; set; }
+    public virtual ICollection<ReturnReceiptItem> ReturnReceiptItemOutboundItems { get; set; } = new List<ReturnReceiptItem>();
 
     public virtual ICollection<ReturnReceiptItem> ReturnReceiptItemOutboundItemNavigations { get; set; } = new List<ReturnReceiptItem>();
 

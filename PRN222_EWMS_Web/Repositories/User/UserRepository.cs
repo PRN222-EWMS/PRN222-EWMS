@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Models;
 using UserEntity = PRN222_EWMS_Web.Models.User;
+using WarehouseEntity = PRN222_EWMS_Web.Models.Warehouse;
 
 namespace PRN222_EWMS_Web.Repositories.User;
 
@@ -44,8 +45,8 @@ public class UserRepository(EwmsDbContext db) : IUserRepository
         return (items, totalCount, normalizedPage, totalPages);
     }
     public Task<List<Role>> GetRolesAsync() => db.Roles.AsNoTracking().OrderBy(r => r.RoleId).ToListAsync();
-    public Task<List<Warehouse>> GetWarehousesAsync() => db.Warehouses.AsNoTracking().OrderBy(w => w.WarehouseName).ToListAsync();
-    public Task<List<Warehouse>> GetActiveWarehousesAsync() => db.Warehouses.AsNoTracking().Where(w => w.Status == "ACTIVE").OrderBy(w => w.WarehouseName).ToListAsync();
+    public Task<List<WarehouseEntity>> GetWarehousesAsync() => db.Warehouses.AsNoTracking().OrderBy(w => w.WarehouseName).ToListAsync();
+    public Task<List<WarehouseEntity>> GetActiveWarehousesAsync() => db.Warehouses.AsNoTracking().Where(w => w.Status == "ACTIVE").OrderBy(w => w.WarehouseName).ToListAsync();
     public async Task AddAsync(UserEntity user) { db.Users.Add(user); await db.SaveChangesAsync(); }
     public async Task SaveAsync() => await db.SaveChangesAsync();
 }

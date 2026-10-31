@@ -65,7 +65,7 @@ public partial class User
 
     public virtual ICollection<StaffWarehouseAssignment> StaffWarehouseAssignmentChangedByUsers { get; set; } = new List<StaffWarehouseAssignment>();
 
-    public virtual StaffWarehouseAssignment? StaffWarehouseAssignmentUser { get; set; }
+    public virtual ICollection<StaffWarehouseAssignment> StaffWarehouseAssignmentUsers { get; set; } = new List<StaffWarehouseAssignment>();
 
     public virtual ICollection<StocktakeAssignment> StocktakeAssignments { get; set; } = new List<StocktakeAssignment>();
 

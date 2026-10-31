@@ -43,7 +43,7 @@ public partial class TransferOrder
 
     public virtual Warehouse ToWarehouse { get; set; } = null!;
 
-    public virtual TransferDispatch? TransferDispatch { get; set; }
+    public virtual ICollection<TransferDispatch> TransferDispatches { get; set; } = new List<TransferDispatch>();
 
     public virtual ICollection<TransferDispatchItem> TransferDispatchItems { get; set; } = new List<TransferDispatchItem>();
 

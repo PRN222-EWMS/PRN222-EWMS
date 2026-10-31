@@ -6,10 +6,6 @@ namespace PRN222_EWMS_Web.Models;
 
 public partial class EwmsDbContext : DbContext
 {
-    public EwmsDbContext()
-    {
-    }
-
     public EwmsDbContext(DbContextOptions<EwmsDbContext> options)
         : base(options)
     {
@@ -328,11 +324,9 @@ public partial class EwmsDbContext : DbContext
             entity.Property(e => e.DispatchId).HasColumnName("DispatchID");
             entity.Property(e => e.OutboundId).HasColumnName("OutboundID");
             entity.Property(e => e.SalesOrderId)
-                .IsRequired()
                 .HasColumnName("SalesOrderID");
             entity.Property(e => e.SupplySourceId).HasColumnName("SupplySourceID");
             entity.Property(e => e.TransferOrderId)
-                .IsRequired()
                 .HasColumnName("TransferOrderID");
 
             entity.HasOne(d => d.Dispatch).WithMany(p => p.DemandAllocationDispatches)
@@ -601,8 +595,8 @@ public partial class EwmsDbContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_InventoryAdjustmentLine_AdjustmentID");
 
-            entity.HasOne(d => d.Observation).WithOne(p => p.InventoryAdjustmentLineObservation)
-                .HasForeignKey<InventoryAdjustmentLine>(d => d.ObservationId)
+            entity.HasOne(d => d.Observation).WithMany(p => p.InventoryAdjustmentLineObservations)
+                .HasForeignKey(d => d.ObservationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_InventoryAdjustmentLine_ObservationID");
 
@@ -756,8 +750,8 @@ public partial class EwmsDbContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Outbound_CreatedByUserID");
 
-            entity.HasOne(d => d.SalesOrder).WithOne(p => p.Outbound)
-                .HasForeignKey<Outbound>(d => d.SalesOrderId)
+            entity.HasOne(d => d.SalesOrder).WithMany(p => p.Outbounds)
+                .HasForeignKey(d => d.SalesOrderId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Outbound_SalesOrderID");
         });
@@ -1078,7 +1072,6 @@ public partial class EwmsDbContext : DbContext
                 .IsRowVersion()
                 .IsConcurrencyToken();
             entity.Property(e => e.SalesOrderId)
-                .IsRequired()
                 .HasColumnName("SalesOrderID");
             entity.Property(e => e.SolineId).HasColumnName("SOLineID");
             entity.Property(e => e.Status)
@@ -1091,7 +1084,6 @@ public partial class EwmsDbContext : DbContext
                 .IsUnicode(false);
             entity.Property(e => e.TransferLineId).HasColumnName("TransferLineID");
             entity.Property(e => e.TransferOrderId)
-                .IsRequired()
                 .HasColumnName("TransferOrderID");
             entity.Property(e => e.WarehouseId).HasColumnName("WarehouseID");
 
@@ -1161,25 +1153,9 @@ public partial class EwmsDbContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_ReservationConsumption_ReservationID");
 
-            entity.HasOne(d => d.DemandAllocation).WithMany(p => p.ReservationConsumptionDemandAllocations)
-                .HasPrincipalKey(p => new { p.AllocationId, p.SupplySourceId, p.SalesOrderId })
-                .HasForeignKey(d => new { d.AllocationId, d.SupplySourceId, d.SalesOrderId })
-                .HasConstraintName("FK_Consumption_DemandAllocation_SO");
 
-            entity.HasOne(d => d.DemandAllocationNavigation).WithMany(p => p.ReservationConsumptionDemandAllocationNavigations)
-                .HasPrincipalKey(p => new { p.AllocationId, p.SupplySourceId, p.TransferOrderId })
-                .HasForeignKey(d => new { d.AllocationId, d.SupplySourceId, d.TransferOrderId })
-                .HasConstraintName("FK_Consumption_DemandAllocation_Transfer");
 
-            entity.HasOne(d => d.ReservationNavigation).WithMany(p => p.ReservationConsumptionReservationNavigations)
-                .HasPrincipalKey(p => new { p.ReservationId, p.SupplySourceId, p.SalesOrderId })
-                .HasForeignKey(d => new { d.ReservationId, d.SupplySourceId, d.SalesOrderId })
-                .HasConstraintName("FK_Consumption_Reservation_SO");
 
-            entity.HasOne(d => d.Reservation1).WithMany(p => p.ReservationConsumptionReservation1s)
-                .HasPrincipalKey(p => new { p.ReservationId, p.SupplySourceId, p.TransferOrderId })
-                .HasForeignKey(d => new { d.ReservationId, d.SupplySourceId, d.TransferOrderId })
-                .HasConstraintName("FK_Consumption_Reservation_Transfer");
         });
 
         modelBuilder.Entity<ReturnReceipt>(entity =>
@@ -1294,8 +1270,8 @@ public partial class EwmsDbContext : DbContext
                 .HasDefaultValueSql("(sysutcdatetime())");
             entity.Property(e => e.SolineId).HasColumnName("SOLineID");
 
-            entity.HasOne(d => d.OutboundItem).WithOne(p => p.ReturnReceiptItemOutboundItem)
-                .HasForeignKey<ReturnReceiptItem>(d => d.OutboundItemId)
+            entity.HasOne(d => d.OutboundItem).WithMany(p => p.ReturnReceiptItemOutboundItems)
+                .HasForeignKey(d => d.OutboundItemId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_ReturnReceiptItem_OutboundItemID");
 
@@ -1705,8 +1681,8 @@ public partial class EwmsDbContext : DbContext
                 .HasForeignKey(d => d.ChangedByUserId)
                 .HasConstraintName("FK_StaffWarehouseAssignment_Actor");
 
-            entity.HasOne(d => d.User).WithOne(p => p.StaffWarehouseAssignmentUser)
-                .HasForeignKey<StaffWarehouseAssignment>(d => d.UserId)
+            entity.HasOne(d => d.User).WithMany(p => p.StaffWarehouseAssignmentUsers)
+                .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_StaffWarehouseAssignment_User");
 
@@ -1946,8 +1922,8 @@ public partial class EwmsDbContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_StocktakeRound_Starter");
 
-            entity.HasOne(d => d.Stocktake).WithOne(p => p.StocktakeRound)
-                .HasForeignKey<StocktakeRound>(d => d.StocktakeId)
+            entity.HasOne(d => d.Stocktake).WithMany(p => p.StocktakeRounds)
+                .HasForeignKey(d => d.StocktakeId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_StocktakeRound_Stocktake");
         });
@@ -2254,8 +2230,8 @@ public partial class EwmsDbContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_TransferDispatch_CreatedByUserID");
 
-            entity.HasOne(d => d.TransferOrder).WithOne(p => p.TransferDispatch)
-                .HasForeignKey<TransferDispatch>(d => d.TransferOrderId)
+            entity.HasOne(d => d.TransferOrder).WithMany(p => p.TransferDispatches)
+                .HasForeignKey(d => d.TransferOrderId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_TransferDispatch_TransferOrderID");
         });
@@ -2439,8 +2415,8 @@ public partial class EwmsDbContext : DbContext
             entity.Property(e => e.Note).HasMaxLength(1000);
             entity.Property(e => e.TransferOrderId).HasColumnName("TransferOrderID");
 
-            entity.HasOne(d => d.DispatchItem).WithOne(p => p.TransferLossRequestItemDispatchItem)
-                .HasForeignKey<TransferLossRequestItem>(d => d.DispatchItemId)
+            entity.HasOne(d => d.DispatchItem).WithMany(p => p.TransferLossRequestItemDispatchItems)
+                .HasForeignKey(d => d.DispatchItemId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_TransferLossRequestItem_DispatchItemID");
 
@@ -2638,8 +2614,8 @@ public partial class EwmsDbContext : DbContext
             entity.Property(e => e.TransferOrderId).HasColumnName("TransferOrderID");
             entity.Property(e => e.TransferReceiptId).HasColumnName("TransferReceiptID");
 
-            entity.HasOne(d => d.DispatchItem).WithOne(p => p.TransferReceiptItemDispatchItem)
-                .HasForeignKey<TransferReceiptItem>(d => d.DispatchItemId)
+            entity.HasOne(d => d.DispatchItem).WithMany(p => p.TransferReceiptItemDispatchItems)
+                .HasForeignKey(d => d.DispatchItemId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_TransferReceiptItem_DispatchItemID");
 
@@ -2953,6 +2929,12 @@ public partial class EwmsDbContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_ZoneStorageRule_ZoneLocationID");
         });
+
+        // DB49 tables with triggers cannot use EF's direct OUTPUT clause.
+        // Keep this configuration when regenerating the shared DbContext.
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+            if (entityType.GetTableName() is not null && entityType.GetDeclaredTriggers().Any())
+                modelBuilder.Entity(entityType.ClrType).ToTable(t => t.UseSqlOutputClause(false));
 
         OnModelCreatingPartial(modelBuilder);
     }

@@ -29,9 +29,7 @@ public partial class DemandAllocation
 
     public virtual ICollection<ReservationConsumption> ReservationConsumptionAllocations { get; set; } = new List<ReservationConsumption>();
 
-    public virtual ICollection<ReservationConsumption> ReservationConsumptionDemandAllocationNavigations { get; set; } = new List<ReservationConsumption>();
 
-    public virtual ICollection<ReservationConsumption> ReservationConsumptionDemandAllocations { get; set; } = new List<ReservationConsumption>();
 
     public virtual SupplySource SupplySource { get; set; } = null!;
 

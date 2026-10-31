@@ -19,14 +19,10 @@ public partial class ReservationConsumption
 
     public virtual DemandAllocation Allocation { get; set; } = null!;
 
-    public virtual DemandAllocation? DemandAllocation { get; set; }
 
-    public virtual DemandAllocation? DemandAllocationNavigation { get; set; }
 
     public virtual Reservation Reservation { get; set; } = null!;
 
-    public virtual Reservation? Reservation1 { get; set; }
 
-    public virtual Reservation? ReservationNavigation { get; set; }
 }
 

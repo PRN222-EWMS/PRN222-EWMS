@@ -45,7 +45,7 @@ public partial class StocktakeObservation
 
     public virtual StorageLocation? ExpectedLocation { get; set; }
 
-    public virtual InventoryAdjustmentLine? InventoryAdjustmentLineObservation { get; set; }
+    public virtual ICollection<InventoryAdjustmentLine> InventoryAdjustmentLineObservations { get; set; } = new List<InventoryAdjustmentLine>();
 
     public virtual ICollection<InventoryAdjustmentLine> InventoryAdjustmentLineStocktakeObservations { get; set; } = new List<InventoryAdjustmentLine>();
 

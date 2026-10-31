@@ -45,9 +45,7 @@ public partial class Reservation
 
     public virtual Reservation? ReplacesReservation { get; set; }
 
-    public virtual ICollection<ReservationConsumption> ReservationConsumptionReservation1s { get; set; } = new List<ReservationConsumption>();
 
-    public virtual ICollection<ReservationConsumption> ReservationConsumptionReservationNavigations { get; set; } = new List<ReservationConsumption>();
 
     public virtual ICollection<ReservationConsumption> ReservationConsumptionReservations { get; set; } = new List<ReservationConsumption>();
 
