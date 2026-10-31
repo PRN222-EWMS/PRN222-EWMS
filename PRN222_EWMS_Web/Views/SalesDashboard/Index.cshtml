@@ -1,0 +1,23 @@
+@model PRN222_EWMS_Web.ViewModels.Sales.SalesDashboardViewModel
+@using PRN222_EWMS_Web.ViewModels.Sales
+@{ ViewData["Title"] = "Dashboard Sales"; }
+<div class="sales-page">
+    <div class="workspace-heading"><div><p class="eyebrow">SALES WORKSPACE</p><h1>Tổng quan bán hàng</h1><p class="muted">Theo dõi yêu cầu xuất hàng và tiến độ thực hiện tại kho.</p></div><a class="workspace-button" asp-controller="Customer" asp-action="Create">Tạo khách hàng</a></div>
+    <div class="sales-stats">
+        <a class="sales-stat" asp-controller="SalesOrder" asp-action="Index" asp-route-status="SUBMITTED"><span>Đơn chờ xuất</span><strong>@Model.WaitingOrders</strong></a>
+        <a class="sales-stat" asp-controller="SalesOrder" asp-action="Index" asp-route-status="PARTIALLY_FULFILLED"><span>Đơn xuất một phần</span><strong>@Model.PartialOrders</strong></a>
+        <a class="sales-stat" asp-controller="SalesOrder" asp-action="Index" asp-route-status="FULFILLED"><span>Đơn đã xuất đủ</span><strong>@Model.FulfilledOrders</strong></a>
+        <div class="sales-stat"><span>Đơn có thiếu nguồn</span><strong>@Model.ShortageOrders</strong></div>
+    </div>
+    <section class="workspace-card">
+        <div class="sales-section-heading"><h2>Đơn bán hàng gần đây</h2><a class="workspace-button" asp-controller="SalesOrder" asp-action="Index">Xem tất cả đơn</a></div>
+        <div class="table-wrap"><table class="workspace-table"><thead><tr><th>Mã đơn</th><th>Khách hàng</th><th>Kho xuất</th><th>Ngày đơn</th><th>Người tạo</th><th>Trạng thái</th></tr></thead><tbody>
+        @foreach (var order in Model.RecentOrders)
+        {
+            <tr><td><a class="workspace-button sales-button-small" asp-controller="SalesOrder" asp-action="Details" asp-route-id="@order.Id">@order.Code</a></td><td>@order.CustomerName</td><td>@order.WarehouseName</td><td>@order.OrderDate.ToString("dd/MM/yyyy")</td><td>@order.CreatedByName</td><td><span class="sales-status">@SalesDisplay.Status(order.Status)</span>@if(order.HasShortage){<div class="sales-muted-small">Thiếu nguồn</div>}</td></tr>
+        }
+        </tbody></table></div>
+        @if(Model.RecentOrders.Count == 0){<p class="sales-empty">Chưa có đơn bán hàng.</p>}
+    </section>
+    <section class="workspace-card"><div class="sales-section-heading"><h2>Khách hàng</h2><a class="workspace-button" asp-controller="Customer" asp-action="Index">Xem danh sách</a></div><p class="muted mb-0">Có @Model.CustomerCount khách hàng trong danh mục dùng chung của Sales.</p></section>
+</div>
