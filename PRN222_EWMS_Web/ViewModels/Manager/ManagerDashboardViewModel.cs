@@ -20,6 +20,22 @@ public class ManagerDashboardViewModel
     public List<DashboardReceiptItem> RecentReceipts { get; set; } = new();
 
     public List<VwLocationCapacity> Capacities { get; set; } = new();
+
+    public List<WarehouseCapacitySummary> WarehouseCapacities { get; set; } = new();
+}
+
+public class WarehouseCapacitySummary
+{
+    public int WarehouseId { get; set; }
+    public string WarehouseName { get; set; } = "";
+    public decimal TotalAreaM2 { get; set; }
+    public decimal UsedAreaM2 { get; set; }
+    public decimal TotalVolumeM3 { get; set; }
+    public decimal UsedVolumeM3 { get; set; }
+    public int LocationCount { get; set; }
+    public int OverloadedLocationCount { get; set; }
+    public int NearFullLocationCount { get; set; }
+    public int MissingCapacityLocationCount { get; set; }
 }
 
 public class DashboardStatusItem

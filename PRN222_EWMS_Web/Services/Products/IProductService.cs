@@ -5,6 +5,9 @@ namespace PRN222_EWMS_Web.Services.Products;
 
 public interface IProductService
 {
+    Task<ProductListViewModel?> GetProductListPageAsync(
+        string? keyword, int? warehouseId, int userId,
+        bool isManager, bool isWarehouseStaff, bool isPurchasingStaff = false);
     Task<List<Product>> GetListAsync(
         string? keyword, int userId, bool isWarehouseStaff);
 

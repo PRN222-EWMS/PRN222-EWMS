@@ -25,7 +25,7 @@
         }),
         ("Danh mục & giao dịch", new[]
         {
-            ("Sản phẩm", "bi-box-seam", "Product", "Index", new[] { "CEO", "MANAGER" }),
+            ("Sản phẩm", "bi-box-seam", "Product", "Index", new[] { "CEO", "MANAGER", "PURCHASING_STAFF" }),
             ("Nhà cung cấp", "bi-truck", "Supplier", "Index", new[] { "PURCHASING_STAFF" }),
             ("Đơn mua hàng", "bi-bag-plus", "PurchaseOrder", "Index", new[] { "PURCHASING_STAFF", "MANAGER" }),
             ("Tạo đơn mua", "bi-plus-circle", "PurchaseOrder", "Create", new[] { "PURCHASING_STAFF" }),
@@ -94,7 +94,7 @@
                 .Where(i => i.Roles.Length == 0 || i.Roles.Contains(role, StringComparer.OrdinalIgnoreCase))
                 // Keep CEO's scope and include the merged modules available to Manager.
                 .Where(i => !isCeo || (i.Action == "Index" && (i.Controller is "Home" or "Warehouse")))
-                .Where(i => !isManager || (i.Action == "Index" && (i.Controller is "Home" or "Warehouse" or "PurchaseOrder" or "SalesOrder" or "Inbound")))
+                .Where(i => !isManager || (i.Action == "Index" && (i.Controller is "Home" or "Warehouse" or "PurchaseOrder" or "SalesOrder" or "Inbound" or "Notice")))
                 .ToArray();
             if (allowedItems.Length == 0) { continue; }
             <div class="ewms-nav-section">

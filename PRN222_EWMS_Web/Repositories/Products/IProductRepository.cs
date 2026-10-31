@@ -1,9 +1,13 @@
 ﻿using PRN222_EWMS_Web.Models;
 
+using PRN222_EWMS_Web.ViewModels.Products;
+
 namespace PRN222_EWMS_Web.Repositories.Products;
 
 public interface IProductRepository
 {
+    Task<List<PRN222_EWMS_Web.Models.Warehouse>> GetWarehousesAsync();
+    Task<List<ProductStockCount>> GetStockCountsAsync(int? warehouseId);
     Task<int?> GetWarehouseIdAsync(int userId);
 
     Task<List<Product>> GetListAsync(

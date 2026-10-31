@@ -1,4 +1,4 @@
-Susing Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using PRN222_EWMS_Web.Models;
 using System.Diagnostics;
 

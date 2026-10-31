@@ -15,14 +15,18 @@ public class ProductController(IProductService service) : Controller
     private bool IsWarehouseStaff =>
         User.IsInRole("WAREHOUSE_STAFF");
 
-    public async Task<IActionResult> Index(string? keyword)
+    [HttpGet]
+    public async Task<IActionResult> Index(string? keyword, int? warehouseId)
     {
-        ViewBag.Keyword = keyword;
+        if (!ModelState.IsValid)
+            return BadRequest();
 
-        var products = await service.GetListAsync(
-            keyword, CurrentUserId, IsWarehouseStaff);
+        var result = await service.GetProductListPageAsync(
+            keyword, warehouseId, CurrentUserId,
+            User.IsInRole("MANAGER"), IsWarehouseStaff,
+            User.IsInRole("PURCHASING_STAFF"));
 
-        return View(products);
+        return result is null ? NotFound() : View(result);
     }
 
     public async Task<IActionResult> Details(int id)

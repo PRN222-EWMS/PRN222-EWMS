@@ -10,6 +10,60 @@ namespace PRN222_EWMS_Web.Services.Products;
 public class ProductService(IProductRepository repository)
     : IProductService
 {
+    public async Task<ProductListViewModel?> GetProductListPageAsync(
+        string? keyword, int? warehouseId, int userId,
+        bool isManager, bool isWarehouseStaff, bool isPurchasingStaff = false)
+    {
+        var result = new ProductListViewModel
+        {
+            Keyword = keyword,
+            CanFilterWarehouse = (isManager || isPurchasingStaff) && !isWarehouseStaff
+        };
+
+        int? effectiveWarehouseId = null;
+        if (isWarehouseStaff)
+        {
+            effectiveWarehouseId = await repository.GetWarehouseIdAsync(userId);
+            if (effectiveWarehouseId is null)
+                return result;
+        }
+        else if (isManager || isPurchasingStaff)
+        {
+            var warehouses = await repository.GetWarehousesAsync();
+            result.Warehouses = warehouses.Select(w => new SelectListItem
+            {
+                Value = w.WarehouseId.ToString(),
+                Text = w.WarehouseName
+            }).ToList();
+
+            if (warehouseId.HasValue &&
+                !warehouses.Any(w => w.WarehouseId == warehouseId.Value))
+                return null;
+
+            effectiveWarehouseId = warehouseId;
+            result.WarehouseId = warehouseId;
+        }
+
+        // Manager and Purchasing keep the shared catalog, including zero-stock products.
+        var products = await repository.GetListAsync(
+            keyword, isWarehouseStaff ? effectiveWarehouseId : null);
+        var counts = await repository.GetStockCountsAsync(effectiveWarehouseId);
+        var stockByProduct = counts.ToDictionary(s => s.ProductId);
+
+        result.Items = products.Select(product =>
+        {
+            stockByProduct.TryGetValue(product.ProductId, out var stock);
+            return new ProductListItemViewModel
+            {
+                Product = product,
+                TotalStock = stock?.TotalStock ?? 0,
+                DamagedStock = stock?.DamagedStock ?? 0
+            };
+        }).ToList();
+
+        return result;
+    }
+
     public async Task<List<Product>> GetListAsync(
         string? keyword, int userId, bool isWarehouseStaff)
     {

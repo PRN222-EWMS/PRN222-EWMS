@@ -1,11 +1,33 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Models;
 
+using PRN222_EWMS_Web.ViewModels.Products;
+
 namespace PRN222_EWMS_Web.Repositories.Products;
 
 public class ProductRepository(EwmsDbContext db)
     : IProductRepository
 {
+    public Task<List<PRN222_EWMS_Web.Models.Warehouse>> GetWarehousesAsync() => db.Warehouses
+        .AsNoTracking().OrderBy(w => w.WarehouseName).ToListAsync();
+
+    public Task<List<ProductStockCount>> GetStockCountsAsync(int? warehouseId)
+    {
+        var query = db.SerialItems.AsNoTracking().Where(s =>
+            s.StockState == "IN_WAREHOUSE" && s.CurrentWarehouseId != null);
+
+        if (warehouseId.HasValue)
+            query = query.Where(s => s.CurrentWarehouseId == warehouseId.Value);
+
+        return query.GroupBy(s => s.ProductId)
+            .Select(g => new ProductStockCount
+            {
+                ProductId = g.Key,
+                TotalStock = g.Count(),
+                DamagedStock = g.Count(s => s.ItemCondition == "DAMAGED")
+            }).ToListAsync();
+    }
+
     public Task<int?> GetWarehouseIdAsync(int userId)
     {
         return db.Users

@@ -74,10 +74,17 @@
             <label asp-for="Specifications" class="form-label">
                 Thông số kỹ thuật
             </label>
+
             <textarea asp-for="Specifications"
                       class="form-control"
-                      rows="5"
-                      placeholder="Ví dụ: Loại máy: Cửa trước&#10;Khối lượng giặt: 9 kg"></textarea>
+                      rows="6"
+                      placeholder='{"CongNghe":"Inverter","MauSac":"Trắng"}'></textarea>
+
+            <div class="form-text">
+                Có thể để trống. Nếu nhập, hãy dùng JSON:
+                tên thông số và giá trị đặt trong dấu ngoặc kép.
+            </div>
+
             <span asp-validation-for="Specifications"
                   class="text-danger"></span>
         </div>

@@ -1,9 +1,10 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using System.Text.Json;
 
 namespace PRN222_EWMS_Web.ViewModels.Products;
 
-public class ProductCreateViewModel
+public class ProductCreateViewModel : IValidatableObject
 {
     [Required(ErrorMessage = "Vui lòng nhập mã sản phẩm.")]
     public string ProductCode { get; set; } = "";
@@ -44,4 +45,33 @@ public class ProductCreateViewModel
     public List<SelectListItem> Categories { get; set; } = new();
 
     public List<SelectListItem> Brands { get; set; } = new();
+
+    public IEnumerable<ValidationResult> Validate(
+    ValidationContext validationContext)
+    {
+        if (string.IsNullOrWhiteSpace(Specifications))
+            yield break;
+
+        bool isValidObject;
+
+        try
+        {
+            using var document = JsonDocument.Parse(Specifications);
+
+            isValidObject =
+                document.RootElement.ValueKind == JsonValueKind.Object;
+        }
+        catch (JsonException)
+        {
+            isValidObject = false;
+        }
+
+        if (!isValidObject)
+        {
+            yield return new ValidationResult(
+                "Thông số kỹ thuật phải là JSON dạng đối tượng, " +
+                "ví dụ: {\"CongNghe\":\"Inverter\"}.",
+                new[] { nameof(Specifications) });
+        }
+    }
 }

@@ -1,4 +1,4 @@
-﻿@model PRN222_EWMS_Web.ViewModels.Manager.ManagerDashboardViewModel
+@model PRN222_EWMS_Web.ViewModels.Manager.ManagerDashboardViewModel
 
 @{
     ViewData["Title"] = "Dashboard Manager";
@@ -212,92 +212,153 @@
 </div>
 
 <div class="card">
-    <div class="card-header">Sức chứa theo vị trí</div>
+    <div class="card-header">Tổng quan sức chứa các kho</div>
     <div class="card-body">
         <p class="text-muted">
-            Ô nền tính theo m², tầng kệ tính theo m³.
-            Tải trọng được theo dõi riêng theo kg.
+            Ô nền tính theo m², tầng kệ theo m³. Gần đầy khi đạt từ 80% sức chứa
+            hoặc tải trọng; vị trí đã quá tải được đếm riêng.
         </p>
 
-        @if (Model.Capacities.Count == 0)
+        @if (Model.WarehouseCapacities.Count == 0)
         {
-            <p class="text-muted mb-0">
-                Chưa có vị trí lưu trữ phù hợp.
-            </p>
+            <p class="text-muted mb-0">Chưa có kho để hiển thị.</p>
         }
         else
         {
             <div class="table-responsive">
-                <table class="table align-middle mb-0">
+                <table class="table align-middle">
+                    <caption class="visually-hidden">Sức chứa tổng hợp theo kho</caption>
                     <thead>
                         <tr>
-                            <th>Kho</th>
-                            <th>Vị trí</th>
-                            <th>Loại</th>
-                            <th>Đã dùng / sức chứa</th>
-                            <th>Tỷ lệ sử dụng</th>
-                            <th>Tải trọng</th>
-                            <th>Số serial</th>
+                            <th scope="col">Kho</th>
+                            <th scope="col">Diện tích ô nền</th>
+                            <th scope="col">Thể tích tầng kệ</th>
+                            <th scope="col">Vị trí gần đầy</th>
+                            <th scope="col">Vị trí quá tải</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in Model.Capacities)
+                        @foreach (var warehouse in Model.WarehouseCapacities)
                         {
-                            var warehouseName = Model.Warehouses
-                                .FirstOrDefault(w =>
-                                    w.Value == item.WarehouseId.ToString())?.Text;
-
-                            bool isFloor = item.CapacityMode == "FLOOR_AREA";
-
-                            decimal? used = isFloor
-                                ? item.UsedAreaM2
-                                : item.UsedVolumeM3;
-
-                            decimal? total = isFloor
-                                ? item.CapacityAreaM2
-                                : item.CapacityVolumeM3;
-
-                            string unit = isFloor ? "m²" : "m³";
-
-                            bool exceeded =
-                                (used.HasValue && total.HasValue &&
-                                 used.Value > total.Value) ||
-                                (item.MaxWeightKg.HasValue &&
-                                 item.UsedWeightKg > item.MaxWeightKg.Value);
-
-                            <tr class="@(exceeded ? "table-danger" : "")">
-                                <td>@(warehouseName ?? $"Kho {item.WarehouseId}")</td>
-                                <td>@item.LocationName</td>
-                                <td>@(isFloor ? "Ô nền" : "Tầng kệ")</td>
-                                <td>
-                                    @Measure(used) / @Measure(total) @unit
-                                </td>
-                                <td>
-                                    @PercentText(used, total)
-                                    @if (exceeded)
+                            <tr>
+                                <th scope="row">
+                                    @warehouse.WarehouseName
+                                    <div class="small text-muted fw-normal">
+                                        @warehouse.LocationCount vị trí lưu trữ
+                                    </div>
+                                    @if (warehouse.MissingCapacityLocationCount > 0)
                                     {
-                                        <span class="badge bg-danger">
-                                            Vượt sức chứa hoặc tải trọng
-                                        </span>
+                                        <div class="small text-danger fw-normal">
+                                            @warehouse.MissingCapacityLocationCount vị trí thiếu dữ liệu sức chứa;
+                                            số tổng hợp có thể chưa đầy đủ.
+                                        </div>
+                                    }
+                                </th>
+                                <td>
+                                    @if (warehouse.TotalAreaM2 > 0)
+                                    {
+                                        <div>@Measure(warehouse.UsedAreaM2) / @Measure(warehouse.TotalAreaM2) m²</div>
+                                        <small class="text-muted">@PercentText(warehouse.UsedAreaM2, warehouse.TotalAreaM2)</small>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Chưa có sức chứa ô nền</span>
                                     }
                                 </td>
                                 <td>
-                                    @item.UsedWeightKg.ToString("0.###")
-                                    /
-                                    @Measure(item.MaxWeightKg) kg
+                                    @if (warehouse.TotalVolumeM3 > 0)
+                                    {
+                                        <div>@Measure(warehouse.UsedVolumeM3) / @Measure(warehouse.TotalVolumeM3) m³</div>
+                                        <small class="text-muted">@PercentText(warehouse.UsedVolumeM3, warehouse.TotalVolumeM3)</small>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Chưa có sức chứa tầng kệ</span>
+                                    }
                                 </td>
-                                <td>@item.ItemCount</td>
+                                <td>
+                                    <span class="badge @(warehouse.NearFullLocationCount > 0 ? "bg-warning text-dark" : "bg-secondary")">
+                                        @warehouse.NearFullLocationCount
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge @(warehouse.OverloadedLocationCount > 0 ? "bg-danger" : "bg-success")">
+                                        @warehouse.OverloadedLocationCount
+                                    </span>
+                                </td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
 
-            <p class="text-muted small mt-3 mb-0">
-                Sức chứa lấy từ view hiện có của database.
-                Hàng chưa được gán vị trí không nằm trong số liệu từng vị trí.
-                Dấu — nghĩa là chưa có thông tin giới hạn.
-            </p>
+            @foreach (var warehouse in Model.WarehouseCapacities)
+            {
+                var locations = Model.Capacities
+                    .Where(c => c.WarehouseId == warehouse.WarehouseId).ToList();
+
+                <details class="border rounded p-3 mt-3">
+                    <summary>Xem chi tiết — @warehouse.WarehouseName</summary>
+                    @if (locations.Count == 0)
+                    {
+                        <p class="text-muted mt-3 mb-0">Kho chưa có vị trí lưu trữ.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive mt-3">
+                            <table class="table table-sm align-middle mb-0">
+                                <caption class="visually-hidden">Chi tiết vị trí tại @warehouse.WarehouseName</caption>
+                                <thead>
+                                    <tr>
+                                        <th scope="col">ID vị trí</th>
+                                        <th scope="col">Tên vị trí</th>
+                                        <th scope="col">Loại</th>
+                                        <th scope="col">Đã dùng / sức chứa</th>
+                                        <th scope="col">Tỷ lệ</th>
+                                        <th scope="col">Tải trọng</th>
+                                        <th scope="col">Số serial</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in locations)
+                                    {
+                                        bool isFloor = item.CapacityMode == "FLOOR_AREA";
+                                        decimal? used = isFloor ? item.UsedAreaM2 : item.UsedVolumeM3;
+                                        decimal? total = isFloor ? item.CapacityAreaM2 : item.CapacityVolumeM3;
+                                        string unit = isFloor ? "m²" : "m³";
+                                        bool overloaded =
+                                            (used.HasValue && total.HasValue && used.Value > total.Value) ||
+                                            (item.MaxWeightKg.HasValue && item.UsedWeightKg > item.MaxWeightKg.Value);
+
+                                        <tr class="@(overloaded ? "table-danger" : "")">
+                                            <td>@item.LocationId</td>
+                                            <th scope="row">@item.LocationName</th>
+                                            <td>@(isFloor ? "Ô nền" : "Tầng kệ")</td>
+                                            <td>@Measure(used) / @Measure(total) @unit</td>
+                                            <td>
+                                                @PercentText(used, total)
+                                                @if (overloaded)
+                                                {
+                                                    <span class="badge bg-danger">Quá tải</span>
+                                                }
+                                            </td>
+                                            <td>@Measure(item.UsedWeightKg) / @Measure(item.MaxWeightKg) kg</td>
+                                            <td>@item.ItemCount</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </details>
+            }
         }
+
+        <p class="small text-muted mt-3 mb-0">
+            Tỷ lệ tổng hợp không bảo đảm từng vị trí còn đủ chỗ.
+            Hàng chưa gán vị trí chưa được tính vào sức chứa đã dùng.
+            Dấu — nghĩa là chưa có dữ liệu; vị trí chưa khai báo giới hạn tải trọng
+            chưa được kiểm tra quá tải theo kg.
+        </p>
     </div>
 </div>

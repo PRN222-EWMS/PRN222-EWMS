@@ -150,6 +150,57 @@ public class ManagerDashboardRepository(EwmsDbContext db)
             .ThenBy(c => c.LocationName)
             .ToListAsync();
 
+        // 80% is the current near-full threshold; overloaded locations are counted separately.
+        bool IsOverloaded(VwLocationCapacity location) =>
+            (location.CapacityAreaM2.HasValue && location.UsedAreaM2.HasValue &&
+             location.UsedAreaM2.Value > location.CapacityAreaM2.Value) ||
+            (location.CapacityVolumeM3.HasValue && location.UsedVolumeM3.HasValue &&
+             location.UsedVolumeM3.Value > location.CapacityVolumeM3.Value) ||
+            (location.MaxWeightKg.HasValue &&
+             location.UsedWeightKg > location.MaxWeightKg.Value);
+
+        bool IsNearFull(VwLocationCapacity location) => !IsOverloaded(location) &&
+            ((location.CapacityAreaM2 > 0 && location.UsedAreaM2.HasValue &&
+              location.UsedAreaM2.Value / location.CapacityAreaM2.Value >= 0.8m) ||
+             (location.CapacityVolumeM3 > 0 && location.UsedVolumeM3.HasValue &&
+              location.UsedVolumeM3.Value / location.CapacityVolumeM3.Value >= 0.8m) ||
+             (location.MaxWeightKg > 0 &&
+              location.UsedWeightKg / location.MaxWeightKg.Value >= 0.8m));
+
+        bool IsMissingCapacity(VwLocationCapacity location) => location.CapacityMode switch
+        {
+            "FLOOR_AREA" => !location.CapacityAreaM2.HasValue ||
+                            location.CapacityAreaM2 <= 0 || !location.UsedAreaM2.HasValue,
+            "VOLUME" => !location.CapacityVolumeM3.HasValue ||
+                        location.CapacityVolumeM3 <= 0 || !location.UsedVolumeM3.HasValue,
+            _ => true
+        };
+
+        var locationsByWarehouse = model.Capacities.ToLookup(c => c.WarehouseId);
+        model.WarehouseCapacities = warehouses
+            .Where(w => !warehouseId.HasValue || w.WarehouseId == warehouseId.Value)
+            .Select(w =>
+            {
+                var locations = locationsByWarehouse[w.WarehouseId].ToList();
+                return new WarehouseCapacitySummary
+                {
+                    WarehouseId = w.WarehouseId,
+                    WarehouseName = w.WarehouseName,
+                    TotalAreaM2 = locations.Where(c => c.CapacityMode == "FLOOR_AREA")
+                        .Sum(c => c.CapacityAreaM2 ?? 0),
+                    UsedAreaM2 = locations.Where(c => c.CapacityMode == "FLOOR_AREA")
+                        .Sum(c => c.UsedAreaM2 ?? 0),
+                    TotalVolumeM3 = locations.Where(c => c.CapacityMode == "VOLUME")
+                        .Sum(c => c.CapacityVolumeM3 ?? 0),
+                    UsedVolumeM3 = locations.Where(c => c.CapacityMode == "VOLUME")
+                        .Sum(c => c.UsedVolumeM3 ?? 0),
+                    LocationCount = locations.Count,
+                    OverloadedLocationCount = locations.Count(IsOverloaded),
+                    NearFullLocationCount = locations.Count(IsNearFull),
+                    MissingCapacityLocationCount = locations.Count(IsMissingCapacity)
+                };
+            }).ToList();
+
         return model;
     }
 }
