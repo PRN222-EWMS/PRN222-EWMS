@@ -1,0 +1,176 @@
+@model PRN222_EWMS_Web.ViewModels.WarehouseStaff.WarehousePoListViewModel
+@{
+    ViewData["Title"] = "Đơn mua hàng cần tiếp nhận";
+}
+
+<div class="wh-page">
+    <!-- Header -->
+    <div class="wh-header">
+        <div>
+            <h1 class="wh-title">Đơn mua hàng cần tiếp nhận</h1>
+            <p class="wh-subtitle">Danh sách các đơn mua hàng đã được nhà cung cấp xác nhận (CONFIRMED hoặc PARTIALLY_RECEIVED) đang vận chuyển tới <strong>@Model.WarehouseName</strong> và còn số lượng cần nhận.</p>
+        </div>
+        <div>
+            <a asp-controller="WarehouseDashboard" asp-action="Index" class="wh-btn wh-btn-outline">
+                <i class="bi bi-grid-1x2"></i> Quay lại Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Filter Form -->
+    <form method="get" class="wh-filters">
+        <div class="wh-filter-group" style="flex: 1; min-width: 200px;">
+            <label for="search">Tìm kiếm</label>
+            <input type="text" id="search" name="search" value="@Model.SearchTerm" class="wh-input" placeholder="Mã PO hoặc Tên nhà cung cấp..." />
+        </div>
+        <div class="wh-filter-group">
+            <label for="fromDate">Dự kiến từ ngày</label>
+            <input type="date" id="fromDate" name="fromDate" value="@Model.FromDate?.ToString("yyyy-MM-dd")" class="wh-input" />
+        </div>
+        <div class="wh-filter-group">
+            <label for="toDate">Đến ngày</label>
+            <input type="date" id="toDate" name="toDate" value="@Model.ToDate?.ToString("yyyy-MM-dd")" class="wh-input" />
+        </div>
+        <div class="wh-filter-group" style="align-self: flex-end;">
+            <button type="submit" class="wh-btn wh-btn-primary">
+                <i class="bi bi-funnel"></i> Lọc đơn
+            </button>
+            <a asp-action="PurchaseOrders" class="wh-btn wh-btn-outline ms-1" title="Đặt lại bộ lọc">
+                <i class="bi bi-arrow-counterclockwise"></i>
+            </a>
+        </div>
+    </form>
+
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-danger py-2 mb-3">
+            @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+            {
+                <div><i class="bi bi-exclamation-circle"></i> @error.ErrorMessage</div>
+            }
+        </div>
+    }
+
+    <!-- PO List Table Section -->
+    <div class="wh-section">
+        <div class="wh-section-title">
+            <span>
+                <i class="bi bi-list-check"></i> Đơn hàng chờ tiếp nhận
+                <span class="wh-badge wh-badge-blue ms-2">@Model.TotalItems đơn hàng</span>
+            </span>
+        </div>
+
+        @if (Model.Items.Count == 0)
+        {
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-inbox fs-1 d-block mb-2 text-secondary"></i>
+                Không tìm thấy đơn mua hàng nào phù hợp với điều kiện tìm kiếm.
+            </div>
+        }
+        else
+        {
+            <div class="wh-table-container">
+                <table class="wh-table">
+                    <thead>
+                        <tr>
+                            <th>Mã PO</th>
+                            <th>Nhà cung cấp</th>
+                            <th>Ngày dự kiến đến</th>
+                            <th class="text-center">Tổng đặt</th>
+                            <th class="text-center">Đã nhận</th>
+                            <th class="text-center">Còn phải nhận</th>
+                            <th>Trạng thái</th>
+                            <th class="text-end">Hành động</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Items)
+                        {
+                            <tr>
+                                <td>
+                                    <strong class="text-primary font-monospace">@item.Pocode</strong>
+                                </td>
+                                <td>
+                                    <strong>@item.SupplierName</strong>
+                                </td>
+                                <td>
+                                    @if (item.ExpectedArrivalDate.HasValue)
+                                    {
+                                        <span>@item.ExpectedArrivalDate.Value.ToString("dd/MM/yyyy")</span>
+                                        @if (item.IsOverdue)
+                                        {
+                                            <span class="wh-badge wh-badge-red ms-1" title="Đã quá hạn dự kiến đến!">Quá hạn</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Chưa hẹn ngày</span>
+                                    }
+                                </td>
+                                <td class="text-center fw-semibold">@item.TotalOrdered</td>
+                                <td class="text-center text-success fw-semibold">@item.TotalReceived</td>
+                                <td class="text-center">
+                                    <span class="badge bg-primary fs-6 px-2 py-1">@item.TotalRemaining</span>
+                                </td>
+                                <td>
+                                    @if (item.Status == "CONFIRMED")
+                                    {
+                                        <span class="wh-badge wh-badge-blue">CONFIRMED</span>
+                                    }
+                                    else if (item.Status == "PARTIALLY_RECEIVED")
+                                    {
+                                        <span class="wh-badge wh-badge-amber">PARTIAL</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="wh-badge wh-badge-gray">@item.Status</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    <a asp-action="PurchaseOrderDetails" asp-route-id="@item.PurchaseOrderId" class="wh-btn wh-btn-outline wh-btn-sm" title="Đối chiếu chi tiết đơn hàng trước khi nhận">
+                                        <i class="bi bi-clipboard2-check"></i> Đối chiếu
+                                    </a>
+                                    <a asp-action="Create" asp-route-purchaseOrderId="@item.PurchaseOrderId" class="wh-btn wh-btn-primary wh-btn-sm ms-1" title="Bắt đầu nhận hàng">
+                                        <i class="bi bi-box-arrow-in-down"></i> Nhận hàng
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            @if (Model.TotalPages > 1)
+            {
+                <div class="wh-pagination">
+                    <small class="text-muted">Trang @Model.PageIndex / @Model.TotalPages (Tổng số @Model.TotalItems đơn)</small>
+                    <div class="btn-group">
+                        @if (Model.PageIndex > 1)
+                        {
+                            <a asp-action="PurchaseOrders"
+                               asp-route-page="@(Model.PageIndex - 1)"
+                               asp-route-search="@Model.SearchTerm"
+                               asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")"
+                               asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")"
+                               class="wh-btn wh-btn-outline wh-btn-sm">
+                                <i class="bi bi-chevron-left"></i> Trước
+                            </a>
+                        }
+                        @if (Model.PageIndex < Model.TotalPages)
+                        {
+                            <a asp-action="PurchaseOrders"
+                               asp-route-page="@(Model.PageIndex + 1)"
+                               asp-route-search="@Model.SearchTerm"
+                               asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")"
+                               asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")"
+                               class="wh-btn wh-btn-outline wh-btn-sm ms-1">
+                                Sau <i class="bi bi-chevron-right"></i>
+                            </a>
+                        }
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>

@@ -110,3 +110,67 @@ public class CustomerFormViewModel
     [StringLength(30, ErrorMessage = "Số điện thoại tối đa 30 ký tự."), Display(Name = "Số điện thoại")]
     public string? Phone { get; set; }
 }
+
+public class SalesOrderFormViewModel
+{
+    public long Id { get; set; }
+    public string Code { get; set; } = "";
+
+    [Required(ErrorMessage = "Vui lòng chọn khách hàng.")]
+    [Display(Name = "Khách hàng")]
+    public int? CustomerId { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng chọn kho xuất.")]
+    [Display(Name = "Kho xuất hàng")]
+    public int? WarehouseId { get; set; }
+
+    [Display(Name = "Ngày đặt hàng")]
+    public DateOnly OrderDate { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+
+    [Display(Name = "Ngày yêu cầu xuất hàng")]
+    public DateOnly? RequestedDate { get; set; }
+
+    [StringLength(500, ErrorMessage = "Ghi chú tối đa 500 ký tự.")]
+    [Display(Name = "Ghi chú")]
+    public string? Note { get; set; }
+
+    public string Status { get; set; } = "DRAFT";
+    public bool CanEdit { get; set; } = true;
+    public bool IsEditMode => Id > 0;
+    public string? ConcurrencyToken { get; set; }
+
+    public List<SalesOrderLineFormDto> Lines { get; set; } = [];
+
+    public List<SelectListItem> Customers { get; set; } = [];
+    public List<SelectListItem> Warehouses { get; set; } = [];
+    public List<ProductStockLookupDto> AvailableProducts { get; set; } = [];
+}
+
+public class SalesOrderLineFormDto
+{
+    public long SolineId { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng chọn sản phẩm.")]
+    public int? ProductId { get; set; }
+
+    public string? ProductCode { get; set; }
+    public string? ProductName { get; set; }
+    public string? Unit { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng nhập số lượng yêu cầu.")]
+    [Range(1, int.MaxValue, ErrorMessage = "Số lượng yêu cầu phải lớn hơn 0.")]
+    public int? RequestedQuantity { get; set; }
+
+    public long AvailableQuantity { get; set; }
+}
+
+public class ProductStockLookupDto
+{
+    public int ProductId { get; set; }
+    public string ProductCode { get; set; } = "";
+    public string ProductName { get; set; } = "";
+    public string Unit { get; set; } = "";
+    public int WarehouseId { get; set; }
+    public long UnreservedQuantity { get; set; }
+}
+

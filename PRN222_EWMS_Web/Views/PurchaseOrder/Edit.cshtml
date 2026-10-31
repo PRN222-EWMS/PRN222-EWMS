@@ -1,0 +1,52 @@
+@model PRN222_EWMS_Web.ViewModels.Purchasing.PoFormViewModel
+@{
+    ViewData["Title"] = "Chỉnh sửa " + Model.Pocode;
+}
+
+<div class="po-page">
+    <div class="workspace-heading">
+        <div>
+            <p class="eyebrow">MUA HÀNG / CHỈNH SỬA</p>
+            <h1>Chỉnh sửa đơn @Model.Pocode</h1>
+            <p class="muted">Cập nhật thông tin chi tiết hoặc sản phẩm khi đơn chưa phát sinh phiếu nhập hàng.</p>
+        </div>
+        <div class="po-toolbar">
+            <a class="workspace-button sales-button-secondary" asp-action="Details" asp-route-id="@Model.PurchaseOrderId">
+                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Hủy & Quay lại
+            </a>
+        </div>
+    </div>
+
+    @if (Model.IsConfirmedOrder)
+    {
+        <div class="po-alert po-alert-info" role="status">
+            <i class="bi bi-shield-check" aria-hidden="true"></i>
+            <div>
+                <strong>Đơn hàng đang ở trạng thái ĐÃ XÁC NHẬN (CONFIRMED):</strong>
+                <span>Do chưa phát sinh đợt nhận hàng (Inbound) nào, bạn được phép cập nhật ngày dự kiến giao hàng, bổ sung ghi chú hoặc điều chỉnh số lượng dòng sản phẩm. Nhà cung cấp không thể thay đổi sau khi đơn đã xác nhận.</span>
+            </div>
+        </div>
+    }
+
+    <form method="post" asp-action="Edit" asp-route-id="@Model.PurchaseOrderId" id="editPoForm">
+        @Html.AntiForgeryToken()
+
+        <section class="workspace-card mb-4">
+            <partial name="_Form" model="Model" />
+        </section>
+
+        <section class="workspace-card">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div class="small text-muted">
+                    Hệ thống tự động kiểm tra xung đột dữ liệu (Concurrency Check) để đảm bảo không bị ghi đè khi nhiều nhân viên cùng xử lý.
+                </div>
+                <div class="d-flex gap-2">
+                    <a class="workspace-button sales-button-secondary" asp-action="Details" asp-route-id="@Model.PurchaseOrderId">Hủy bỏ</a>
+                    <button type="submit" class="workspace-button">
+                        <i class="bi bi-save me-1" aria-hidden="true"></i> Lưu thay đổi
+                    </button>
+                </div>
+            </div>
+        </section>
+    </form>
+</div>

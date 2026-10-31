@@ -1,0 +1,24 @@
+@model PRN222_EWMS_Web.ViewModels.Sales.SalesOrderFormViewModel
+@{
+    ViewData["Title"] = "Chỉnh sửa đơn " + Model.Code;
+}
+
+<div class="sales-page">
+    <div class="workspace-heading">
+        <div>
+            <p class="eyebrow">BÁN HÀNG / CHỈNH SỬA ĐƠN</p>
+            <h1>@Model.Code</h1>
+            <p class="muted">Chỉ được phép chỉnh sửa đơn trước khi phiếu xuất kho đầu tiên được tạo và lưu.</p>
+        </div>
+        <div class="sales-toolbar">
+            <a asp-action="Details" asp-route-id="@Model.Id" class="workspace-button sales-button-secondary">
+                <i class="bi bi-arrow-left me-1"></i> Chi tiết đơn
+            </a>
+        </div>
+    </div>
+
+    <form method="post" asp-action="Edit" asp-route-id="@Model.Id" id="salesOrderForm">
+        @Html.AntiForgeryToken()
+        <partial name="_Form" model="Model" />
+    </form>
+</div>
