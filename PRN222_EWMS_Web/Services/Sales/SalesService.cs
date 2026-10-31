@@ -3,21 +3,46 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Models;
 using PRN222_EWMS_Web.Repositories.Sales;
+using PRN222_EWMS_Web.Repositories.User;
 using PRN222_EWMS_Web.ViewModels.Sales;
 
 namespace PRN222_EWMS_Web.Services.Sales;
 
-public class SalesService(ISalesRepository repository) : ISalesService
+public class SalesService(ISalesRepository repository, IUserRepository users) : ISalesService
 {
-    private static Expression<Func<SalesOrder, SalesOrderRowViewModel>> Row(int userId) => o => new SalesOrderRowViewModel
+    private static Expression<Func<SalesOrder, SalesOrderRowViewModel>> Row(int userId, bool canEdit = true) => o => new SalesOrderRowViewModel
     {
         Id = o.SalesOrderId, Code = o.Socode,
         CustomerName = o.CustomerNameSnapshot ?? o.Customer.CustomerName,
         WarehouseName = o.Warehouse.WarehouseName, CreatedByName = o.CreatedByUser.FullName,
         CreatedByUserId = o.CreatedByUserId, OrderDate = o.OrderDate.ToDateTime(TimeOnly.MinValue),
         Status = o.Status, HasShortage = o.HasShortage,
-        CanEdit = o.CreatedByUserId == userId && (o.Status == "DRAFT" || o.Status == "SUBMITTED") && !o.Outbounds.Any()
+        CanEdit = canEdit && o.CreatedByUserId == userId && (o.Status == "DRAFT" || o.Status == "SUBMITTED") && !o.Outbounds.Any()
     };
+
+    private sealed record OrderReadScope(bool IsSales, bool IsWarehouseStaff, int? WarehouseId, bool Allowed);
+
+    private async Task<OrderReadScope> GetOrderReadScopeAsync(int userId)
+    {
+        var user = await users.FindByIdAsync(userId);
+        if (user?.Status != "ACTIVE") return new(false, false, null, false);
+        return user.Role?.RoleName switch
+        {
+            "SALES_STAFF" => new(true, false, null, true),
+            "MANAGER" => new(false, false, null, true),
+            "WAREHOUSE_STAFF" => new(false, true, user.WarehouseId, user.WarehouseId.HasValue),
+            _ => new(false, false, null, false)
+        };
+    }
+
+    private IQueryable<SalesOrder> ApplyOrderReadScope(OrderReadScope scope)
+    {
+        var query = repository.Orders;
+        if (!scope.Allowed) return query.Where(_ => false);
+        if (scope.IsWarehouseStaff)
+            query = query.Where(o => o.WarehouseId == scope.WarehouseId && o.Status != "DRAFT" && o.SubmittedAt != null);
+        return query;
+    }
 
     public async Task<SalesDashboardViewModel> GetDashboardAsync(int userId)
     {
@@ -36,7 +61,15 @@ public class SalesService(ISalesRepository repository) : ISalesService
 
     public async Task<SalesOrderListViewModel> GetOrdersAsync(SalesOrderListViewModel filter, int userId)
     {
-        var query = repository.Orders;
+        var scope = await GetOrderReadScopeAsync(userId);
+        var query = ApplyOrderReadScope(scope);
+        filter.CanFilterMine = scope.IsSales;
+        filter.IsWarehouseStaff = scope.IsWarehouseStaff;
+        filter.ScopeMessage = scope.IsWarehouseStaff && !scope.WarehouseId.HasValue
+            ? "Bạn chưa được phân công kho làm việc. Vui lòng liên hệ quản lý để được phân công kho."
+            : null;
+        if (!scope.IsSales) filter.Mine = false;
+        if (scope.IsWarehouseStaff) filter.WarehouseId = scope.WarehouseId;
         filter.Search = filter.Search?.Trim();
         if (!string.IsNullOrEmpty(filter.Search))
         {
@@ -51,13 +84,19 @@ public class SalesService(ISalesRepository repository) : ISalesService
         filter.TotalCount = await query.CountAsync();
         filter.Page = Math.Clamp(filter.Page, 1, filter.TotalPages);
         filter.Items = await query.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.SalesOrderId)
-            .Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize).Select(Row(userId)).ToListAsync();
-        filter.Warehouses = await repository.Warehouses.OrderBy(x => x.WarehouseName)
+            .Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize).Select(Row(userId, scope.IsSales)).ToListAsync();
+        var warehouses = repository.Warehouses;
+        if (!scope.Allowed) warehouses = warehouses.Where(_ => false);
+        else if (scope.IsWarehouseStaff) warehouses = warehouses.Where(w => w.WarehouseId == scope.WarehouseId);
+        filter.Warehouses = await warehouses.OrderBy(x => x.WarehouseName)
             .Select(x => new SelectListItem(x.WarehouseName, x.WarehouseId.ToString())).ToListAsync();
         return filter;
     }
 
-    public Task<SalesOrderDetailsViewModel?> GetOrderAsync(long id, int userId) => repository.Orders
+    public async Task<SalesOrderDetailsViewModel?> GetOrderAsync(long id, int userId)
+    {
+        var scope = await GetOrderReadScopeAsync(userId);
+        return await ApplyOrderReadScope(scope)
         .Where(o => o.SalesOrderId == id).Select(o => new SalesOrderDetailsViewModel
         {
             Id = o.SalesOrderId, Code = o.Socode, CustomerName = o.CustomerNameSnapshot ?? o.Customer.CustomerName,
@@ -68,7 +107,7 @@ public class SalesService(ISalesRepository repository) : ISalesService
             CreatedByUserId = o.CreatedByUserId, OrderDate = o.OrderDate.ToDateTime(TimeOnly.MinValue), Status = o.Status,
             HasShortage = o.HasShortage, RequestedDate = o.RequestedDate.HasValue ? o.RequestedDate.Value.ToDateTime(TimeOnly.MinValue) : null, SubmittedAt = o.SubmittedAt,
             ClosedAt = o.ClosedAt, CloseReason = o.CloseReason, Note = o.Note,
-            CanEdit = o.CreatedByUserId == userId && (o.Status == "DRAFT" || o.Status == "SUBMITTED") && !o.Outbounds.Any(),
+            CanEdit = scope.IsSales && o.CreatedByUserId == userId && (o.Status == "DRAFT" || o.Status == "SUBMITTED") && !o.Outbounds.Any(),
             Lines = o.SalesOrderLines.OrderBy(l => l.SolineId).Select(l => new SalesOrderLineViewModel
             {
                 ProductCode = l.Product.ProductCode, ProductName = l.Product.ProductName,
@@ -81,6 +120,7 @@ public class SalesService(ISalesRepository repository) : ISalesService
                 CompletedAt = x.CompletedAt, Quantity = x.OutboundItemOutbounds.Count(i => i.IsActive)
             }).ToList()
         }).SingleOrDefaultAsync();
+    }
 
     public async Task<CustomerListViewModel> GetCustomersAsync(CustomerListViewModel filter)
     {

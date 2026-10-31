@@ -9,7 +9,9 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/ewms-sidebar.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/workspace.css" asp-append-version="true" />
-    @if (User.IsInRole("SALES_STAFF"))
+    @if (User.IsInRole("SALES_STAFF") ||
+        ((User.IsInRole("MANAGER") || User.IsInRole("WAREHOUSE_STAFF")) &&
+         string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "SalesOrder", StringComparison.OrdinalIgnoreCase)))
     {
         <link rel="stylesheet" href="~/css/sales.css" asp-append-version="true" />
     }

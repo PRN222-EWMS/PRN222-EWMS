@@ -42,11 +42,11 @@
     </div>
 }
 
-@if (User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value != Model.CreatedByUserId.ToString())
+@if (User.IsInRole("SALES_STAFF") && User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value != Model.CreatedByUserId.ToString())
 {
     <p class="sales-muted-small mb-0">Bạn đang xem đơn của Sales khác. Chỉ người tạo đơn được phép chỉnh sửa khi đơn còn đủ điều kiện.</p>
 }
-else if (!Model.CanEdit)
+else if (User.IsInRole("SALES_STAFF") && !Model.CanEdit)
 {
     <p class="sales-muted-small mb-0">Đơn của bạn hiện không còn đủ điều kiện chỉnh sửa. Đơn đã có phiếu xuất được lưu sẽ khóa sửa thông tin đơn.</p>
 }
