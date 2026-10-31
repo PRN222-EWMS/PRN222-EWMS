@@ -7,7 +7,7 @@
     <div>
         <p class="eyebrow">BÁN HÀNG</p>
         <h1>Đơn bán hàng</h1>
-        <p class="muted">Tra cứu tất cả đơn hoặc theo dõi những đơn do bạn tạo.</p>
+        <p class="muted">@(Model.IsWarehouseStaff ? "Tra cứu đơn bán hàng đã gửi thuộc kho được phân công." : Model.CanFilterMine ? "Tra cứu tất cả đơn hoặc theo dõi những đơn do bạn tạo." : "Theo dõi đơn bán hàng và tiến độ xuất của tất cả kho.")</p>
     </div>
     @if (User.IsInRole("SALES_STAFF"))
     {
@@ -29,14 +29,28 @@
 }
 
 <section class="workspace-card">
+@if (!string.IsNullOrEmpty(Model.ScopeMessage))
+{
+    <div class="sales-warning" role="status">@Model.ScopeMessage</div>
+}
 <div asp-validation-summary="All" class="validation-message" role="alert"></div>
 <form method="get" asp-action="Index" class="sales-filters">
     <div><label for="Search">Tìm đơn bán hàng</label><input id="Search" name="Search" value="@Model.Search" placeholder="Mã đơn hoặc tên khách hàng" maxlength="200" /></div>
-    <div><label for="Status">Trạng thái</label><select id="Status" name="Status"><option value="">Tất cả trạng thái</option>@foreach(var status in new[]{"DRAFT","SUBMITTED","PARTIALLY_FULFILLED","FULFILLED","CLOSED","CANCELLED"}){<option value="@status" selected="@(Model.Status == status)">@SalesDisplay.Status(status)</option>}</select></div>
-    <div><label asp-for="WarehouseId">Kho xuất</label><select asp-for="WarehouseId" asp-items="Model.Warehouses"><option value="">Tất cả kho</option></select></div>
+    <div><label for="Status">Trạng thái</label><select id="Status" name="Status"><option value="">Tất cả trạng thái</option>@foreach(var status in new[]{"DRAFT","SUBMITTED","PARTIALLY_FULFILLED","FULFILLED","CLOSED","CANCELLED"}.Where(s => !Model.IsWarehouseStaff || s != "DRAFT")){<option value="@status" selected="@(Model.Status == status)">@SalesDisplay.Status(status)</option>}</select></div>
+    @if (Model.IsWarehouseStaff)
+    {
+        <div><label for="AssignedWarehouse">Kho được phân công</label><input id="AssignedWarehouse" value="@(Model.Warehouses.FirstOrDefault()?.Text ?? "Chưa được phân công kho")" readonly /></div>
+    }
+    else
+    {
+        <div><label asp-for="WarehouseId">Kho xuất</label><select asp-for="WarehouseId" asp-items="Model.Warehouses"><option value="">Tất cả kho</option></select></div>
+    }
     <div><label for="From">Ngày đơn từ</label><input type="date" id="From" name="From" value="@Model.From?.ToString("yyyy-MM-dd")" /></div>
     <div><label for="To">Đến ngày</label><input type="date" id="To" name="To" value="@Model.To?.ToString("yyyy-MM-dd")" /></div>
-    <div><label for="Mine">Phạm vi</label><select id="Mine" name="Mine"><option value="false" selected="@(!Model.Mine)">Tất cả đơn</option><option value="true" selected="@Model.Mine">Đơn của tôi</option></select></div>
+    @if (Model.CanFilterMine)
+    {
+        <div><label for="Mine">Phạm vi</label><select id="Mine" name="Mine"><option value="false" selected="@(!Model.Mine)">Tất cả đơn</option><option value="true" selected="@Model.Mine">Đơn của tôi</option></select></div>
+    }
     <div class="sales-toolbar"><button class="workspace-button" type="submit">Tìm kiếm</button><a class="workspace-button sales-button-secondary" asp-action="Index">Xóa bộ lọc</a></div>
 </form>
 <div class="table-wrap"><table class="workspace-table"><thead><tr><th>Mã đơn</th><th>Khách hàng</th><th>Kho xuất</th><th>Ngày đơn</th><th>Người tạo</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>

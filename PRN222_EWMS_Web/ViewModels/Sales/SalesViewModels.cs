@@ -29,6 +29,9 @@ public class SalesDashboardViewModel
 
 public class SalesOrderListViewModel
 {
+    public bool CanFilterMine { get; set; }
+    public bool IsWarehouseStaff { get; set; }
+    public string? ScopeMessage { get; set; }
     public string? Search { get; set; }
     public string? Status { get; set; }
     public int? WarehouseId { get; set; }
@@ -107,6 +110,7 @@ public class CustomerFormViewModel
     public string CustomerName { get; set; } = "";
     [StringLength(500, ErrorMessage = "Địa chỉ tối đa 500 ký tự."), Display(Name = "Địa chỉ")]
     public string? Address { get; set; }
+    [Required(ErrorMessage = "Vui lòng nhập số điện thoại.")]
     [RegularExpression(@"^0[0-9]{9}$",
         ErrorMessage = "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0.")]
     [Display(Name = "Số điện thoại")]
