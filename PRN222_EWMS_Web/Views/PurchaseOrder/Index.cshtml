@@ -1,0 +1,262 @@
+@model PRN222_EWMS_Web.ViewModels.Purchasing.PoListViewModel
+@{
+    ViewData["Title"] = "Đơn mua hàng";
+}
+
+<div class="po-page">
+    <div class="workspace-heading">
+        <div>
+            <p class="eyebrow">MUA HÀNG & TIẾP NHẬN</p>
+            <h1>Đơn mua hàng</h1>
+            <p class="muted">Theo dõi và giám sát tiến độ thực hiện đơn mua hàng từ nhà cung cấp về các kho.</p>
+        </div>
+        @if (Model.CanCreateNew)
+        {
+            <div>
+                <a class="workspace-button" asp-action="Create">
+                    <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> Tạo đơn mua hàng
+                </a>
+            </div>
+        }
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="po-alert po-alert-success" role="alert">
+            <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+            <span>@TempData["SuccessMessage"]</span>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="po-alert po-alert-danger" role="alert">
+            <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+            <span>@TempData["ErrorMessage"]</span>
+        </div>
+    }
+
+    <section class="workspace-card">
+        <div asp-validation-summary="All" class="validation-message" role="alert"></div>
+
+        <form method="get" asp-action="Index" class="po-filters">
+            <div>
+                <label for="SearchTerm">Tìm kiếm</label>
+                <input id="SearchTerm" name="SearchTerm" value="@Model.SearchTerm" placeholder="Mã PO hoặc tên nhà cung cấp..." maxlength="100" />
+            </div>
+
+            <div>
+                <label for="SupplierId">Nhà cung cấp</label>
+                <select id="SupplierId" name="SupplierId">
+                    <option value="">-- Tất cả nhà cung cấp --</option>
+                    @foreach (var s in Model.Suppliers)
+                    {
+                        <option value="@s.Id" selected="@(Model.SupplierId == s.Id)">@s.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div>
+                <label for="WarehouseId">Kho tiếp nhận</label>
+                <select id="WarehouseId" name="WarehouseId">
+                    <option value="">-- Tất cả kho --</option>
+                    @foreach (var w in Model.Warehouses)
+                    {
+                        <option value="@w.Id" selected="@(Model.WarehouseId == w.Id)">@w.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div>
+                <label for="Status">Trạng thái đơn</label>
+                <select id="Status" name="Status">
+                    <option value="">-- Tất cả trạng thái --</option>
+                    <option value="DRAFT" selected="@(Model.Status == "DRAFT")">Bản nháp (DRAFT)</option>
+                    <option value="CONFIRMED" selected="@(Model.Status == "CONFIRMED")">Đã xác nhận (CONFIRMED)</option>
+                    <option value="PARTIALLY_RECEIVED" selected="@(Model.Status == "PARTIALLY_RECEIVED")">Đang nhận một phần (PARTIALLY_RECEIVED)</option>
+                    <option value="RECEIVED" selected="@(Model.Status == "RECEIVED")">Đã nhận đủ (RECEIVED)</option>
+                    <option value="CLOSED" selected="@(Model.Status == "CLOSED")">Đã đóng đơn (CLOSED)</option>
+                    <option value="CANCELLED" selected="@(Model.Status == "CANCELLED")">Đã hủy (CANCELLED)</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="FromDate">Ngày đặt từ</label>
+                <input type="date" id="FromDate" name="FromDate" value="@(Model.FromDate?.ToString("yyyy-MM-dd"))" />
+            </div>
+
+            <div>
+                <label for="ToDate">Đến ngày</label>
+                <input type="date" id="ToDate" name="ToDate" value="@(Model.ToDate?.ToString("yyyy-MM-dd"))" />
+            </div>
+
+            <div class="d-flex align-items-center mt-2">
+                <div class="checkbox-row">
+                    <input type="checkbox" id="OnlyMyOrders" name="OnlyMyOrders" value="true" @(Model.OnlyMyOrders ? "checked" : "") />
+                    <label for="OnlyMyOrders" class="mb-0 ms-2" style="cursor: pointer;">Chỉ hiển thị đơn do tôi tạo</label>
+                </div>
+            </div>
+
+            <div class="po-toolbar">
+                <button class="workspace-button" type="submit">
+                    <i class="bi bi-funnel me-1" aria-hidden="true"></i> Lọc dữ liệu
+                </button>
+                <a class="workspace-button sales-button-secondary" asp-action="Index">
+                    <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i> Xóa bộ lọc
+                </a>
+            </div>
+        </form>
+
+        <div class="table-wrap">
+            <table class="workspace-table">
+                <thead>
+                    <tr>
+                        <th>Mã đơn</th>
+                        <th>Nhà cung cấp</th>
+                        <th>Kho nhận</th>
+                        <th>Ngày đặt / Dự kiến đến</th>
+                        <th>Người tạo</th>
+                        <th style="min-width: 160px;">Tiến độ nhận hàng</th>
+                        <th>Trạng thái</th>
+                        <th style="text-align: right;">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in Model.Items)
+                    {
+                        var statusClass = order.Status switch
+                        {
+                            "DRAFT" => "po-status-draft",
+                            "CONFIRMED" => "po-status-confirmed",
+                            "PARTIALLY_RECEIVED" => "po-status-partially",
+                            "RECEIVED" => "po-status-received",
+                            "CLOSED" => "po-status-closed",
+                            "CANCELLED" => "po-status-cancelled",
+                            _ => "po-status-draft"
+                        };
+
+                        var statusText = order.Status switch
+                        {
+                            "DRAFT" => "Bản nháp",
+                            "CONFIRMED" => "Đã xác nhận",
+                            "PARTIALLY_RECEIVED" => "Nhận 1 phần",
+                            "RECEIVED" => "Đã nhận đủ",
+                            "CLOSED" => "Đã đóng",
+                            "CANCELLED" => "Đã hủy",
+                            _ => order.Status
+                        };
+
+                        <tr>
+                            <td>
+                                <a asp-action="Details" asp-route-id="@order.PurchaseOrderId" class="fw-semibold text-primary text-decoration-none">
+                                    @order.Pocode
+                                </a>
+                            </td>
+                            <td>
+                                <div>@order.SupplierName</div>
+                            </td>
+                            <td>
+                                <div>@order.WarehouseName</div>
+                            </td>
+                            <td>
+                                <div>@order.OrderDate.ToString("dd/MM/yyyy")</div>
+                                <div class="muted small">
+                                    Đến: @order.ExpectedArrivalDate.ToString("dd/MM/yyyy")
+                                </div>
+                                @if (order.IsOverdue)
+                                {
+                                    <div class="po-overdue-tag">
+                                        <i class="bi bi-clock-history" aria-hidden="true"></i> Quá hạn giao
+                                    </div>
+                                }
+                            </td>
+                            <td>
+                                <div>@order.CreatedByName</div>
+                            </td>
+                            <td>
+                                <div class="d-flex justify-content-between small text-muted mb-1">
+                                    <span>Đã nhận: <strong>@order.TotalReceivedQuantity</strong>/@order.TotalOrderedQuantity</span>
+                                    <span>@order.ProgressPercent%</span>
+                                </div>
+                                <div class="po-progress-wrap">
+                                    <div class="po-progress-bar">
+                                        <div class="po-progress-fill @(order.TotalReceivedQuantity < order.TotalOrderedQuantity ? "partial" : "")" 
+                                             style="width: @(order.ProgressPercent)%"></div>
+                                    </div>
+                                </div>
+                                <div class="small muted mt-1">
+                                    Còn lại: <span class="fw-medium text-dark">@order.TotalRemainingQuantity</span>
+                                    @if (order.TotalClosedQuantity > 0)
+                                    {
+                                        <span class="text-secondary">(Đã đóng: @order.TotalClosedQuantity)</span>
+                                    }
+                                </div>
+                            </td>
+                            <td>
+                                <span class="po-status @statusClass">
+                                    @statusText
+                                </span>
+                            </td>
+                            <td style="text-align: right; white-space: nowrap;">
+                                <a class="workspace-button sales-button-small" asp-action="Details" asp-route-id="@order.PurchaseOrderId" title="Xem chi tiết">
+                                    Chi tiết
+                                </a>
+                                @if (order.CanEdit)
+                                {
+                                    <a class="workspace-button sales-button-secondary sales-button-small ms-1" asp-action="Edit" asp-route-id="@order.PurchaseOrderId" title="Chỉnh sửa">
+                                        <i class="bi bi-pencil" aria-hidden="true"></i>
+                                    </a>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Model.Items.Count == 0)
+        {
+            <div class="sales-empty">
+                <i class="bi bi-inbox" style="font-size: 32px;" aria-hidden="true"></i>
+                <p class="mt-2 mb-0">Không có đơn mua hàng nào phù hợp với bộ lọc hiện tại.</p>
+            </div>
+        }
+
+        <div class="sales-pagination">
+            <span class="muted">
+                Tổng cộng @Model.TotalItems đơn · Trang @Model.PageIndex / @Math.Max(1, Model.TotalPages)
+            </span>
+            <nav aria-label="Phân trang đơn mua hàng">
+                @if (Model.PageIndex > 1)
+                {
+                    <a class="workspace-button sales-button-small"
+                       asp-action="Index"
+                       asp-route-PageIndex="@(Model.PageIndex - 1)"
+                       asp-route-SearchTerm="@Model.SearchTerm"
+                       asp-route-SupplierId="@Model.SupplierId"
+                       asp-route-WarehouseId="@Model.WarehouseId"
+                       asp-route-Status="@Model.Status"
+                       asp-route-FromDate="@Model.FromDate?.ToString("yyyy-MM-dd")"
+                       asp-route-ToDate="@Model.ToDate?.ToString("yyyy-MM-dd")"
+                       asp-route-OnlyMyOrders="@Model.OnlyMyOrders">
+                        ← Trang trước
+                    </a>
+                }
+                @if (Model.PageIndex < Model.TotalPages)
+                {
+                    <a class="workspace-button sales-button-small"
+                       asp-action="Index"
+                       asp-route-PageIndex="@(Model.PageIndex + 1)"
+                       asp-route-SearchTerm="@Model.SearchTerm"
+                       asp-route-SupplierId="@Model.SupplierId"
+                       asp-route-WarehouseId="@Model.WarehouseId"
+                       asp-route-Status="@Model.Status"
+                       asp-route-FromDate="@Model.FromDate?.ToString("yyyy-MM-dd")"
+                       asp-route-ToDate="@Model.ToDate?.ToString("yyyy-MM-dd")"
+                       asp-route-OnlyMyOrders="@Model.OnlyMyOrders">
+                        Trang sau →
+                    </a>
+                }
+            </nav>
+        </div>
+    </section>
+</div>

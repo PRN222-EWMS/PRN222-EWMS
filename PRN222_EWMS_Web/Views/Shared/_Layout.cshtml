@@ -13,6 +13,10 @@
     {
         <link rel="stylesheet" href="~/css/sales.css" asp-append-version="true" />
     }
+    @if (User.IsInRole("PURCHASING_STAFF") || User.IsInRole("MANAGER"))
+    {
+        <link rel="stylesheet" href="~/css/purchasing.css" asp-append-version="true" />
+    }
 </head>
 <body class="ewms-shell">
     <partial name="_Sidebar" />

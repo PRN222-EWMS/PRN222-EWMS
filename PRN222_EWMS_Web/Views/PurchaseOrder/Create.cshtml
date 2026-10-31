@@ -1,0 +1,45 @@
+@model PRN222_EWMS_Web.ViewModels.Purchasing.PoFormViewModel
+@{
+    ViewData["Title"] = "Tạo đơn mua hàng";
+}
+
+<div class="po-page">
+    <div class="workspace-heading">
+        <div>
+            <p class="eyebrow">MUA HÀNG / TẠO MỚI</p>
+            <h1>Tạo đơn mua hàng</h1>
+            <p class="muted">Tạo mới đơn đặt mua hàng hóa từ đối tác cung ứng về kho tiếp nhận.</p>
+        </div>
+        <div class="po-toolbar">
+            <a class="workspace-button sales-button-secondary" asp-action="Index">
+                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Hủy & Quay lại
+            </a>
+        </div>
+    </div>
+
+    <form method="post" asp-action="Create" id="createPoForm">
+        @Html.AntiForgeryToken()
+
+        <section class="workspace-card mb-4">
+            <partial name="_Form" model="Model" />
+        </section>
+
+        <section class="workspace-card">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div class="small text-muted">
+                    <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                    Bản nháp cho phép tùy chỉnh thông tin trước khi xác nhận. Đơn đã xác nhận sẽ lập tức sẵn sàng để nhân viên kho kiểm đếm nhận hàng.
+                </div>
+                <div class="d-flex gap-2">
+                    <a class="workspace-button sales-button-secondary" asp-action="Index">Hủy</a>
+                    <button type="submit" name="action" value="draft" class="workspace-button sales-button-secondary">
+                        <i class="bi bi-file-earmark me-1" aria-hidden="true"></i> Lưu bản nháp
+                    </button>
+                    <button type="submit" name="action" value="confirm" class="workspace-button" style="background: #0e733b;">
+                        <i class="bi bi-check-circle me-1" aria-hidden="true"></i> Lưu & Xác nhận đơn
+                    </button>
+                </div>
+            </div>
+        </section>
+    </form>
+</div>
