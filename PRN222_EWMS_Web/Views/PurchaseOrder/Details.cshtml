@@ -50,6 +50,12 @@
                     <i class="bi bi-pencil me-1" aria-hidden="true"></i> Chỉnh sửa đơn
                 </a>
             }
+            else
+            {
+                <button type="button" class="workspace-button po-btn-disabled" disabled title="Đơn hàng ở trạng thái @statusText không thể chỉnh sửa">
+                    <i class="bi bi-pencil me-1" aria-hidden="true"></i> Chỉnh sửa đơn
+                </button>
+            }
             @if (Model.CanConfirm)
             {
                 <form method="post" asp-action="Confirm" asp-route-id="@Model.PurchaseOrderId" class="d-inline" onsubmit="return confirm('Bạn có chắc chắn muốn xác nhận đơn mua hàng này? Sau khi xác nhận, đơn sẽ sẵn sàng để kho tiếp nhận.');">
