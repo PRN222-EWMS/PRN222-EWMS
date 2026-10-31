@@ -61,3 +61,4 @@ public partial class Outbound
 
     public virtual ICollection<SerialMovement> SerialMovements { get; set; } = new List<SerialMovement>();
 }
+

@@ -23,3 +23,4 @@ public partial class PickingClaim
 
     public virtual SerialItem SerialItem { get; set; } = null!;
 }
+

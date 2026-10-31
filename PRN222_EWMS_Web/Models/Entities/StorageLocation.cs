@@ -69,3 +69,4 @@ public partial class StorageLocation
 
     public virtual ICollection<ZoneStorageRule> ZoneStorageRules { get; set; } = new List<ZoneStorageRule>();
 }
+

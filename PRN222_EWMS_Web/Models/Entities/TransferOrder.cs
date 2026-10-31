@@ -53,3 +53,4 @@ public partial class TransferOrder
 
     public virtual ICollection<TransferReceipt> TransferReceipts { get; set; } = new List<TransferReceipt>();
 }
+

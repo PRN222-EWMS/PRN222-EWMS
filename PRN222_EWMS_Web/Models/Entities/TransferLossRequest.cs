@@ -43,3 +43,4 @@ public partial class TransferLossRequest
 
     public virtual TransferOrder TransferOrder { get; set; } = null!;
 }
+

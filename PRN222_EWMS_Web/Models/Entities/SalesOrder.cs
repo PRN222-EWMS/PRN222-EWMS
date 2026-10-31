@@ -57,3 +57,4 @@ public partial class SalesOrder
 
     public virtual Warehouse Warehouse { get; set; } = null!;
 }
+

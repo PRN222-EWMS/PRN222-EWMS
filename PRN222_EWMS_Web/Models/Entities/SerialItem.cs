@@ -79,3 +79,4 @@ public partial class SerialItem
 
     public virtual ICollection<TransferDispatchItem> TransferDispatchItemSerialItems { get; set; } = new List<TransferDispatchItem>();
 }
+

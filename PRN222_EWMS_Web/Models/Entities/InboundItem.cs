@@ -45,3 +45,4 @@ public partial class InboundItem
 
     public virtual SerialItem? SerialItemNavigation { get; set; }
 }
+

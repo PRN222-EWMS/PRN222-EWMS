@@ -15,3 +15,4 @@ public partial class Brand
 
     public virtual ICollection<ZoneStorageRule> ZoneStorageRules { get; set; } = new List<ZoneStorageRule>();
 }
+

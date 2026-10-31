@@ -27,3 +27,4 @@ public partial class VwSupplyAvailability
 
     public long? UnreservedQuantity { get; set; }
 }
+

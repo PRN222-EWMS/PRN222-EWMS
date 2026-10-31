@@ -25,3 +25,4 @@ public partial class Notice
 
     public virtual User User { get; set; } = null!;
 }
+

@@ -19,3 +19,4 @@ public partial class ZoneStorageRule
 
     public virtual StorageLocation ZoneLocation { get; set; } = null!;
 }
+

@@ -59,3 +59,4 @@ public partial class StocktakeObservation
 
     public virtual StocktakeRound StocktakeRound { get; set; } = null!;
 }
+

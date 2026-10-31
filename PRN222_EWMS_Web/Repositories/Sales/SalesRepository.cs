@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Models;
+using WarehouseEntity = PRN222_EWMS_Web.Models.Warehouse;
 using PRN222_EWMS_Web.ViewModels.Sales;
 
 namespace PRN222_EWMS_Web.Repositories.Sales;
@@ -8,7 +9,7 @@ public class SalesRepository(EwmsDbContext db) : ISalesRepository
 {
     public IQueryable<SalesOrder> Orders => db.SalesOrders.AsNoTracking();
     public IQueryable<Customer> Customers => db.Customers.AsNoTracking();
-    public IQueryable<Warehouse> Warehouses => db.Warehouses.AsNoTracking();
+    public IQueryable<WarehouseEntity> Warehouses => db.Warehouses.AsNoTracking();
     public IQueryable<Product> Products => db.Products.AsNoTracking();
     public IQueryable<SupplySource> SupplySources => db.SupplySources.AsNoTracking();
     public IQueryable<Reservation> Reservations => db.Reservations.AsNoTracking();

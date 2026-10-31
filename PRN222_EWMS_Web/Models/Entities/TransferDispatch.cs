@@ -49,3 +49,4 @@ public partial class TransferDispatch
 
     public virtual TransferOrder TransferOrder { get; set; } = null!;
 }
+

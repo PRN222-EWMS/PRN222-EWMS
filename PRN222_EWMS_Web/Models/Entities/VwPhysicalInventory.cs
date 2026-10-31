@@ -19,3 +19,4 @@ public partial class VwPhysicalInventory
 
     public long? EligiblePhysicalQuantity { get; set; }
 }
+

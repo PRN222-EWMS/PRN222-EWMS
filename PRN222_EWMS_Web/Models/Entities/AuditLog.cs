@@ -29,3 +29,4 @@ public partial class AuditLog
 
     public virtual User? ActorUser { get; set; }
 }
+

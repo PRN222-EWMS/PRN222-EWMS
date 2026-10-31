@@ -29,3 +29,4 @@ public partial class TransferReceiptItem
 
     public virtual TransferReceipt TransferReceiptNavigation { get; set; } = null!;
 }
+

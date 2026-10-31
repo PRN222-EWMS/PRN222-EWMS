@@ -47,3 +47,4 @@ public partial class InventoryAdjustment
 
     public virtual ICollection<SupplySource> SupplySources { get; set; } = new List<SupplySource>();
 }
+
