@@ -1,4 +1,4 @@
-﻿:root {
+:root {
     --ewms-blue: #0075de;
     --ewms-blue-pressed: #005bab;
     --ewms-paper: #f6f5f4;
@@ -277,7 +277,8 @@ body.ewms-shell {
 }
 
 .ewms-content {
-    max-width: 1320px;
+    max-width: 1680px;
+    width: 100%;
     margin: auto;
     padding: 32px;
 }
