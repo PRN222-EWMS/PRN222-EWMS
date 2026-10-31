@@ -1,8 +1,33 @@
 @model PRN222_EWMS_Web.ViewModels.Sales.SalesOrderListViewModel
 @using PRN222_EWMS_Web.ViewModels.Sales
 @{ ViewData["Title"] = "Đơn bán hàng"; }
+
 <div class="sales-page">
-<div class="workspace-heading"><div><p class="eyebrow">BÁN HÀNG</p><h1>Đơn bán hàng</h1><p class="muted">Tra cứu tất cả đơn hoặc theo dõi những đơn do bạn tạo.</p></div></div>
+<div class="workspace-heading">
+    <div>
+        <p class="eyebrow">BÁN HÀNG</p>
+        <h1>Đơn bán hàng</h1>
+        <p class="muted">Tra cứu tất cả đơn hoặc theo dõi những đơn do bạn tạo.</p>
+    </div>
+    @if (User.IsInRole("SALES_STAFF"))
+    {
+        <div class="sales-toolbar">
+            <a class="workspace-button" asp-action="Create">
+                <i class="bi bi-plus-circle me-1"></i> Tạo đơn bán hàng
+            </a>
+        </div>
+    }
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="sales-alert sales-alert-success" role="status">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="sales-warning" role="alert">@TempData["Error"]</div>
+}
+
 <section class="workspace-card">
 <div asp-validation-summary="All" class="validation-message" role="alert"></div>
 <form method="get" asp-action="Index" class="sales-filters">
@@ -15,7 +40,7 @@
     <div class="sales-toolbar"><button class="workspace-button" type="submit">Tìm kiếm</button><a class="workspace-button sales-button-secondary" asp-action="Index">Xóa bộ lọc</a></div>
 </form>
 <div class="table-wrap"><table class="workspace-table"><thead><tr><th>Mã đơn</th><th>Khách hàng</th><th>Kho xuất</th><th>Ngày đơn</th><th>Người tạo</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
-@foreach(var order in Model.Items){<tr><td><a class="workspace-button sales-button-small" asp-action="Details" asp-route-id="@order.Id">@order.Code</a></td><td>@order.CustomerName</td><td>@order.WarehouseName</td><td>@order.OrderDate.ToString("dd/MM/yyyy")</td><td>@order.CreatedByName</td><td><span class="sales-status">@SalesDisplay.Status(order.Status)</span>@if(order.HasShortage){<div class="sales-muted-small">Thiếu nguồn</div>}</td><td><a class="workspace-button sales-button-small" asp-action="Details" asp-route-id="@order.Id">Xem chi tiết</a></td></tr>}
+@foreach(var order in Model.Items){<tr><td><a class="workspace-button sales-button-small" asp-action="Details" asp-route-id="@order.Id">@order.Code</a></td><td>@order.CustomerName</td><td>@order.WarehouseName</td><td>@order.OrderDate.ToString("dd/MM/yyyy")</td><td>@order.CreatedByName</td><td><span class="sales-status">@SalesDisplay.Status(order.Status)</span>@if(order.HasShortage){<div class="sales-muted-small text-danger">Thiếu nguồn</div>}</td><td><div class="d-flex gap-2"><a class="workspace-button sales-button-small" asp-action="Details" asp-route-id="@order.Id">Chi tiết</a>@if(order.CanEdit && User.IsInRole("SALES_STAFF")){<a class="workspace-button sales-button-small sales-button-secondary" asp-action="Edit" asp-route-id="@order.Id">Sửa</a>}</div></td></tr>}
 </tbody></table></div>
 @if(Model.Items.Count == 0){<p class="sales-empty">Không có đơn bán hàng phù hợp với bộ lọc.</p>}
 <div class="sales-pagination"><span class="muted">@Model.TotalCount đơn · Trang @Model.Page / @Model.TotalPages</span><nav aria-label="Phân trang đơn bán hàng">

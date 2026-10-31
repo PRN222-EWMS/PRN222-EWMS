@@ -12,4 +12,10 @@ public interface ISalesService
     Task<CustomerFormViewModel?> GetCustomerFormAsync(int id);
     Task<int> CreateCustomerAsync(CustomerFormViewModel model, int actorId);
     Task<bool> UpdateCustomerAsync(int id, CustomerFormViewModel model, int actorId);
+
+    Task<SalesOrderFormViewModel> GetCreateFormAsync(int userId);
+    Task<SalesOrderFormViewModel?> GetEditFormAsync(long id, int userId);
+    Task<long> CreateOrderAsync(SalesOrderFormViewModel model, string action, int actorId);
+    Task<bool> UpdateOrderAsync(long id, SalesOrderFormViewModel model, string action, int actorId);
+    Task<List<ProductStockLookupDto>> GetAvailableProductsAsync(int warehouseId);
 }
