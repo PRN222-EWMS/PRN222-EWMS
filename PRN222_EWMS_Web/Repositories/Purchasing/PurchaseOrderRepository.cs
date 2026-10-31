@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using PRN222_EWMS_Web.Models;
+using WarehouseEntity = PRN222_EWMS_Web.Models.Warehouse;
 
 namespace PRN222_EWMS_Web.Repositories.Purchasing;
 
@@ -9,7 +10,7 @@ public class PurchaseOrderRepository(EwmsDbContext db) : IPurchaseOrderRepositor
     public IQueryable<PurchaseOrder> Orders => db.PurchaseOrders.AsNoTracking();
     public IQueryable<VwPurchaseOrderProgress> Progress => db.VwPurchaseOrderProgresses.AsNoTracking();
     public IQueryable<Supplier> Suppliers => db.Suppliers.AsNoTracking();
-    public IQueryable<Warehouse> Warehouses => db.Warehouses.AsNoTracking();
+    public IQueryable<WarehouseEntity> Warehouses => db.Warehouses.AsNoTracking();
     public IQueryable<Product> Products => db.Products.AsNoTracking();
     public IQueryable<SupplierProduct> SupplierProducts => db.SupplierProducts.AsNoTracking();
 

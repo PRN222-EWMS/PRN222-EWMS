@@ -5,9 +5,11 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Models;
 using PRN222_EWMS_Web.Repositories.User;
+using PRN222_EWMS_Web.Repositories.Warehouse;
 using PRN222_EWMS_Web.Services.Admin;
 using PRN222_EWMS_Web.Services.Account;
 using PRN222_EWMS_Web.Services.Authentication;
+using PRN222_EWMS_Web.Services.Warehouse;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
@@ -21,6 +23,8 @@ builder.Services.AddScoped<PRN222_EWMS_Web.Services.Purchasing.IPurchaseOrderSer
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.WarehouseStaff.IWarehouseStaffRepository, PRN222_EWMS_Web.Repositories.WarehouseStaff.WarehouseStaffRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.WarehouseStaff.IWarehouseStaffService, PRN222_EWMS_Web.Services.WarehouseStaff.WarehouseStaffService>();
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IWarehouseRepository, WarehouseRepository>();
+builder.Services.AddScoped<IWarehouseService, WarehouseService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Authentication.IAuthenticationService, AuthenticationService>();
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();

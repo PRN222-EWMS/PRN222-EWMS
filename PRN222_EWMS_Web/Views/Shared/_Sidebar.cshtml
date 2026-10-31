@@ -5,6 +5,8 @@
     var signedIn = User.Identity?.IsAuthenticated == true;
     var actualRole = signedIn ? User.FindFirst(ClaimTypes.Role)?.Value : null;
     var role = actualRole ?? "";
+    var isCeo = User.IsInRole("CEO");
+    var isManager = User.IsInRole("MANAGER");
     var displayName = signedIn ? (User.Identity?.Name ?? "Nhân viên") : "Xem trước giao diện";
     var controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
     var action = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
@@ -85,7 +87,12 @@
     <nav class="ewms-nav" aria-label="Menu theo vai trò">
         @foreach (var section in sections)
         {
-            var allowedItems = section.Items.Where(i => i.Roles.Length == 0 || i.Roles.Contains(role, StringComparer.OrdinalIgnoreCase)).ToArray();
+            var allowedItems = section.Items
+                .Where(i => i.Roles.Length == 0 || i.Roles.Contains(role, StringComparer.OrdinalIgnoreCase))
+                // Keep CEO's scope and include the merged modules available to Manager.
+                .Where(i => !isCeo || (i.Action == "Index" && (i.Controller is "Home" or "Warehouse")))
+                .Where(i => !isManager || (i.Action == "Index" && (i.Controller is "Home" or "Warehouse" or "PurchaseOrder" or "SalesOrder" or "Inbound")))
+                .ToArray();
             if (allowedItems.Length == 0) { continue; }
             <div class="ewms-nav-section">
                 <div class="ewms-nav-heading">@(section.Heading)</div>
@@ -93,6 +100,7 @@
                 {
                     var active = string.Equals(controller, item.Controller, StringComparison.OrdinalIgnoreCase)
                               && (string.Equals(action, item.Action, StringComparison.OrdinalIgnoreCase)
+                                  || (item.Controller == "Warehouse" && item.Action == "Index")
                                   || (item.Action == "Index" && (action == "Details" || action == "Edit")));
                     <a class="ewms-nav-link @(active ? "is-active" : "")"
                        href="@($"/{item.Controller}/{item.Action}")"

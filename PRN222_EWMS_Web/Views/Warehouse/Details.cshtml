@@ -1,0 +1,121 @@
+@using System.Globalization
+@model PRN222_EWMS_Web.ViewModels.Warehouse.WarehouseDetailsViewModel
+@{
+    var configuring = ViewData["Configuring"] is true;
+    ViewData["Title"] = configuring ? "Cấu hình kho" : "Chi tiết kho";
+    var warehouse = Model.Warehouse;
+    ViewData["WarehouseId"] = warehouse.WarehouseId;
+    var numberCulture = CultureInfo.GetCultureInfo("vi-VN");
+}
+
+<div class="workspace-heading">
+    <div>
+        <p class="eyebrow">QUẢN TRỊ KHO</p>
+        <h1>@ViewData["Title"]</h1>
+        <p class="muted warehouse-title">@warehouse.WarehouseName</p>
+    </div>
+    <div class="warehouse-heading-actions">
+        <a asp-action="Index" class="workspace-link">← Danh sách kho</a>
+        @if (!Model.HasStoredItems)
+        {
+            <a asp-action="Edit" asp-route-id="@warehouse.WarehouseId" class="workspace-button">Chỉnh sửa thông tin kho</a>
+        }
+        @if (!configuring)
+        {
+            <a asp-action="Setup" asp-route-id="@warehouse.WarehouseId" class="workspace-button">Cấu hình vị trí</a>
+        }
+    </div>
+</div>
+
+@if (Model.HasStoredItems)
+{
+    <p class="warehouse-config-note">Kho đang chứa hàng nên không thể chỉnh sửa thông tin chung. Chỉ có thể chỉnh sửa vị trí khi chính vị trí đó và toàn bộ các vị trí con không chứa hàng.</p>
+}
+
+@if (TempData["Success"] is string message)
+{
+    <div class="workspace-notice" role="status">@message</div>
+}
+
+<div class="warehouse-list">
+    @if (configuring)
+    {
+        <section class="workspace-card warehouse-panel" aria-labelledby="warehouse-setup-title">
+            <h2 id="warehouse-setup-title">Thiết lập cấu trúc lưu trữ</h2>
+            <p>Tạo Zone → Dãy → Kệ → Tầng, hoặc Zone → Dãy → Ô sàn. Mỗi bước được lưu riêng; bạn có thể quay lại để tiếp tục cấu hình.</p>
+            <p class="muted">Zone quy định loại hàng và hãng; dãy quy định để kệ hoặc để sàn. Kệ/ô sàn quy định hàng tốt hoặc hàng hỏng. Kích thước và tải trọng được đặt tại tầng/ô sàn.</p>
+            <p class="muted">Chỉ sửa hoặc thêm vị trí con khi phạm vi liên quan chưa chứa hàng và không bị khóa kiểm kê. Khi ngừng hoạt động một vị trí, các vị trí con cũng ngừng hoạt động.</p>
+            <div asp-validation-summary="All" class="validation-message" role="alert"></div>
+            @if (Model.SetupIssues.Count > 0)
+            {
+                <div class="warehouse-config-note">
+                    <p><strong>Cần bổ sung trước khi hoàn tất:</strong></p>
+                    <ul>
+                        @foreach (var issue in Model.SetupIssues) { <li>@issue</li> }
+                    </ul>
+                </div>
+            }
+            <div class="warehouse-setup-actions">
+                <a asp-action="ConfigureLocation" asp-route-id="@warehouse.WarehouseId" class="workspace-button">Thêm Zone</a>
+                <form asp-action="CompleteSetup" asp-route-id="@warehouse.WarehouseId" method="post">
+                    <button type="submit" class="workspace-button" disabled="@(Model.SetupIssues.Count > 0)">Hoàn tất cấu hình</button>
+                </form>
+                <a asp-action="Details" asp-route-id="@warehouse.WarehouseId" class="workspace-link">Xem chi tiết kho</a>
+            </div>
+        </section>
+    }
+    <section class="workspace-card warehouse-panel" aria-labelledby="warehouse-info-title">
+        <h2 id="warehouse-info-title">Thông tin chung</h2>
+        <dl class="warehouse-info-grid">
+            <div><dt>ID kho</dt><dd>@warehouse.WarehouseId</dd></div>
+            <div><dt>Loại kho</dt><dd>@warehouse.TypeLabel</dd></div>
+            <div><dt>Trạng thái</dt><dd><span class="warehouse-status @(warehouse.Status == "ACTIVE" ? "warehouse-status-active" : "")">@warehouse.StatusLabel</span></dd></div>
+            <div class="warehouse-info-wide"><dt>Tên kho</dt><dd>@warehouse.WarehouseName</dd></div>
+            <div class="warehouse-info-wide"><dt>Địa chỉ</dt><dd>@warehouse.Address</dd></div>
+            @if (warehouse.WarehouseType == "RENTED")
+            {
+                <div><dt>Ngày bắt đầu thuê</dt><dd>@(warehouse.RentalStartDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "Chưa có thông tin")</dd></div>
+                <div><dt>Ngày kết thúc thuê</dt><dd>@(warehouse.RentalEndDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "Chưa có thông tin")</dd></div>
+            }
+            else
+            {
+                <div><dt>Thời hạn thuê</dt><dd>@(warehouse.WarehouseType == "MAIN" ? "Không áp dụng" : "Chưa có thông tin")</dd></div>
+            }
+        </dl>
+    </section>
+
+    <section class="workspace-card warehouse-panel" aria-labelledby="warehouse-structure-title">
+        <h2 id="warehouse-structure-title">Cấu trúc và sức chứa</h2>
+        @if (Model.LocationCount == 0)
+        {
+            <p class="warehouse-empty">Kho chưa có cấu trúc vị trí lưu trữ.</p>
+        }
+        else
+        {
+            <p class="muted">@Model.Zones.Count Zone · @Model.RowCount dãy · @Model.RackCount kệ · @Model.TierCount tầng · @Model.FloorSlotCount ô sàn</p>
+            <dl class="warehouse-capacity-totals">
+                <div><dt>Thể tích các tầng kệ</dt><dd>@Model.RackVolumeM3.ToString("N3", numberCulture) m³</dd></div>
+                <div><dt>Diện tích các ô sàn</dt><dd>@Model.FloorAreaM2.ToString("N2", numberCulture) m²</dd></div>
+            </dl>
+            <p class="muted warehouse-filter-hint">Tổng sức chứa theo cấu hình, gồm cả vị trí ngừng hoạt động; chưa trừ hàng đang lưu. Diện tích ô sàn không phải diện tích mặt bằng kho. Không cộng m² với m³.</p>
+            <div class="warehouse-tree">
+                @foreach (var zone in Model.Zones)
+                {
+                    <partial name="_StorageLocation" model="zone" />
+                }
+            </div>
+            @if (Model.UnlinkedLocations.Count > 0)
+            {
+                <div class="warehouse-error" role="alert">
+                    <p>Một số vị trí chưa nối đúng cấu trúc. Vui lòng kiểm tra cấu hình các vị trí sau:</p>
+                    <ul>
+                        @foreach (var location in Model.UnlinkedLocations)
+                        {
+                            <li>@location.TypeLabel @location.Name (ID @location.LocationId, vị trí cha: @(location.ParentLocationId?.ToString() ?? "Chưa có"))</li>
+                        }
+                    </ul>
+                </div>
+            }
+        }
+    </section>
+</div>

@@ -1,0 +1,88 @@
+@model PRN222_EWMS_Web.ViewModels.Warehouse.WarehouseFormViewModel
+@{
+    var editing = Model.WarehouseId > 0;
+    var blocked = Model.IsOccupied || Model.IsLocked;
+    ViewData["Title"] = editing ? "Chỉnh sửa kho" : "Tạo kho";
+}
+
+<div class="workspace-heading">
+    <div>
+        <p class="eyebrow">QUẢN TRỊ KHO</p>
+        <h1>@ViewData["Title"]</h1>
+        <p class="muted">@(editing ? "Cập nhật thông tin, trạng thái và thời hạn thuê khi kho chưa chứa hàng." : "Bước 1: Lưu thông tin kho. Tiếp theo, thiết lập Zone, dãy và các vị trí lưu trữ.")</p>
+    </div>
+    <a asp-action="Index" class="workspace-link">← Danh sách kho</a>
+</div>
+
+<section class="workspace-card">
+    @if (blocked)
+    {
+        <div class="warehouse-error" role="alert">@(Model.IsOccupied ? "Kho đang chứa hàng, kể cả hàng chưa xếp vị trí. Không thể chỉnh sửa thông tin kho." : "Kho đang có phạm vi bị khóa kiểm kê. Chưa thể chỉnh sửa thông tin kho.")</div>
+    }
+    <form asp-action="@(editing ? "Edit" : "Create")" asp-route-id="@(editing ? Model.WarehouseId : (int?)null)" method="post" class="workspace-form" id="warehouse-form">
+        <div asp-validation-summary="All" class="validation-message" role="alert"></div>
+        @if (editing)
+        {
+            <input asp-for="RowVersion" type="hidden" />
+        }
+        <fieldset class="warehouse-form-fields" disabled="@blocked">
+        <div>
+            <label asp-for="WarehouseName"></label>
+            <input asp-for="WarehouseName" maxlength="150" required />
+        </div>
+        <div>
+            <label asp-for="Address"></label>
+            <input asp-for="Address" maxlength="500" required />
+        </div>
+        <div class="form-grid">
+            <div>
+                <label asp-for="WarehouseType"></label>
+                <select asp-for="WarehouseType" aria-controls="warehouse-rental-fields">
+                    <option value="MAIN">Kho chính</option>
+                    <option value="RENTED">Kho thuê</option>
+                </select>
+            </div>
+            <div>
+                <label asp-for="Status"></label>
+                <select asp-for="Status">
+                    <option value="ACTIVE">Đang hoạt động</option>
+                    <option value="INACTIVE">Ngừng hoạt động</option>
+                </select>
+            </div>
+        </div>
+        <fieldset id="warehouse-rental-fields">
+            <legend class="warehouse-fieldset-title">Thời hạn thuê</legend>
+            <p class="muted warehouse-filter-hint">Chỉ áp dụng cho kho thuê. Ngày kết thúc phải từ ngày bắt đầu trở đi.</p>
+            <div class="form-grid">
+                <div>
+                    <label asp-for="RentalStartDate"></label>
+                    <input asp-for="RentalStartDate" asp-format="{0:yyyy-MM-dd}" type="date" />
+                </div>
+                <div>
+                    <label asp-for="RentalEndDate"></label>
+                    <input asp-for="RentalEndDate" asp-format="{0:yyyy-MM-dd}" type="date" />
+                </div>
+            </div>
+        </fieldset>
+        </fieldset>
+        @if (editing && !ViewData.ModelState.IsValid)
+        {
+            <a asp-action="Edit" asp-route-id="@Model.WarehouseId" class="warehouse-detail-link">Tải lại dữ liệu kho (bỏ các thay đổi chưa lưu)</a>
+        }
+        <div class="form-actions">
+            <button type="submit" class="workspace-button" disabled="@blocked">@(editing ? "Lưu thay đổi" : "Lưu và cấu hình vị trí")</button>
+            @if (editing)
+            {
+                <a asp-action="Details" asp-route-id="@Model.WarehouseId" class="workspace-link">Hủy</a>
+            }
+            else
+            {
+                <a asp-action="Index" class="workspace-link">Hủy</a>
+            }
+        </div>
+    </form>
+</section>
+
+@section Scripts {
+    <script src="~/js/warehouse-form.js" asp-append-version="true"></script>
+}

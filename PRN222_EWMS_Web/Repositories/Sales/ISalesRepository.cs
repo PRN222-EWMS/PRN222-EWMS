@@ -1,4 +1,5 @@
 using PRN222_EWMS_Web.Models;
+using WarehouseEntity = PRN222_EWMS_Web.Models.Warehouse;
 using PRN222_EWMS_Web.ViewModels.Sales;
 
 namespace PRN222_EWMS_Web.Repositories.Sales;
@@ -7,7 +8,7 @@ public interface ISalesRepository
 {
     IQueryable<SalesOrder> Orders { get; }
     IQueryable<Customer> Customers { get; }
-    IQueryable<Warehouse> Warehouses { get; }
+    IQueryable<WarehouseEntity> Warehouses { get; }
     IQueryable<Product> Products { get; }
     IQueryable<SupplySource> SupplySources { get; }
     IQueryable<Reservation> Reservations { get; }
