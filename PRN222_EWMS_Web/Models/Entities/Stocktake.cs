@@ -49,3 +49,4 @@ public partial class Stocktake
 
     public virtual Warehouse Warehouse { get; set; } = null!;
 }
+

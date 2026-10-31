@@ -2,7 +2,7 @@
 @using PRN222_EWMS_Web.ViewModels.Sales
 @{ ViewData["Title"] = "Dashboard Sales"; }
 <div class="sales-page">
-    <div class="workspace-heading"><div><p class="eyebrow">SALES WORKSPACE</p><h1>Tổng quan bán hàng</h1><p class="muted">Theo dõi yêu cầu xuất hàng và tiến độ thực hiện tại kho.</p></div><a class="workspace-button" asp-controller="Customer" asp-action="Create">Tạo khách hàng</a></div>
+    <div class="workspace-heading"><div><p class="eyebrow">SALES WORKSPACE</p><h1>Tổng quan bán hàng</h1><p class="muted">Theo dõi yêu cầu xuất hàng và tiến độ thực hiện tại kho.</p></div></div>
     <div class="sales-stats">
         <a class="sales-stat" asp-controller="SalesOrder" asp-action="Index" asp-route-status="SUBMITTED"><span>Đơn chờ xuất</span><strong>@Model.WaitingOrders</strong></a>
         <a class="sales-stat" asp-controller="SalesOrder" asp-action="Index" asp-route-status="PARTIALLY_FULFILLED"><span>Đơn xuất một phần</span><strong>@Model.PartialOrders</strong></a>
@@ -19,5 +19,4 @@
         </tbody></table></div>
         @if(Model.RecentOrders.Count == 0){<p class="sales-empty">Chưa có đơn bán hàng.</p>}
     </section>
-    <section class="workspace-card"><div class="sales-section-heading"><h2>Khách hàng</h2><a class="workspace-button" asp-controller="Customer" asp-action="Index">Xem danh sách</a></div><p class="muted mb-0">Có @Model.CustomerCount khách hàng trong danh mục dùng chung của Sales.</p></section>
 </div>

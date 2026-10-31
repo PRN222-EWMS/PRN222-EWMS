@@ -95,3 +95,4 @@ public partial class User
 
     public virtual Warehouse? Warehouse { get; set; }
 }
+

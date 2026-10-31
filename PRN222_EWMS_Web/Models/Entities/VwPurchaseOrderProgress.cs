@@ -29,3 +29,4 @@ public partial class VwPurchaseOrderProgress
 
     public long? RemainingQuantity { get; set; }
 }
+

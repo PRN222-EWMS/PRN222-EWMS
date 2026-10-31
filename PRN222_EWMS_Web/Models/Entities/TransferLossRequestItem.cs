@@ -25,3 +25,4 @@ public partial class TransferLossRequestItem
 
     public virtual TransferLossRequest TransferLossRequest { get; set; } = null!;
 }
+

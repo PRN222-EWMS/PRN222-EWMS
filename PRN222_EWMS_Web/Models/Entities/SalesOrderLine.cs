@@ -31,3 +31,4 @@ public partial class SalesOrderLine
 
     public virtual SalesOrder SalesOrder { get; set; } = null!;
 }
+

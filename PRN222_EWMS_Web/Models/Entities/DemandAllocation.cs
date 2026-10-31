@@ -35,3 +35,4 @@ public partial class DemandAllocation
 
     public virtual TransferDispatch? TransferDispatch { get; set; }
 }
+

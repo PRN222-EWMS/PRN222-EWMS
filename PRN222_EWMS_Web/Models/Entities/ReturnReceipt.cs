@@ -51,3 +51,4 @@ public partial class ReturnReceipt
 
     public virtual ICollection<SupplySource> SupplySources { get; set; } = new List<SupplySource>();
 }
+

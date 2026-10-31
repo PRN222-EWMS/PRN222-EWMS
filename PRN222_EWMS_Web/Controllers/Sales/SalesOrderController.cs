@@ -7,7 +7,7 @@ using PRN222_EWMS_Web.ViewModels.Sales;
 
 namespace PRN222_EWMS_Web.Controllers.Sales;
 
-[Authorize(Roles = "SALES_STAFF,MANAGER")]
+[Authorize(Roles = "SALES_STAFF,MANAGER,WAREHOUSE_STAFF")]
 public class SalesOrderController(ISalesService sales) : Controller
 {
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);

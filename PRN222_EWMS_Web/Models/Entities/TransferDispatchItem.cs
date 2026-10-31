@@ -55,3 +55,4 @@ public partial class TransferDispatchItem
 
     public virtual ICollection<TransferReceiptItem> TransferReceiptItemTransferDispatchItems { get; set; } = new List<TransferReceiptItem>();
 }
+

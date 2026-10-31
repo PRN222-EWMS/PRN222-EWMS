@@ -31,3 +31,4 @@ public partial class StocktakeRound
 
     public virtual ICollection<StocktakeObservation> StocktakeObservations { get; set; } = new List<StocktakeObservation>();
 }
+

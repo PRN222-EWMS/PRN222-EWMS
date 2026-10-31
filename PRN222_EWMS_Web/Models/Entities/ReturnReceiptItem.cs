@@ -39,3 +39,4 @@ public partial class ReturnReceiptItem
 
     public virtual ReturnReceipt ReturnReceiptNavigation { get; set; } = null!;
 }
+

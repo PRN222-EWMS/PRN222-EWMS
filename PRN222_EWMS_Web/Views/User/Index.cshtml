@@ -1,7 +1,6 @@
 @model List<PRN222_EWMS_Web.Models.User>
 @{ ViewData["Title"] = "Người dùng"; }
 <div class="workspace-heading"><div><p class="eyebrow">QUẢN TRỊ</p><h1>Người dùng</h1><p class="muted">Thành viên và vai trò trong hệ thống.</p></div><a class="workspace-button" asp-action="Create">Tạo tài khoản</a></div>
-@if (TempData["Success"] is string message) { <div class="workspace-notice" role="status">@message</div> }
 <div class="workspace-card table-wrap">
 <table class="workspace-table"><thead><tr><th>Thành viên</th><th>Tên đăng nhập</th><th>Vai trò</th><th>Kho</th><th>Trạng thái</th></tr></thead><tbody>
 @foreach (var account in Model)

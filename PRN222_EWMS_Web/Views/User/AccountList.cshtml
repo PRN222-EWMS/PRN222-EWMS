@@ -1,0 +1,136 @@
+@model PRN222_EWMS_Web.ViewModels.Admin.UserListViewModel
+@{
+    ViewData["Title"] = "Tài khoản";
+}
+
+<div class="workspace-heading">
+    <div>
+        <p class="eyebrow">QUẢN TRỊ</p>
+        <h1>Tài khoản</h1>
+        <p class="muted">Tìm kiếm và xem tài khoản nội bộ, vai trò, trạng thái và kho làm việc.</p>
+    </div>
+    <a class="workspace-button" asp-controller="User" asp-action="Create">Tạo tài khoản</a>
+</div>
+
+<section class="workspace-card" aria-label="Danh sách tài khoản">
+    <form asp-controller="AccountList" asp-action="Index" method="get" class="workspace-form mt-0">
+        <div class="row g-3 align-items-end">
+            <div class="col-12 col-xl-4">
+                <label for="Search">Tìm tài khoản</label>
+                <input id="Search" name="Search" type="search" value="@Model.Search" placeholder="Họ tên hoặc email" autocomplete="off" />
+            </div>
+            <div class="col-12 col-sm-6 col-xl-2">
+                <label for="RoleId">Vai trò</label>
+                <select id="RoleId" name="RoleId" class="form-select">
+                    <option value="">Tất cả vai trò</option>
+                    @foreach (var role in Model.Roles)
+                    {
+                        <option value="@role.Value" selected="@(Model.RoleId?.ToString() == role.Value)">@role.Text</option>
+                    }
+                </select>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-2">
+                <label for="Status">Trạng thái</label>
+                <select id="Status" name="Status" class="form-select">
+                    <option value="">Tất cả trạng thái</option>
+                    @foreach (var status in Model.Statuses)
+                    {
+                        <option value="@status.Value" selected="@(Model.Status == status.Value)">@status.Text</option>
+                    }
+                </select>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-2">
+                <label for="WarehouseId">Kho làm việc</label>
+                <select id="WarehouseId" name="WarehouseId" class="form-select">
+                    <option value="">Tất cả kho</option>
+                    @foreach (var warehouse in Model.Warehouses)
+                    {
+                        <option value="@warehouse.Value" selected="@(Model.WarehouseId?.ToString() == warehouse.Value)">@warehouse.Text</option>
+                    }
+                </select>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-2 d-flex flex-wrap gap-2">
+                <button class="workspace-button" type="submit"><i class="bi bi-funnel" aria-hidden="true"></i> Lọc</button>
+                @if (Model.IsFiltered)
+                {
+                    <a class="workspace-link" asp-controller="AccountList" asp-action="Index">Xóa lọc</a>
+                }
+            </div>
+        </div>
+    </form>
+
+    <div class="d-flex justify-content-between align-items-center py-3 text-secondary small" aria-live="polite">
+        @if (Model.TotalCount > 0)
+        {
+            <span>Đang hiển thị <strong>@Model.FirstItemNumber–@Model.LastItemNumber</strong> trên <strong>@Model.TotalCount</strong> tài khoản</span>
+        }
+        else
+        {
+            <span>0 tài khoản</span>
+        }
+    </div>
+
+    <div class="table-wrap">
+        <table class="workspace-table">
+            <thead>
+                <tr>
+                    <th scope="col">Họ và tên</th>
+                    <th scope="col">Vai trò</th>
+                    <th scope="col">Kho làm việc</th>
+                    <th scope="col">Trạng thái</th>
+                    <th scope="col">Ngày tạo</th>
+                    <th scope="col"><span class="visually-hidden">Thao tác</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var account in Model.Accounts)
+                {
+                    <tr>
+                        <td><strong>@account.FullName</strong><br /><span class="muted">@(string.IsNullOrWhiteSpace(account.Email) ? "Chưa có email" : account.Email)</span></td>
+                        <td><span class="role-badge">@account.RoleName</span></td>
+                        <td>@(account.WarehouseName ?? "—")</td>
+                        <td><span class="badge rounded-pill @account.StatusClass">@account.StatusLabel</span></td>
+                        <td>@account.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                        <td>
+                            <a class="workspace-link" asp-controller="AccountList" asp-action="Details" asp-route-id="@account.UserId" asp-route-search="@Model.Search" asp-route-roleId="@Model.RoleId" asp-route-status="@Model.Status" asp-route-warehouseId="@Model.WarehouseId" asp-route-page="@Model.Page">
+                                <i class="bi bi-eye" aria-hidden="true"></i> Chi tiết
+                            </a>
+                            <a class="workspace-link" asp-controller="AccountList" asp-action="Edit" asp-route-id="@account.UserId" asp-route-search="@Model.Search" asp-route-roleId="@Model.RoleId" asp-route-status="@Model.Status" asp-route-warehouseId="@Model.WarehouseId" asp-route-page="@Model.Page">
+                                <i class="bi bi-pencil" aria-hidden="true"></i> Sửa
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (Model.Accounts.Count == 0)
+    {
+        <div class="text-center py-5">
+            <p class="mb-1"><strong>@(Model.IsFiltered ? "Không tìm thấy tài khoản phù hợp" : "Chưa có tài khoản")</strong></p>
+            <p class="muted mb-0">@(Model.IsFiltered ? "Thử thay đổi từ khóa hoặc bộ lọc." : "Tài khoản nội bộ sẽ xuất hiện tại đây.")</p>
+        </div>
+    }
+
+    @if (Model.TotalPages > 1)
+    {
+        <nav class="d-flex flex-wrap justify-content-between align-items-center gap-3 pt-3 mt-3 border-top" aria-label="Phân trang tài khoản">
+            <span class="muted small">Trang @Model.Page / @Model.TotalPages</span>
+            <div class="d-flex flex-wrap gap-1">
+                @if (Model.Page > 1)
+                {
+                    <a class="workspace-link" asp-controller="AccountList" asp-action="Index" asp-route-search="@Model.Search" asp-route-roleId="@Model.RoleId" asp-route-status="@Model.Status" asp-route-warehouseId="@Model.WarehouseId" asp-route-page="@(Model.Page - 1)"><i class="bi bi-chevron-left" aria-hidden="true"></i> Trước</a>
+                }
+                @for (var pageNumber = Math.Max(1, Model.Page - 2); pageNumber <= Math.Min(Model.TotalPages, Model.Page + 2); pageNumber++)
+                {
+                    <a class="workspace-link @(pageNumber == Model.Page ? "fw-semibold text-primary" : "")" asp-controller="AccountList" asp-action="Index" asp-route-search="@Model.Search" asp-route-roleId="@Model.RoleId" asp-route-status="@Model.Status" asp-route-warehouseId="@Model.WarehouseId" asp-route-page="@pageNumber" aria-current="@(pageNumber == Model.Page ? "page" : null)">@pageNumber</a>
+                }
+                @if (Model.Page < Model.TotalPages)
+                {
+                    <a class="workspace-link" asp-controller="AccountList" asp-action="Index" asp-route-search="@Model.Search" asp-route-roleId="@Model.RoleId" asp-route-status="@Model.Status" asp-route-warehouseId="@Model.WarehouseId" asp-route-page="@(Model.Page + 1)">Sau <i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+                }
+            </div>
+        </nav>
+    }
+</section>

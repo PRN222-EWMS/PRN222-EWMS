@@ -51,3 +51,4 @@ public partial class OutboundItem
 
     public virtual SupplySource SupplySource { get; set; } = null!;
 }
+

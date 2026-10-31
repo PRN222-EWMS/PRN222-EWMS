@@ -1,0 +1,198 @@
+@model PRN222_EWMS_Web.ViewModels.Warehouse.StorageLocationFormViewModel
+@{
+    var editing = Model.LocationId > 0;
+    var blocked = Model.IsOccupied || Model.IsLocked;
+    ViewData["Title"] = $"{(editing ? "Chỉnh sửa" : "Thêm")} {Model.TypeLabel.ToLower()}";
+}
+
+<div class="workspace-heading">
+    <div>
+        <p class="eyebrow">CẤU HÌNH VỊ TRÍ LƯU TRỮ</p>
+        <h1>@ViewData["Title"]</h1>
+        <p class="muted warehouse-title">@Model.WarehouseName @(Model.ParentName is not null ? $" / {Model.ParentName}" : "")</p>
+    </div>
+    <a asp-action="Setup" asp-route-id="@Model.WarehouseId" class="workspace-link">← Cấu trúc kho</a>
+</div>
+
+<section class="workspace-card">
+    @if (Model.IsOccupied)
+    {
+        <div class="warehouse-error" role="alert">@(editing
+            ? "Vị trí này hoặc một vị trí con đang chứa hàng. Không thể chỉnh sửa tên, trạng thái, kích thước hay quy tắc lưu trữ cho đến khi chuyển hết hàng ra ngoài phạm vi này."
+            : "Vị trí cha hoặc một vị trí con của nó đang chứa hàng. Chưa thể thêm vị trí mới trong phạm vi này.")</div>
+    }
+    @if (Model.IsLocked)
+    {
+        <div class="warehouse-error" role="alert">Phạm vi này đang bị khóa kiểm kê. Chưa thể thay đổi cấu hình vị trí.</div>
+    }
+    <form asp-action="ConfigureLocation" asp-route-id="@Model.WarehouseId" asp-route-locationId="@(editing ? Model.LocationId : (int?)null)"
+          method="post" class="workspace-form" id="warehouse-location-form" data-blocked="@(blocked ? "true" : "false")">
+        <div asp-validation-summary="All" class="validation-message" role="alert"></div>
+        <input asp-for="ParentLocationId" type="hidden" />
+        <input asp-for="LocationType" type="hidden" />
+        @if (editing) { <input asp-for="RowVersion" type="hidden" /> }
+        <fieldset class="warehouse-form-fields" disabled="@blocked">
+            <div class="form-grid">
+                <div>
+                    <label asp-for="LocationName"></label>
+                    <input asp-for="LocationName" maxlength="100" required />
+                    <span asp-validation-for="LocationName"></span>
+                </div>
+                <div>
+                    <label asp-for="Status"></label>
+                    <select asp-for="Status">
+                        <option value="ACTIVE">Đang hoạt động</option>
+                        <option value="INACTIVE">Ngừng hoạt động</option>
+                    </select>
+                    <span asp-validation-for="Status"></span>
+                </div>
+            </div>
+            @if (editing)
+            {
+                <p class="muted warehouse-filter-hint">Không đổi vị trí cha hoặc cấp cấu trúc. Ngừng hoạt động vị trí sẽ ngừng hoạt động toàn bộ vị trí con; kích hoạt lại không tự kích hoạt các vị trí con.</p>
+            }
+
+            @if (Model.LocationType == "ZONE")
+            {
+                <div>
+                    <label asp-for="ZoneType"></label>
+                    <select asp-for="ZoneType" aria-controls="warehouse-zone-rules">
+                        <option value="RESERVE">Dự trữ — chưa cố định loại hàng/hãng</option>
+                        <option value="STANDARD">Tiêu chuẩn — cấu hình loại hàng/hãng</option>
+                    </select>
+                    <span asp-validation-for="ZoneType"></span>
+                    <p class="muted warehouse-filter-hint">Zone dự trữ không lưu quy tắc loại hàng/hãng. Chuyển sang dự trữ sẽ bỏ các cặp đã cấu hình khi lưu.</p>
+                </div>
+                <fieldset id="warehouse-zone-rules" class="warehouse-rule-fields" hidden="@(Model.ZoneType != "STANDARD")" disabled="@(Model.ZoneType != "STANDARD")">
+                    <legend class="warehouse-fieldset-title">Loại hàng (Category) — Hãng (Brand) được phép</legend>
+                    <p class="muted warehouse-filter-hint">Mỗi dòng là một cặp được phép. “Mọi hãng” chỉ áp dụng cho loại hàng của dòng đó; không cố định từng mã sản phẩm.</p>
+                    <div id="warehouse-rule-rows">
+                        @for (var i = 0; i < Model.Rules.Count; i++)
+                        {
+                            <div class="warehouse-rule-row">
+                                <div>
+                                    <label asp-for="Rules[i].CategoryId">Loại hàng</label>
+                                    <select asp-for="Rules[i].CategoryId" asp-items="Model.Categories" data-rule-field="CategoryId" required>
+                                        <option value="">Chọn loại hàng</option>
+                                    </select>
+                                    <span asp-validation-for="Rules[i].CategoryId"></span>
+                                </div>
+                                <div>
+                                    <label asp-for="Rules[i].BrandId">Hãng</label>
+                                    <select asp-for="Rules[i].BrandId" asp-items="Model.Brands" data-rule-field="BrandId">
+                                        <option value="">Mọi hãng</option>
+                                    </select>
+                                    <span asp-validation-for="Rules[i].BrandId"></span>
+                                </div>
+                                <button type="button" class="warehouse-small-button" data-remove-rule aria-label="Bỏ cặp loại hàng và hãng này">Bỏ dòng</button>
+                            </div>
+                        }
+                    </div>
+                    <button type="button" class="warehouse-small-button" id="warehouse-add-rule">Thêm cặp loại hàng — hãng</button>
+                    <p id="warehouse-rule-limit" class="muted warehouse-filter-hint" role="status"></p>
+                </fieldset>
+                <template id="warehouse-rule-template">
+                    <div class="warehouse-rule-row">
+                        <div>
+                            <label>Loại hàng</label>
+                            <select data-rule-field="CategoryId" required>
+                                <option value="">Chọn loại hàng</option>
+                                @foreach (var item in Model.Categories) { <option value="@item.Value" disabled="@item.Disabled">@item.Text</option> }
+                            </select>
+                        </div>
+                        <div>
+                            <label>Hãng</label>
+                            <select data-rule-field="BrandId">
+                                <option value="">Mọi hãng</option>
+                                @foreach (var item in Model.Brands) { <option value="@item.Value" disabled="@item.Disabled">@item.Text</option> }
+                            </select>
+                        </div>
+                        <button type="button" class="warehouse-small-button" data-remove-rule aria-label="Bỏ cặp loại hàng và hãng này">Bỏ dòng</button>
+                    </div>
+                </template>
+            }
+            @if (Model.LocationType == "ROW")
+            {
+                <div>
+                    <label asp-for="StorageType"></label>
+                    <select asp-for="StorageType" disabled="@Model.HasChildren">
+                        <option value="RACK">Để kệ</option>
+                        <option value="FLOOR">Để sàn</option>
+                    </select>
+                    @if (Model.HasChildren)
+                    {
+                        <input name="StorageType" value="@Model.StorageType" type="hidden" />
+                        <p class="muted warehouse-filter-hint">Dãy đã có vị trí con nên không thể đổi kiểu lưu trữ, kể cả khi các vị trí con đã ngừng hoạt động. Có thể ngừng hoạt động dãy cũ và tạo dãy mới.</p>
+                    }
+                    <span asp-validation-for="StorageType"></span>
+                </div>
+            }
+            @if (Model.LocationType is "RACK" or "FLOOR_SLOT")
+            {
+                <div>
+                    <label asp-for="ConditionPolicy"></label>
+                    <select asp-for="ConditionPolicy">
+                        <option value="GOOD">Hàng tốt</option>
+                        <option value="DAMAGED">Hàng hỏng</option>
+                    </select>
+                    <span asp-validation-for="ConditionPolicy"></span>
+                    @if (Model.LocationType == "RACK")
+                    {
+                        <p class="muted warehouse-filter-hint">Tất cả tầng của kệ dùng chung tình trạng hàng này. Kích thước sử dụng và tải trọng sẽ được nhập cho từng tầng.</p>
+                    }
+                </div>
+            }
+            @if (Model.LocationType == "TIER")
+            {
+                <p class="warehouse-config-note">Tình trạng hàng được phép: <strong>@Model.ParentConditionLabel</strong> (theo kệ cha).</p>
+            }
+            @if (Model.LocationType is "TIER" or "FLOOR_SLOT")
+            {
+                <div class="form-grid">
+                    <div>
+                        <label asp-for="LengthCm"></label>
+                        <input asp-for="LengthCm" type="number" min="0.01" max="99999999.99" step="0.01" required />
+                        <span asp-validation-for="LengthCm"></span>
+                    </div>
+                    <div>
+                        <label asp-for="WidthCm"></label>
+                        <input asp-for="WidthCm" type="number" min="0.01" max="99999999.99" step="0.01" required />
+                        <span asp-validation-for="WidthCm"></span>
+                    </div>
+                    <div>
+                        <label asp-for="HeightCm"></label>
+                        <input asp-for="HeightCm" type="number" min="0.01" max="99999999.99" step="0.01" required="@(Model.LocationType == "TIER")" />
+                        <span asp-validation-for="HeightCm"></span>
+                    </div>
+                    <div>
+                        <label asp-for="MaxWeightKg"></label>
+                        <input asp-for="MaxWeightKg" type="number" min="0.001" max="999999999.999" step="0.001" />
+                        <span asp-validation-for="MaxWeightKg"></span>
+                        <p class="muted warehouse-filter-hint">Có thể để trống nếu chưa xác định tải trọng.</p>
+                    </div>
+                </div>
+                <p class="warehouse-config-note" id="warehouse-capacity-preview" role="status" aria-live="polite">Nhập kích thước để xem sức chứa cấu hình.</p>
+                @if (Model.LocationType == "FLOOR_SLOT")
+                {
+                    <p class="muted warehouse-filter-hint">Ô sàn tính sức chứa bằng m², không xếp chồng. Chiều cao là giới hạn chiều cao kiện hàng, có thể để trống.</p>
+                }
+                else
+                {
+                    <p class="muted warehouse-filter-hint">Tầng kệ tính sức chứa bằng m³ theo kích thước sử dụng, không phải kích thước bên ngoài của khung kệ.</p>
+                }
+            }
+        </fieldset>
+        @if (editing && !ViewData.ModelState.IsValid)
+        {
+            <a asp-action="ConfigureLocation" asp-route-id="@Model.WarehouseId" asp-route-locationId="@Model.LocationId" class="warehouse-detail-link">Tải lại vị trí (bỏ các thay đổi chưa lưu)</a>
+        }
+        <div class="form-actions">
+            <button type="submit" class="workspace-button" disabled="@blocked">@(editing ? "Lưu thay đổi" : $"Lưu {Model.TypeLabel.ToLower()}")</button>
+            <a asp-action="Setup" asp-route-id="@Model.WarehouseId" class="workspace-link">Quay lại cấu trúc kho</a>
+        </div>
+    </form>
+</section>
+
+@section Scripts {
+    <script src="~/js/warehouse-form.js" asp-append-version="true"></script>
+}

@@ -25,3 +25,4 @@ public partial class StaffWarehouseAssignment
 
     public virtual Warehouse Warehouse { get; set; } = null!;
 }
+

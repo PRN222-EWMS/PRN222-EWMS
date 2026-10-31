@@ -33,3 +33,4 @@ public partial class VwSalesOrderProgress
 
     public long ReservedBalance { get; set; }
 }
+

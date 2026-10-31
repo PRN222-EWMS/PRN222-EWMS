@@ -29,3 +29,4 @@ public partial class StocktakeAssignment
 
     public virtual User User { get; set; } = null!;
 }
+
