@@ -6,10 +6,20 @@
 
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
     <h2 class="mb-0">Danh sách sản phẩm</h2>
-    @if (User.IsInRole("PURCHASING_STAFF"))
-    {
-        <a asp-action="Create" class="btn btn-primary">Thêm sản phẩm</a>
-    }
+    <div class="d-flex flex-wrap gap-2 ms-auto">
+        @if (User.IsInRole("PURCHASING_STAFF"))
+        {
+            <a asp-action="Create" class="btn btn-primary">Thêm sản phẩm</a>
+        }
+        @if (User.IsInRole("MANAGER"))
+        {
+            <a asp-controller="ManagerDashboard"
+               asp-action="Dashboard"
+               class="btn btn-outline-secondary">
+                ← Về tổng quan
+            </a>
+        }
+    </div>
 </div>
 
 <form asp-action="Index" method="get" class="row g-2 mb-3">
