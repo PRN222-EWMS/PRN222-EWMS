@@ -1,0 +1,303 @@
+﻿@model PRN222_EWMS_Web.ViewModels.Manager.ManagerDashboardViewModel
+
+@{
+    ViewData["Title"] = "Dashboard Manager";
+
+    string StatusText(string status) => status switch
+    {
+        "DRAFT" => "Bản nháp",
+        "CONFIRMED" => "Đã xác nhận",
+        "PARTIALLY_RECEIVED" => "Đã nhận một phần",
+        "RECEIVED" => "Đã nhận đủ",
+        "SUBMITTED" => "Đã gửi",
+        "PARTIALLY_FULFILLED" => "Đã đáp ứng một phần",
+        "FULFILLED" => "Đã đáp ứng đủ",
+        "CLOSED" => "Đã đóng",
+        "CANCELLED" => "Đã hủy",
+        "READY" => "Sẵn sàng",
+        "PICKING" => "Đang lấy hàng",
+        "DONE" => "Hoàn tất",
+        _ => status
+    };
+
+    string PercentText(decimal? used, decimal? capacity)
+    {
+        if (!used.HasValue || !capacity.HasValue || capacity.Value <= 0)
+            return "Chưa có dữ liệu";
+
+        return (used.Value / capacity.Value * 100).ToString("0.#") + "%";
+    }
+
+    string Measure(decimal? value)
+        => value.HasValue ? value.Value.ToString("0.###") : "—";
+}
+
+<div class="d-flex justify-content-between align-items-center
+    flex-wrap gap-2 mb-4">
+    <div>
+        <h2 class="mb-1">Tổng quan quản lý kho</h2>
+        <p class="text-muted mb-0">
+            Theo dõi nghiệp vụ và sức chứa tại các kho.
+        </p>
+    </div>
+
+    <a asp-controller="Product"
+       asp-action="Index"
+       class="btn btn-outline-primary">
+        Danh sách sản phẩm
+    </a>
+</div>
+
+<form asp-action="Dashboard" method="get" class="row g-2 mb-4">
+    <div class="col-md-5">
+        <label asp-for="WarehouseId" class="form-label">Kho</label>
+        <select asp-for="WarehouseId"
+                asp-items="Model.Warehouses"
+                class="form-select">
+            <option value="">Tất cả kho</option>
+        </select>
+    </div>
+
+    <div class="col-md-auto align-self-end">
+        <button type="submit" class="btn btn-primary">
+            Xem dữ liệu
+        </button>
+    </div>
+</form>
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted">Phiếu nhập nháp</div>
+                <div class="fs-2 fw-bold">@Model.PendingInboundCount</div>
+                <small>Chưa hoàn tất nhập kho</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-sm-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted">Phiếu xuất chưa hoàn tất</div>
+                <div class="fs-2 fw-bold">@Model.PendingOutboundCount</div>
+                <small>Nháp, sẵn sàng hoặc đang lấy hàng</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-sm-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted">Đơn mua chờ nhận đủ</div>
+                <div class="fs-2 fw-bold">@Model.OpenPurchaseOrderCount</div>
+                <small>Đã xác nhận hoặc đã nhận một phần</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-sm-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted">Kiểm kê đang xử lý</div>
+                <div class="fs-2 fw-bold">@Model.ActiveStocktakeCount</div>
+                <small>Kiểm đếm, kiểm lại, rà soát hoặc chờ duyệt</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Trạng thái đơn mua</div>
+            <div class="card-body">
+                @if (Model.PurchaseStatuses.Count == 0)
+                {
+                    <p class="text-muted mb-0">Chưa có đơn mua.</p>
+                }
+                else
+                {
+                    <table class="table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Trạng thái</th>
+                                <th class="text-end">Số đơn</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.PurchaseStatuses)
+                            {
+                                <tr>
+                                    <td>@StatusText(item.Status)</td>
+                                    <td class="text-end">@item.Count</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Trạng thái đơn bán</div>
+            <div class="card-body">
+                @if (Model.SalesStatuses.Count == 0)
+                {
+                    <p class="text-muted mb-0">Chưa có đơn bán.</p>
+                }
+                else
+                {
+                    <table class="table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Trạng thái</th>
+                                <th class="text-end">Số đơn</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.SalesStatuses)
+                            {
+                                <tr>
+                                    <td>@StatusText(item.Status)</td>
+                                    <td class="text-end">@item.Count</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">10 phiếu nhập/xuất được tạo gần nhất</div>
+    <div class="card-body">
+        @if (Model.RecentReceipts.Count == 0)
+        {
+            <p class="text-muted mb-0">Chưa có phiếu nhập/xuất.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Loại</th>
+                            <th>Mã phiếu</th>
+                            <th>Kho</th>
+                            <th>Trạng thái</th>
+                            <th>Ngày tạo (UTC)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.RecentReceipts)
+                        {
+                            <tr>
+                                <td>@item.Type</td>
+                                <td>@item.Code</td>
+                                <td>@item.WarehouseName</td>
+                                <td>@StatusText(item.Status)</td>
+                                <td>@item.CreatedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Sức chứa theo vị trí</div>
+    <div class="card-body">
+        <p class="text-muted">
+            Ô nền tính theo m², tầng kệ tính theo m³.
+            Tải trọng được theo dõi riêng theo kg.
+        </p>
+
+        @if (Model.Capacities.Count == 0)
+        {
+            <p class="text-muted mb-0">
+                Chưa có vị trí lưu trữ phù hợp.
+            </p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Kho</th>
+                            <th>Vị trí</th>
+                            <th>Loại</th>
+                            <th>Đã dùng / sức chứa</th>
+                            <th>Tỷ lệ sử dụng</th>
+                            <th>Tải trọng</th>
+                            <th>Số serial</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Capacities)
+                        {
+                            var warehouseName = Model.Warehouses
+                                .FirstOrDefault(w =>
+                                    w.Value == item.WarehouseId.ToString())?.Text;
+
+                            bool isFloor = item.CapacityMode == "FLOOR_AREA";
+
+                            decimal? used = isFloor
+                                ? item.UsedAreaM2
+                                : item.UsedVolumeM3;
+
+                            decimal? total = isFloor
+                                ? item.CapacityAreaM2
+                                : item.CapacityVolumeM3;
+
+                            string unit = isFloor ? "m²" : "m³";
+
+                            bool exceeded =
+                                (used.HasValue && total.HasValue &&
+                                 used.Value > total.Value) ||
+                                (item.MaxWeightKg.HasValue &&
+                                 item.UsedWeightKg > item.MaxWeightKg.Value);
+
+                            <tr class="@(exceeded ? "table-danger" : "")">
+                                <td>@(warehouseName ?? $"Kho {item.WarehouseId}")</td>
+                                <td>@item.LocationName</td>
+                                <td>@(isFloor ? "Ô nền" : "Tầng kệ")</td>
+                                <td>
+                                    @Measure(used) / @Measure(total) @unit
+                                </td>
+                                <td>
+                                    @PercentText(used, total)
+                                    @if (exceeded)
+                                    {
+                                        <span class="badge bg-danger">
+                                            Vượt sức chứa hoặc tải trọng
+                                        </span>
+                                    }
+                                </td>
+                                <td>
+                                    @item.UsedWeightKg.ToString("0.###")
+                                    /
+                                    @Measure(item.MaxWeightKg) kg
+                                </td>
+                                <td>@item.ItemCount</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <p class="text-muted small mt-3 mb-0">
+                Sức chứa lấy từ view hiện có của database.
+                Hàng chưa được gán vị trí không nằm trong số liệu từng vị trí.
+                Dấu — nghĩa là chưa có thông tin giới hạn.
+            </p>
+        }
+    </div>
+</div>

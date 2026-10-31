@@ -1,0 +1,165 @@
+﻿@model PRN222_EWMS_Web.ViewModels.Products.ProductEditViewModel
+
+@{
+    ViewData["Title"] = "Sửa sản phẩm";
+}
+
+<h2 class="mb-4">Sửa sản phẩm</h2>
+
+<form asp-action="Edit"
+      asp-route-id="@Model.ProductId"
+      method="post">
+
+    <input asp-for="ProductId" type="hidden" />
+    <input asp-for="RowVersion" type="hidden" />
+
+    <div asp-validation-summary="ModelOnly"
+         class="text-danger mb-3"></div>
+
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label asp-for="ProductCode" class="form-label">
+                Mã sản phẩm
+            </label>
+            <input asp-for="ProductCode"
+                   class="form-control"
+                   readonly />
+            <div class="form-text">
+                Không được thay đổi mã sản phẩm.
+            </div>
+            <span asp-validation-for="ProductCode"
+                  class="text-danger"></span>
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <label asp-for="ProductName" class="form-label">
+                Tên sản phẩm
+            </label>
+            <input asp-for="ProductName" class="form-control" />
+            <span asp-validation-for="ProductName"
+                  class="text-danger"></span>
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <label asp-for="Model" class="form-label">Model</label>
+            <input asp-for="Model" class="form-control" />
+            <span asp-validation-for="Model"
+                  class="text-danger"></span>
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <label asp-for="Unit" class="form-label">Đơn vị</label>
+            <input asp-for="Unit"
+                   class="form-control"
+                   placeholder="Ví dụ: Cái" />
+            <span asp-validation-for="Unit"
+                  class="text-danger"></span>
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <label asp-for="CategoryId" class="form-label">
+                Danh mục
+            </label>
+            <select asp-for="CategoryId"
+                    asp-items="Model.Categories"
+                    class="form-select">
+                <option value="">-- Chọn danh mục --</option>
+            </select>
+            <span asp-validation-for="CategoryId"
+                  class="text-danger"></span>
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <label asp-for="BrandId" class="form-label">
+                Thương hiệu
+            </label>
+            <select asp-for="BrandId"
+                    asp-items="Model.Brands"
+                    class="form-select">
+                <option value="">-- Chọn thương hiệu --</option>
+            </select>
+            <span asp-validation-for="BrandId"
+                  class="text-danger"></span>
+        </div>
+
+        <div class="col-12 mb-3">
+            <label asp-for="Specifications" class="form-label">
+                Thông số kỹ thuật
+            </label>
+            <textarea asp-for="Specifications"
+                      class="form-control"
+                      rows="6"
+                      placeholder="Nhập thông số kỹ thuật"></textarea>
+            <span asp-validation-for="Specifications"
+                  class="text-danger"></span>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <label asp-for="LengthCm" class="form-label">
+                Chiều dài (cm)
+            </label>
+            <input asp-for="LengthCm"
+                   class="form-control"
+                   type="number"
+                   step="0.01"
+                   min="0.01" />
+            <span asp-validation-for="LengthCm"
+                  class="text-danger"></span>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <label asp-for="WidthCm" class="form-label">
+                Chiều rộng (cm)
+            </label>
+            <input asp-for="WidthCm"
+                   class="form-control"
+                   type="number"
+                   step="0.01"
+                   min="0.01" />
+            <span asp-validation-for="WidthCm"
+                  class="text-danger"></span>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <label asp-for="HeightCm" class="form-label">
+                Chiều cao (cm)
+            </label>
+            <input asp-for="HeightCm"
+                   class="form-control"
+                   type="number"
+                   step="0.01"
+                   min="0.01" />
+            <span asp-validation-for="HeightCm"
+                  class="text-danger"></span>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <label asp-for="GrossWeightKg" class="form-label">
+                Trọng lượng (kg)
+            </label>
+            <input asp-for="GrossWeightKg"
+                   class="form-control"
+                   type="number"
+                   step="0.001"
+                   min="0.001" />
+            <span asp-validation-for="GrossWeightKg"
+                  class="text-danger"></span>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-primary">
+            Lưu thay đổi
+        </button>
+
+        <a asp-action="Details"
+           asp-route-id="@Model.ProductId"
+           class="btn btn-secondary">
+            Hủy
+        </a>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
