@@ -6,7 +6,7 @@ using PRN222_EWMS_Web.ViewModels.Purchasing;
 
 namespace PRN222_EWMS_Web.Controllers.Purchasing;
 
-[Authorize(Roles = "MANAGER,PURCHASING_STAFF")]
+[Authorize(Roles = "MANAGER,PURCHASING_STAFF,WAREHOUSE_STAFF")]
 public class PurchaseOrderController(IPurchaseOrderService poService) : Controller
 {
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -18,6 +18,11 @@ public class PurchaseOrderController(IPurchaseOrderService poService) : Controll
     [HttpGet]
     public async Task<IActionResult> Index(PoListViewModel filter)
     {
+        if (CurrentUserRole == "WAREHOUSE_STAFF")
+        {
+            return RedirectToAction("PurchaseOrders", "Inbound");
+        }
+
         if (filter.FromDate.HasValue && filter.ToDate.HasValue && filter.FromDate > filter.ToDate)
         {
             ModelState.AddModelError(nameof(filter.ToDate), "Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.");
@@ -33,6 +38,11 @@ public class PurchaseOrderController(IPurchaseOrderService poService) : Controll
     [HttpGet]
     public async Task<IActionResult> Details(long id)
     {
+        if (CurrentUserRole == "WAREHOUSE_STAFF")
+        {
+            return RedirectToAction("PurchaseOrderDetails", "Inbound", new { id });
+        }
+
         var model = await poService.GetOrderDetailsAsync(id, CurrentUserId, CurrentUserRole);
         if (model == null) return NotFound();
 

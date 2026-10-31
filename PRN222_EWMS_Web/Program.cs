@@ -18,6 +18,8 @@ builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Sales.ISalesRepository, 
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Sales.ISalesService, PRN222_EWMS_Web.Services.Sales.SalesService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Purchasing.IPurchaseOrderRepository, PRN222_EWMS_Web.Repositories.Purchasing.PurchaseOrderRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Purchasing.IPurchaseOrderService, PRN222_EWMS_Web.Services.Purchasing.PurchaseOrderService>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.WarehouseStaff.IWarehouseStaffRepository, PRN222_EWMS_Web.Repositories.WarehouseStaff.WarehouseStaffRepository>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.WarehouseStaff.IWarehouseStaffService, PRN222_EWMS_Web.Services.WarehouseStaff.WarehouseStaffService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Authentication.IAuthenticationService, AuthenticationService>();

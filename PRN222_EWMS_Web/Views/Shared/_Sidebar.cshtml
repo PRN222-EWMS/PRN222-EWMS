@@ -55,6 +55,24 @@
                 ("Tạo khách hàng", "bi-person-plus", "Customer", "Create", Array.Empty<string>()) })
         };
     }
+    else if (role == "WAREHOUSE_STAFF")
+    {
+        sections = new (string Heading, (string Label, string Icon, string Controller, string Action, string[] Roles)[] Items)[]
+        {
+            ("Tổng quan", new[] {
+                ("Dashboard", "bi-grid-1x2", "WarehouseDashboard", "Index", Array.Empty<string>())
+            }),
+            ("Nhập kho", new[] {
+                ("Đơn mua cần nhận", "bi-box-arrow-in-down", "Inbound", "PurchaseOrders", Array.Empty<string>())
+            }),
+            ("Vận hành kho", new[] {
+                ("Lưu kho / Kệ hàng", "bi-boxes", "Putaway", "Index", Array.Empty<string>()),
+                ("Xuất kho", "bi-box-arrow-up", "Outbound", "Index", Array.Empty<string>()),
+                ("Chuyển kho", "bi-arrow-left-right", "Transfer", "Index", Array.Empty<string>()),
+                ("Kiểm kê", "bi-clipboard-check", "Stocktake", "Index", Array.Empty<string>())
+            })
+        };
+    }
 }
 
 <aside class="ewms-sidebar" id="ewmsSidebar" aria-label="Điều hướng chính">

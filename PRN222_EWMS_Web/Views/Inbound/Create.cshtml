@@ -1,0 +1,70 @@
+@model PRN222_EWMS_Web.ViewModels.WarehouseStaff.WarehousePoDetailsViewModel
+@{
+    ViewData["Title"] = $"Khởi tạo phiếu nhập hàng từ {Model.Pocode}";
+}
+
+<div class="wh-page">
+    <div class="wh-header">
+        <div>
+            <h1 class="wh-title">Khởi tạo phiếu tiếp nhận hàng (Inbound Receipt)</h1>
+            <p class="wh-subtitle">Đơn mua hàng liên kết: <strong>@Model.Pocode</strong> | Nhà cung cấp: <strong>@Model.SupplierName</strong> | Kho đích: <strong>@Model.WarehouseName</strong></p>
+        </div>
+        <div>
+            <a asp-action="PurchaseOrderDetails" asp-route-id="@Model.PurchaseOrderId" class="wh-btn wh-btn-outline">
+                <i class="bi bi-arrow-left"></i> Quay lại đối chiếu
+            </a>
+        </div>
+    </div>
+
+    <div class="wh-banner" style="border-left: 4px solid #0075de;">
+        <div class="wh-banner-info">
+            <div class="wh-banner-icon">
+                <i class="bi bi-qr-code-scan"></i>
+            </div>
+            <div class="wh-banner-details">
+                <h3>Sẵn sàng ghi nhận tiếp nhận hàng</h3>
+                <p>Số lượng còn lại tối đa được nhận đợt này là <strong>@Model.TotalRemaining thiết bị</strong>. Chuẩn bị máy quét mã vạch để quét từng số Serial thiết bị, phân loại tình trạng hàng (GOOD/DAMAGED) và lưu phiếu nhận.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Product Lines Review -->
+    <div class="wh-section">
+        <div class="wh-section-title">
+            <span><i class="bi bi-box-seam"></i> Thiết bị dự kiến nhận theo đơn mua</span>
+        </div>
+        <div class="wh-table-container">
+            <table class="wh-table">
+                <thead>
+                    <tr>
+                        <th>Mã SP</th>
+                        <th>Tên sản phẩm</th>
+                        <th>Quy cách / Hiệu</th>
+                        <th class="text-center">Số lượng còn nhận</th>
+                        <th>Trạng thái</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var line in Model.Lines.Where(l => l.RemainingQuantity > 0))
+                    {
+                        <tr>
+                            <td><strong class="font-monospace text-primary">@line.ProductCode</strong></td>
+                            <td><strong>@line.ProductName</strong></td>
+                            <td>@line.CategoryName • @line.BrandName</td>
+                            <td class="text-center">
+                                <span class="badge bg-primary fs-6 px-2 py-1">@line.RemainingQuantity @line.Unit</span>
+                            </td>
+                            <td><span class="wh-badge wh-badge-blue">Sẵn sàng nhận</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center">
+            <span class="text-muted"><i class="bi bi-info-circle"></i> Quy trình quét serial từng thiết bị và tạo phiếu Inbound DRAFT/DONE hoàn tất tại khu vực tiếp nhận.</span>
+            <a asp-action="PurchaseOrders" class="wh-btn wh-btn-outline">
+                <i class="bi bi-check2-circle"></i> Đã hoàn tất đối chiếu
+            </a>
+        </div>
+    </div>
+</div>
