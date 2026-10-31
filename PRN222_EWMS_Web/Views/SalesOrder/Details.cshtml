@@ -2,7 +2,13 @@
 @using PRN222_EWMS_Web.ViewModels.Sales
 @{ ViewData["Title"] = "Chi tiết " + Model.Code; }
 <div class="sales-page">
-<div class="workspace-heading"><div><p class="eyebrow">BÁN HÀNG / CHI TIẾT ĐƠN</p><h1>@Model.Code</h1><span class="sales-status">@SalesDisplay.Status(Model.Status)</span></div><a class="workspace-button sales-button-secondary" asp-action="Index">← Danh sách đơn bán hàng</a></div>
+<div class="workspace-heading"><div><p class="eyebrow">BÁN HÀNG / CHI TIẾT ĐƠN</p><h1>@Model.Code</h1><span class="sales-status">@SalesDisplay.Status(Model.Status)</span></div><div class="sales-toolbar">
+    <a class="workspace-button sales-button-secondary" asp-action="Index">← Danh sách đơn bán hàng</a>
+    @if (Model.CanEdit)
+    {
+        <a class="workspace-button" href="@Url.Content($"~/SalesOrder/Edit/{Model.Id}")">Sửa</a>
+    }
+</div></div>
 @if(Model.HasShortage){<div class="sales-warning" role="status">Đơn hàng đang có thiếu nguồn đáp ứng. Cần kiểm tra phần nhu cầu còn lại.</div>}
 @if (User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value != Model.CreatedByUserId.ToString())
 {

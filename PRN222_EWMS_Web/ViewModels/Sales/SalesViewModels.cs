@@ -24,7 +24,6 @@ public class SalesDashboardViewModel
     public int PartialOrders { get; set; }
     public int FulfilledOrders { get; set; }
     public int ShortageOrders { get; set; }
-    public int CustomerCount { get; set; }
     public List<SalesOrderRowViewModel> RecentOrders { get; set; } = [];
 }
 

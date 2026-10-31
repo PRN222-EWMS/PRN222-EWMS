@@ -30,7 +30,6 @@ public class SalesService(ISalesRepository repository) : ISalesService
             PartialOrders = counts.Where(x => x.Status == "PARTIALLY_FULFILLED").Sum(x => x.Count),
             FulfilledOrders = counts.Where(x => x.Status == "FULFILLED").Sum(x => x.Count),
             ShortageOrders = await repository.Orders.CountAsync(x => x.HasShortage && (x.Status == "SUBMITTED" || x.Status == "PARTIALLY_FULFILLED")),
-            CustomerCount = await repository.Customers.CountAsync(),
             RecentOrders = await repository.Orders.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.SalesOrderId).Take(5).Select(Row(userId)).ToListAsync()
         };
     }
