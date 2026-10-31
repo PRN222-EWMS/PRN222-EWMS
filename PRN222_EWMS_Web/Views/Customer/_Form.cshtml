@@ -2,6 +2,6 @@
 <div asp-validation-summary="All" class="validation-message" role="alert"></div>
 <div class="form-grid">
     <div><label asp-for="CustomerName"></label><input asp-for="CustomerName" autocomplete="name" maxlength="200" /><span asp-validation-for="CustomerName"></span></div>
-    <div><label asp-for="Phone"></label><input asp-for="Phone" autocomplete="tel" maxlength="30" /><span asp-validation-for="Phone"></span></div>
+    <div><label asp-for="Phone"></label><input asp-for="Phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10" /><span asp-validation-for="Phone"></span></div>
 </div>
 <div><label asp-for="Address"></label><textarea asp-for="Address" rows="3" autocomplete="street-address" maxlength="500"></textarea><span asp-validation-for="Address"></span></div>
