@@ -5,7 +5,10 @@ using PRN222_EWMS_Web.ViewModels.Purchasing;
 
 namespace PRN222_EWMS_Web.Services.Purchasing;
 
-public class PurchaseOrderService(IPurchaseOrderRepository repo, EwmsDbContext db) : IPurchaseOrderService
+public class PurchaseOrderService(
+    IPurchaseOrderRepository repo, 
+    EwmsDbContext db, 
+    IWarehouseCapacityEngine capacityEngine) : IPurchaseOrderService
 {
     // =========================================================================
     // 1. DANH SÁCH ĐƠN MUA HÀNG (PO LIST)
@@ -307,6 +310,18 @@ public class PurchaseOrderService(IPurchaseOrderRepository repo, EwmsDbContext d
                 return (false, "Số lượng đặt hàng của mỗi sản phẩm phải là số nguyên dương lớn hơn 0.", 0);
         }
 
+        // Kiểm tra sức chứa vật lý kho khi xác nhận đơn ngay (confirmNow = true)
+        if (confirmNow)
+        {
+            var (isValidCapacity, capacityError) = await capacityEngine.ValidatePurchaseOrderLinesCapacityAsync(
+                model.WarehouseId,
+                model.Lines.Select(l => (l.ProductId, l.OrderedQuantity)),
+                excludePoId: null);
+
+            if (!isValidCapacity)
+                return (false, capacityError ?? "Sức chứa kho tiếp nhận không đủ để xác nhận đơn mua hàng.", 0);
+        }
+
         // Bắt đầu Transaction
         using var transaction = await repo.BeginTransactionAsync();
         try
@@ -483,6 +498,28 @@ public class PurchaseOrderService(IPurchaseOrderRepository repo, EwmsDbContext d
             }
             else if (po.Status == "CONFIRMED")
             {
+                // Khi Confirmed: Kiểm tra sức chứa kho nếu có dòng tăng số lượng đặt hàng
+                var increasedLines = new List<(int ProductId, int Quantity)>();
+                foreach (var lineInput in model.Lines)
+                {
+                    var existingLine = po.PurchaseOrderLines.FirstOrDefault(l => l.ProductId == lineInput.ProductId);
+                    if (existingLine != null && lineInput.OrderedQuantity > existingLine.OrderedQuantity)
+                    {
+                        increasedLines.Add((lineInput.ProductId, lineInput.OrderedQuantity));
+                    }
+                }
+
+                if (increasedLines.Count > 0)
+                {
+                    var (isValidCapacity, capacityError) = await capacityEngine.ValidatePurchaseOrderLinesCapacityAsync(
+                        po.WarehouseId,
+                        increasedLines,
+                        excludePoId: po.PurchaseOrderId);
+
+                    if (!isValidCapacity)
+                        return (false, capacityError ?? "Sức chứa kho tiếp nhận không đủ để tăng số lượng đặt hàng.");
+                }
+
                 // Khi Confirmed: Chỉ sửa ExpectedArrivalDate, Note và số lượng dòng hiện có
                 po.ExpectedArrivalDate = model.ExpectedArrivalDate;
                 po.Note = model.Note?.Trim();
@@ -507,22 +544,30 @@ public class PurchaseOrderService(IPurchaseOrderRepository repo, EwmsDbContext d
                             supplySource.EligibleQuantity += diff;
                             supplySource.AvailableFrom = po.ExpectedArrivalDate;
 
-                            // Nếu giảm lượng làm thiếu nguồn cho các Sales Order đang giữ chỗ:
-                            if (diff < 0)
-                            {
-                                var activeReservations = await db.Reservations
-                                    .Include(r => r.SalesOrder)
-                                    .Where(r => r.SupplySourceId == supplySource.SupplySourceId && r.Status == "ACTIVE")
-                                    .ToListAsync();
+                            // Tìm các Active Reservation của các Sales Order đang dựa vào nguồn PO_INCOMING này
+                            var activeReservations = await db.Reservations
+                                .Include(r => r.SalesOrder)
+                                .Where(r => r.SupplySourceId == supplySource.SupplySourceId && r.Status == "ACTIVE")
+                                .ToListAsync();
 
-                                int totalReserved = activeReservations.Sum(r => r.ReservedQuantity);
-                                if (totalReserved > supplySource.RemainingQuantity)
+                            // 1. Kiểm tra thiếu số lượng khi giảm OrderedQuantity (diff < 0)
+                            long totalReserved = activeReservations.Sum(r => (long)r.ReservedQuantity - r.ConsumedQuantity - r.ReleasedQuantity);
+                            if (supplySource.RemainingQuantity < totalReserved)
+                            {
+                                // Bật cờ HasShortage cho các đơn SO bị ảnh hưởng
+                                foreach (var res in activeReservations.Where(r => r.SalesOrder != null))
                                 {
-                                    // Bật cờ HasShortage cho các đơn SO bị ảnh hưởng
-                                    foreach (var res in activeReservations.Where(r => r.SalesOrder != null))
-                                    {
-                                        res.SalesOrder!.HasShortage = true;
-                                    }
+                                    res.SalesOrder!.HasShortage = true;
+                                }
+                            }
+
+                            // 2. Kiểm tra trễ hạn ngày khách cần (RequestedDate Cutoff theo Phân tích SO Mục 11 & SO15):
+                            // Nếu ngày dự kiến hàng về po.ExpectedArrivalDate bị dời lùi sau ngày khách yêu cầu giao hàng
+                            foreach (var res in activeReservations.Where(r => r.SalesOrder != null))
+                            {
+                                if (res.SalesOrder!.RequestedDate.HasValue && po.ExpectedArrivalDate > res.SalesOrder.RequestedDate.Value)
+                                {
+                                    res.SalesOrder.HasShortage = true;
                                 }
                             }
                         }
@@ -552,6 +597,15 @@ public class PurchaseOrderService(IPurchaseOrderRepository repo, EwmsDbContext d
 
         if (po == null) return (false, "Không tìm thấy đơn mua hàng.");
         if (po.Status != "DRAFT") return (false, "Chỉ được xác nhận đơn mua hàng đang ở trạng thái DRAFT.");
+
+        // Kiểm tra sức chứa vật lý kho trước khi xác nhận đơn mua hàng
+        var (isValidCapacity, capacityError) = await capacityEngine.ValidatePurchaseOrderLinesCapacityAsync(
+            po.WarehouseId,
+            po.PurchaseOrderLines.Select(l => (l.ProductId, l.OrderedQuantity - l.ClosedQuantity)),
+            excludePoId: po.PurchaseOrderId);
+
+        if (!isValidCapacity)
+            return (false, capacityError ?? "Sức chứa kho tiếp nhận không đủ để xác nhận đơn mua hàng.");
 
         using var transaction = await repo.BeginTransactionAsync();
         try
@@ -626,6 +680,22 @@ public class PurchaseOrderService(IPurchaseOrderRepository repo, EwmsDbContext d
                     {
                         source.RemainingQuantity = 0;
                         source.EligibleQuantity = 0;
+
+                        // Theo MSG-027 và Phân tích SO Mục 9 & Mục 13 (SO21):
+                        // Khi đóng phần chưa nhận của PO, lượng incoming bị xóa bỏ hoàn toàn.
+                        // Các Sales Order đang có Active Reservation dựa vào nguồn này bị mất nguồn cung -> Bật HasShortage!
+                        var affectedReservations = await db.Reservations
+                            .Include(r => r.SalesOrder)
+                            .Where(r => r.SupplySourceId == source.SupplySourceId && r.Status == "ACTIVE")
+                            .ToListAsync();
+
+                        foreach (var res in affectedReservations)
+                        {
+                            if (res.SalesOrder != null)
+                            {
+                                res.SalesOrder.HasShortage = true;
+                            }
+                        }
                     }
                 }
             }
