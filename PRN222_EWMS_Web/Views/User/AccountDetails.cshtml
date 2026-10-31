@@ -14,15 +14,11 @@
             <i class="bi bi-pencil" aria-hidden="true"></i> Chỉnh sửa
         </a>
         <a class="workspace-link" asp-controller="AccountList" asp-action="Index" asp-route-search="@Model.ReturnFilter.Search" asp-route-roleId="@Model.ReturnFilter.RoleId" asp-route-status="@Model.ReturnFilter.Status" asp-route-warehouseId="@Model.ReturnFilter.WarehouseId" asp-route-page="@Model.ReturnFilter.Page">
-            <i class="bi bi-arrow-left" aria-hidden="true"></i> Quay lại danh sách
+            <i class="bi bi-arrow-left" aria-hidden="true"></i> Quay lại
         </a>
     </div>
 </div>
 
-@if (TempData["Success"] is string message)
-{
-    <div class="workspace-notice" role="status">@message</div>
-}
 
 <section class="workspace-card" aria-label="Thông tin tài khoản">
     <div class="workspace-heading">

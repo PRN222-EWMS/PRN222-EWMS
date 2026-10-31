@@ -12,7 +12,7 @@
         <p class="muted">Cập nhật thông tin, vai trò, trạng thái và kho làm việc.</p>
     </div>
     <a class="workspace-link" asp-controller="AccountList" asp-action="Details" asp-route-id="@Model.UserId" asp-route-search="@Model.ReturnFilter.Search" asp-route-roleId="@Model.ReturnFilter.RoleId" asp-route-status="@Model.ReturnFilter.Status" asp-route-warehouseId="@Model.ReturnFilter.WarehouseId" asp-route-page="@Model.ReturnFilter.Page">
-        <i class="bi bi-arrow-left" aria-hidden="true"></i> Hủy
+        <i class="bi bi-arrow-left" aria-hidden="true"></i> Quay lại
     </a>
 </div>
 
@@ -66,7 +66,7 @@
                 <small class="muted" id="warehouse-help">Chỉ áp dụng cho WAREHOUSE_STAFF.</small>
             </div>
         </div>
-        <div class="form-actions">
+        <div class="form-actions mt-4 justify-content-end">
             <button class="workspace-button" type="submit">Lưu thay đổi</button>
             <a class="workspace-link" asp-controller="AccountList" asp-action="Details" asp-route-id="@Model.UserId" asp-route-search="@Model.ReturnFilter.Search" asp-route-roleId="@Model.ReturnFilter.RoleId" asp-route-status="@Model.ReturnFilter.Status" asp-route-warehouseId="@Model.ReturnFilter.WarehouseId" asp-route-page="@Model.ReturnFilter.Page">Hủy</a>
         </div>

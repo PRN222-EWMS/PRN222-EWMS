@@ -4,7 +4,16 @@
     var warehouseRoleId = Model.Roles.FirstOrDefault(r => r.Text == "WAREHOUSE_STAFF")?.Value;
     var isWarehouseStaff = warehouseRoleId is not null && Model.RoleId.ToString() == warehouseRoleId;
 }
-<div class="workspace-heading"><div><p class="eyebrow">QUẢN TRỊ / NGƯỜI DÙNG</p><h1>Tạo tài khoản</h1><p class="muted">Cấp tài khoản và vai trò cho thành viên mới.</p></div></div>
+<div class="workspace-heading">
+    <div>
+        <p class="eyebrow">QUẢN TRỊ / TÀI KHOẢN</p>
+        <h1>Tạo tài khoản</h1>
+        <p class="muted">Cấp tài khoản và vai trò cho thành viên mới.</p>
+    </div>
+    <a class="workspace-link" asp-controller="AccountList" asp-action="Index">
+        <i class="bi bi-arrow-left" aria-hidden="true"></i> Quay lại
+    </a>
+</div>
 <section class="workspace-card">
 <form asp-action="Create" method="post" class="workspace-form" data-warehouse-role-id="@warehouseRoleId">
     <div asp-validation-summary="All" class="validation-message" role="alert"></div>
@@ -18,7 +27,10 @@
         <div><label asp-for="RoleId"></label><select asp-for="RoleId" asp-items="Model.Roles"><option value="">Chọn vai trò</option></select><span asp-validation-for="RoleId"></span></div>
         <div><label asp-for="WarehouseId"></label><select asp-for="WarehouseId" asp-items="Model.Warehouses" disabled="@(!isWarehouseStaff)" required="@isWarehouseStaff" aria-describedby="warehouse-help"><option value="">@(isWarehouseStaff ? "Chọn kho làm việc" : "Chỉ dành cho nhân viên kho")</option></select><span asp-validation-for="WarehouseId"></span><small class="muted" id="warehouse-help">Chỉ áp dụng cho WAREHOUSE_STAFF.</small></div>
     </div>
-    <div class="form-actions"><button class="workspace-button" type="submit">Tạo tài khoản</button><a class="workspace-link" asp-action="Index">Hủy</a></div>
+    <div class="form-actions mt-4 justify-content-end">
+        <button class="workspace-button" type="submit">Tạo tài khoản</button>
+        <a class="workspace-link" asp-controller="AccountList" asp-action="Index">Hủy</a>
+    </div>
 </form>
 </section>
 @section Scripts {

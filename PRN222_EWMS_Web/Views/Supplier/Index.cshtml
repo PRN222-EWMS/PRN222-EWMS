@@ -1,0 +1,217 @@
+@model PRN222_EWMS_Web.ViewModels.Supplier.SupplierListViewModel
+@{
+    ViewData["Title"] = "Nhà cung cấp";
+}
+
+<div class="workspace-heading">
+    <div>
+        <p class="eyebrow">MUA HÀNG</p>
+        <h1>Nhà cung cấp</h1>
+        <p class="muted">Quản lý danh sách đối tác cung ứng, tìm kiếm và kiểm soát trạng thái hoạt động.</p>
+    </div>
+    <a class="workspace-button" asp-controller="Supplier" asp-action="Create">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i> Thêm nhà cung cấp
+    </a>
+</div>
+
+<section class="workspace-card" aria-label="Danh sách nhà cung cấp">
+    <form asp-controller="Supplier" asp-action="Index" method="get" class="workspace-form mt-0">
+        <div class="row g-3 align-items-end">
+            <div class="col-12 col-md-6 col-xl-5">
+                <label for="Search">Tìm kiếm nhà cung cấp</label>
+                <input id="Search" name="Search" type="search" value="@Model.Search" placeholder="Tên, tên gợi nhớ, email hoặc số điện thoại" autocomplete="off" />
+            </div>
+            <div class="col-12 col-sm-6 col-md-3 col-xl-3">
+                <label for="Status">Trạng thái</label>
+                <select id="Status" name="Status" class="form-select">
+                    @foreach (var s in Model.Statuses)
+                    {
+                        <option value="@s.Value" selected="@(Model.Status == s.Value)">@s.Text</option>
+                    }
+                </select>
+            </div>
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+                <button class="workspace-button w-100" type="submit">
+                    <i class="bi bi-search" aria-hidden="true"></i> Tìm kiếm
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <div class="d-flex justify-content-between align-items-center py-3 text-secondary small" aria-live="polite">
+        @if (Model.TotalCount > 0)
+        {
+            <span>Đang hiển thị <strong>@Model.FirstItemNumber–@Model.LastItemNumber</strong> trên <strong>@Model.TotalCount</strong> nhà cung cấp</span>
+        }
+        else
+        {
+            <span>0 nhà cung cấp</span>
+        }
+    </div>
+
+    @if (Model.TotalCount == 0)
+    {
+        <div class="text-center py-5">
+            @if (Model.IsFiltered)
+            {
+                <p class="fs-5 text-secondary mb-0">Không tìm thấy nhà cung cấp</p>
+            }
+            else
+            {
+                <p class="fs-5 text-secondary mb-3">Chưa có nhà cung cấp nào</p>
+                <a class="workspace-button" asp-controller="Supplier" asp-action="Create">
+                    <i class="bi bi-plus-lg" aria-hidden="true"></i> Thêm nhà cung cấp
+                </a>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="workspace-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Tên nhà cung cấp</th>
+                        <th scope="col">Số điện thoại</th>
+                        <th scope="col">Email</th>
+                        <th scope="col">Trạng thái</th>
+                        <th scope="col" class="text-end">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var supplier in Model.Suppliers)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@supplier.DisplayName</strong>
+                            </td>
+                            <td>@(supplier.Phone ?? "—")</td>
+                            <td>@(supplier.Email ?? "—")</td>
+                            <td>
+                                <div class="d-inline-flex align-items-center gap-2">
+                                    <span class="@supplier.StatusClass">@supplier.StatusLabel</span>
+                                    <form asp-controller="Supplier" asp-action="ToggleStatus" asp-route-id="@supplier.SupplierId"
+                                          asp-route-search="@Model.Search" asp-route-status="@Model.Status" asp-route-page="@Model.Page"
+                                          method="post" class="d-inline toggle-status-form">
+                                        @Html.AntiForgeryToken()
+                                        <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none toggle-status-btn"
+                                                data-name="@supplier.DisplayName"
+                                                data-action="@(supplier.IsActive ? "ngừng hoạt động" : "kích hoạt")"
+                                                title="@(supplier.IsActive ? "Chuyển sang Ngừng hoạt động" : "Kích hoạt lại đối tác")">
+                                            <i class="bi @(supplier.IsActive ? "bi-toggle-on text-success fs-5" : "bi-toggle-off text-muted fs-5")" aria-hidden="true"></i>
+                                            <span class="visually-hidden">@(supplier.IsActive ? "Ngừng hoạt động" : "Kích hoạt")</span>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                            <td class="text-end">
+                                <a class="workspace-link me-3" asp-controller="Supplier" asp-action="Details"
+                                   asp-route-id="@supplier.SupplierId"
+                                   asp-route-search="@Model.Search"
+                                   asp-route-status="@Model.Status"
+                                   asp-route-page="@Model.Page">
+                                    <i class="bi bi-eye" aria-hidden="true"></i> Xem chi tiết
+                                </a>
+                                @if (supplier.IsActive)
+                                {
+                                    <a class="workspace-link" asp-controller="Supplier" asp-action="Edit"
+                                       asp-route-id="@supplier.SupplierId"
+                                       asp-route-search="@Model.Search"
+                                       asp-route-status="@Model.Status"
+                                       asp-route-page="@Model.Page">
+                                        <i class="bi bi-pencil" aria-hidden="true"></i> Chỉnh sửa
+                                    </a>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-link p-0 text-muted text-decoration-none disabled" disabled
+                                            title="Cần kích hoạt nhà cung cấp trước khi chỉnh sửa">
+                                        <i class="bi bi-pencil" aria-hidden="true"></i> Chỉnh sửa
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="d-flex justify-content-between align-items-center pt-4" aria-label="Phân trang nhà cung cấp">
+                <span class="text-secondary small">Trang @Model.Page / @Model.TotalPages</span>
+                <ul class="pagination pagination-sm mb-0">
+                    <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
+                        <a class="page-link" asp-controller="Supplier" asp-action="Index"
+                           asp-route-search="@Model.Search"
+                           asp-route-status="@Model.Status"
+                           asp-route-page="@(Model.Page - 1)">Trước</a>
+                    </li>
+                    @for (int p = 1; p <= Model.TotalPages; p++)
+                    {
+                        <li class="page-item @(p == Model.Page ? "active" : "")">
+                            <a class="page-link" asp-controller="Supplier" asp-action="Index"
+                               asp-route-search="@Model.Search"
+                               asp-route-status="@Model.Status"
+                               asp-route-page="@p">@p</a>
+                        </li>
+                    }
+                    <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
+                        <a class="page-link" asp-controller="Supplier" asp-action="Index"
+                           asp-route-search="@Model.Search"
+                           asp-route-status="@Model.Status"
+                           asp-route-page="@(Model.Page + 1)">Sau</a>
+                    </li>
+                </ul>
+            </nav>
+        }
+    }
+</section>
+
+<!-- Modal Xác nhận Đổi Trạng thái -->
+<div class="modal fade" id="toggleStatusModal" tabindex="-1" aria-labelledby="toggleStatusModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="toggleStatusModalLabel">Xác nhận thay đổi trạng thái</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="toggleStatusModalBody">
+                Bạn có chắc chắn muốn thay đổi trạng thái của nhà cung cấp này không?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                <button type="button" class="btn btn-primary" id="confirmToggleStatusBtn">Xác nhận</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            let pendingForm = null;
+            const modalEl = document.getElementById("toggleStatusModal");
+            const modalBody = document.getElementById("toggleStatusModalBody");
+            const confirmBtn = document.getElementById("confirmToggleStatusBtn");
+            const bsModal = new bootstrap.Modal(modalEl);
+
+            document.querySelectorAll(".toggle-status-btn").forEach(function (btn) {
+                btn.addEventListener("click", function () {
+                    pendingForm = this.closest("form");
+                    const supplierName = this.getAttribute("data-name");
+                    const actionText = this.getAttribute("data-action");
+                    modalBody.textContent = `Bạn có chắc chắn muốn ${actionText} nhà cung cấp "${supplierName}" không?`;
+                    bsModal.show();
+                });
+            });
+
+            confirmBtn.addEventListener("click", function () {
+                if (pendingForm) {
+                    pendingForm.submit();
+                }
+            });
+        });
+    </script>
+}
+

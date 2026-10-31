@@ -8,6 +8,8 @@ using PRN222_EWMS_Web.Repositories.User;
 using PRN222_EWMS_Web.Services.Admin;
 using PRN222_EWMS_Web.Services.Account;
 using PRN222_EWMS_Web.Services.Authentication;
+using PRN222_EWMS_Web.Repositories.Supplier;
+using PRN222_EWMS_Web.Services.Supplier;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
@@ -19,6 +21,8 @@ builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Authentication.IAuthenticationService, AuthenticationService>();
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddScoped<AccountCookieEvents>();
+builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
+builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options =>
 {
     options.LoginPath = "/Authentication/Login";

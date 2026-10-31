@@ -9,6 +9,8 @@ public partial class Supplier
 
     public string SupplierName { get; set; } = null!;
 
+    public string? Nickname { get; set; }
+
     public string? Address { get; set; }
 
     public string? Phone { get; set; }

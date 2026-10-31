@@ -1,0 +1,89 @@
+@model PRN222_EWMS_Web.ViewModels.Supplier.SupplierDetailsViewModel
+@{
+    ViewData["Title"] = "Chi tiết nhà cung cấp";
+}
+
+<div class="workspace-heading">
+    <div>
+        <p class="eyebrow">MUA HÀNG / NHÀ CUNG CẤP</p>
+        <h1>Chi tiết nhà cung cấp</h1>
+        <p class="muted">Thông tin định danh và liên hệ của đối tác cung ứng.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        @if (Model.IsActive)
+        {
+            <a class="workspace-button" asp-controller="Supplier" asp-action="Edit"
+               asp-route-id="@Model.SupplierId"
+               asp-route-search="@Model.ReturnFilter.Search"
+               asp-route-status="@Model.ReturnFilter.Status"
+               asp-route-page="@Model.ReturnFilter.Page">
+                <i class="bi bi-pencil" aria-hidden="true"></i> Chỉnh sửa
+            </a>
+        }
+        else
+        {
+            <button type="button" class="btn btn-secondary disabled" disabled
+                    title="Nhà cung cấp đang ngừng hoạt động, không thể chỉnh sửa.">
+                <i class="bi bi-pencil" aria-hidden="true"></i> Chỉnh sửa
+            </button>
+        }
+        <a class="workspace-link" asp-controller="Supplier" asp-action="Index"
+           asp-route-search="@Model.ReturnFilter.Search"
+           asp-route-status="@Model.ReturnFilter.Status"
+           asp-route-page="@Model.ReturnFilter.Page">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i> Quay lại
+        </a>
+    </div>
+</div>
+
+@if (!Model.IsActive)
+{
+    <div class="alert alert-warning d-flex align-items-center mb-4" role="status">
+        <i class="bi bi-info-circle-fill me-2 fs-5" aria-hidden="true"></i>
+        <div>
+            Nhà cung cấp này đang ở trạng thái <strong>Ngừng hoạt động</strong>. Để chỉnh sửa thông tin, vui lòng kích hoạt lại đối tác từ danh sách nhà cung cấp.
+        </div>
+    </div>
+}
+
+<section class="workspace-card" aria-label="Thông tin nhà cung cấp">
+    <div class="workspace-heading">
+        <div>
+            <p class="eyebrow">MÃ ĐỐI TÁC: #@Model.SupplierId</p>
+            <h2>@Model.DisplayName</h2>
+        </div>
+        <span class="@Model.StatusClass">@Model.StatusLabel</span>
+    </div>
+
+    <dl class="profile-details">
+        <div>
+            <dt>Mã nhà cung cấp</dt>
+            <dd>#@Model.SupplierId</dd>
+        </div>
+        <div>
+            <dt>Tên nhà cung cấp</dt>
+            <dd>@Model.SupplierName</dd>
+        </div>
+        <div>
+            <dt>Tên gợi nhớ (Nickname)</dt>
+            <dd>@(string.IsNullOrWhiteSpace(Model.Nickname) ? "—" : Model.Nickname)</dd>
+        </div>
+        <div>
+            <dt>Trạng thái</dt>
+            <dd><span class="@Model.StatusClass">@Model.StatusLabel</span></dd>
+        </div>
+        <div>
+            <dt>Số điện thoại</dt>
+            <dd>@Model.PhoneDisplay</dd>
+        </div>
+        <div>
+            <dt>Email</dt>
+            <dd>@Model.EmailDisplay</dd>
+        </div>
+        <div class="w-100">
+            <dt>Địa chỉ</dt>
+            <dd>@Model.AddressDisplay</dd>
+        </div>
+    </dl>
+</section>
+
