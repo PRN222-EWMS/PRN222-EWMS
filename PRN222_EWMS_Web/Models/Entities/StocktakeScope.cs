@@ -21,3 +21,4 @@ public partial class StocktakeScope
 
     public virtual StorageLocation StorageLocation { get; set; } = null!;
 }
+

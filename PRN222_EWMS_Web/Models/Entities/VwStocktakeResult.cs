@@ -49,3 +49,4 @@ public partial class VwStocktakeResult
 
     public string? Note { get; set; }
 }
+

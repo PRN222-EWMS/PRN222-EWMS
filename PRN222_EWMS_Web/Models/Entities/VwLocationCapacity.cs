@@ -29,3 +29,4 @@ public partial class VwLocationCapacity
 
     public long ItemCount { get; set; }
 }
+

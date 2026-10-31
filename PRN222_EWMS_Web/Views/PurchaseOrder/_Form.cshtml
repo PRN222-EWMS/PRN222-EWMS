@@ -1,0 +1,385 @@
+@model PRN222_EWMS_Web.ViewModels.Purchasing.PoFormViewModel
+
+<div asp-validation-summary="All" class="po-alert po-alert-danger" role="alert" style="@(ViewData.ModelState.IsValid ? "display:none;" : "")"></div>
+
+@if (Model.IsEditMode)
+{
+    <input type="hidden" asp-for="PurchaseOrderId" />
+    <input type="hidden" asp-for="Status" />
+    <input type="hidden" name="RowVersion" value="@(Model.RowVersion != null ? Convert.ToBase64String(Model.RowVersion) : "")" />
+}
+
+<div class="row g-4">
+    <!-- CỘT TRÁI: THÔNG TIN CHÍNH -->
+    <div class="col-lg-6">
+        <div class="mb-3">
+            <label asp-for="SupplierId" class="form-label fw-semibold">
+                Nhà cung cấp <span class="text-danger">*</span>
+            </label>
+            @if (Model.IsEditMode && Model.IsConfirmedOrder)
+            {
+                <select asp-for="SupplierId" class="form-select" disabled>
+                    @foreach (var s in Model.Suppliers)
+                    {
+                        <option value="@s.Id" selected="@(Model.SupplierId == s.Id)">@s.Name</option>
+                    }
+                </select>
+                <input type="hidden" asp-for="SupplierId" id="SupplierIdHidden" />
+                <div class="form-text text-muted">Đơn đã xác nhận không thể đổi Nhà cung cấp.</div>
+            }
+            else
+            {
+                <select asp-for="SupplierId" class="form-select" id="SupplierSelect" required>
+                    <option value="">-- Chọn nhà cung cấp --</option>
+                    @foreach (var s in Model.Suppliers)
+                    {
+                        <option value="@s.Id" selected="@(Model.SupplierId == s.Id)">@s.Name</option>
+                    }
+                </select>
+                <div class="form-text">Danh mục sản phẩm bên dưới sẽ tự động tải theo nhà cung cấp này.</div>
+            }
+            <span asp-validation-for="SupplierId" class="text-danger small"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="WarehouseId" class="form-label fw-semibold">
+                Kho tiếp nhận <span class="text-danger">*</span>
+            </label>
+            <select asp-for="WarehouseId" class="form-select" required>
+                <option value="">-- Chọn kho nhận hàng --</option>
+                @foreach (var w in Model.Warehouses)
+                {
+                    <option value="@w.Id" selected="@(Model.WarehouseId == w.Id)">@w.Name</option>
+                }
+            </select>
+            <span asp-validation-for="WarehouseId" class="text-danger small"></span>
+        </div>
+    </div>
+
+    <!-- CỘT PHẢI: MỐC THỜI GIAN & GHI CHÚ -->
+    <div class="col-lg-6">
+        @if (Model.IsEditMode)
+        {
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Mã đơn mua (PO Code)</label>
+                <input type="text" class="form-control" value="@Model.Pocode" readonly />
+            </div>
+        }
+        else
+        {
+            <div class="mb-3">
+                <label asp-for="Pocode" class="form-label fw-semibold">Mã đơn mua (Tùy chọn)</label>
+                <input asp-for="Pocode" class="form-control" placeholder="Để trống để hệ thống tự sinh (PO-YYYYMMDD-XXXX)" />
+                <span asp-validation-for="Pocode" class="text-danger small"></span>
+            </div>
+        }
+
+        <div class="mb-3">
+            <label asp-for="ExpectedArrivalDate" class="form-label fw-semibold">
+                Ngày dự kiến đến kho <span class="text-danger">*</span>
+            </label>
+            <input type="date" asp-for="ExpectedArrivalDate" class="form-control" required />
+            <span asp-validation-for="ExpectedArrivalDate" class="text-danger small"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Note" class="form-label fw-semibold">Ghi chú đơn hàng</label>
+            <textarea asp-for="Note" class="form-control" rows="2" maxlength="1000" placeholder="Ghi chú thêm về đơn hàng hoặc thỏa thuận giao nhận..."></textarea>
+            <span asp-validation-for="Note" class="text-danger small"></span>
+        </div>
+    </div>
+</div>
+
+<!-- KHU VỰC DÒNG SẢN PHẨM -->
+<hr class="my-4" />
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h3 class="h5 mb-0">Danh sách sản phẩm đặt hàng <span class="text-danger">*</span></h3>
+        <p class="text-muted small mb-0">Bắt buộc tối thiểu 1 sản phẩm. Số lượng phải là số nguyên dương lớn hơn 0.</p>
+    </div>
+    <button type="button" class="workspace-button sales-button-small" id="btnAddLine">
+        <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> Thêm sản phẩm
+    </button>
+</div>
+
+<div class="table-wrap">
+    <table class="workspace-table po-lines-table" id="linesTable">
+        <thead>
+            <tr>
+                <th style="width: 40px;">#</th>
+                <th style="min-width: 320px;">Sản phẩm (Mã / Tên / Model)</th>
+                <th style="width: 120px;">ĐVT</th>
+                <th style="width: 180px;">Số lượng đặt</th>
+                <th style="width: 60px; text-align: center;">Xóa</th>
+            </tr>
+        </thead>
+        <tbody id="linesTbody">
+            @for (int i = 0; i < Model.Lines.Count; i++)
+            {
+                <tr data-index="@i">
+                    <td class="row-num fw-semibold text-muted">@(i + 1)</td>
+                    <td>
+                        <input type="hidden" name="Lines[@i].PolineId" value="@Model.Lines[i].PolineId" />
+                        <select name="Lines[@i].ProductId" class="form-select product-select" required data-current="@Model.Lines[i].ProductId">
+                            <option value="">-- Chọn sản phẩm --</option>
+                            @foreach (var p in Model.AvailableProducts)
+                            {
+                                <option value="@p.ProductId" 
+                                        selected="@(p.ProductId == Model.Lines[i].ProductId)" 
+                                        data-unit="@p.Unit"
+                                        data-code="@p.ProductCode"
+                                        data-model="@p.Model">
+                                    [@p.ProductCode] @p.ProductName (@p.Model)
+                                </option>
+                            }
+                        </select>
+                    </td>
+                    <td>
+                        <span class="unit-label text-muted">@(Model.Lines[i].Unit ?? "—")</span>
+                    </td>
+                    <td>
+                        <input type="number" 
+                               name="Lines[@i].OrderedQuantity" 
+                               class="form-control qty-input text-end" 
+                               min="1" 
+                               max="1000000" 
+                               value="@Model.Lines[i].OrderedQuantity" 
+                               required />
+                    </td>
+                    <td style="text-align: center;">
+                        <button type="button" class="po-btn-danger-icon btn-remove-line" title="Xóa dòng">
+                            <i class="bi bi-trash" aria-hidden="true"></i>
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+        <tfoot>
+            <tr style="background: #fdfdfc; font-weight: 700;">
+                <td colspan="3" style="text-align: right;">Tổng số lượng đặt hàng:</td>
+                <td style="text-align: right;"><span id="totalQuantityDisplay">0</span></td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+
+<div id="noLinesWarning" class="sales-empty" style="@(Model.Lines.Count > 0 ? "display: none;" : "")">
+    <i class="bi bi-cart-x" style="font-size: 28px;"></i>
+    <p class="mt-2 mb-0">Chưa có sản phẩm nào trong đơn hàng. Vui lòng bấm <strong>"Thêm sản phẩm"</strong> để thêm hàng.</p>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const supplierSelect = document.getElementById('SupplierSelect');
+        const supplierHidden = document.getElementById('SupplierIdHidden');
+        const linesTbody = document.getElementById('linesTbody');
+        const btnAddLine = document.getElementById('btnAddLine');
+        const totalQtyDisplay = document.getElementById('totalQuantityDisplay');
+        const noLinesWarning = document.getElementById('noLinesWarning');
+
+        // Danh sách sản phẩm của nhà cung cấp hiện tại (dùng để render dropdown)
+        let currentProducts = [];
+
+        // Nạp danh sách ban đầu nếu có sẵn
+        @if (Model.AvailableProducts.Count > 0)
+        {
+            <text>
+            currentProducts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AvailableProducts.Select(p => new {
+                productId = p.ProductId,
+                productCode = p.ProductCode,
+                productName = p.ProductName,
+                model = p.Model,
+                unit = p.Unit
+            })));
+            </text>
+        }
+
+        function getSelectedSupplierId() {
+            if (supplierSelect) return supplierSelect.value;
+            if (supplierHidden) return supplierHidden.value;
+            return null;
+        }
+
+        // Lấy sản phẩm theo Supplier khi đổi nhà cung cấp
+        if (supplierSelect) {
+            supplierSelect.addEventListener('change', async function () {
+                const supId = this.value;
+                if (!supId) {
+                    currentProducts = [];
+                    refreshAllProductDropdowns();
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/PurchaseOrder/GetSupplierProducts?supplierId=${supId}`);
+                    if (response.ok) {
+                        currentProducts = await response.json();
+                        refreshAllProductDropdowns();
+                    }
+                } catch (e) {
+                    console.error('Lỗi tải sản phẩm theo NCC:', e);
+                }
+            });
+        }
+
+        function refreshAllProductDropdowns() {
+            const selects = linesTbody.querySelectorAll('.product-select');
+            selects.forEach(select => {
+                const currentVal = select.value;
+                select.innerHTML = '<option value="">-- Chọn sản phẩm --</option>';
+                currentProducts.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.productId;
+                    opt.textContent = `[${p.productCode}] ${p.productName} (${p.model})`;
+                    opt.dataset.unit = p.unit;
+                    opt.dataset.code = p.productCode;
+                    opt.dataset.model = p.model;
+                    if (p.productId == currentVal) {
+                        opt.selected = true;
+                    }
+                    select.appendChild(opt);
+                });
+                updateUnitForSelect(select);
+            });
+            recalcTotal();
+        }
+
+        function updateUnitForSelect(select) {
+            const row = select.closest('tr');
+            const unitLabel = row.querySelector('.unit-label');
+            const selectedOpt = select.options[select.selectedIndex];
+            if (selectedOpt && selectedOpt.dataset.unit) {
+                unitLabel.textContent = selectedOpt.dataset.unit;
+            } else {
+                unitLabel.textContent = '—';
+            }
+        }
+
+        function recalcTotal() {
+            let total = 0;
+            const rows = linesTbody.querySelectorAll('tr');
+            rows.forEach((row, idx) => {
+                row.querySelector('.row-num').textContent = (idx + 1);
+                // cập nhật lại thuộc tính name theo index tuần tự để MVC ModelBinder map đúng
+                const polineHidden = row.querySelector('input[type="hidden"]');
+                if (polineHidden) polineHidden.name = `Lines[${idx}].PolineId`;
+
+                const prodSelect = row.querySelector('.product-select');
+                if (prodSelect) prodSelect.name = `Lines[${idx}].ProductId`;
+
+                const qtyInput = row.querySelector('.qty-input');
+                if (qtyInput) {
+                    qtyInput.name = `Lines[${idx}].OrderedQuantity`;
+                    const val = parseInt(qtyInput.value) || 0;
+                    total += val;
+                }
+            });
+
+            totalQtyDisplay.textContent = total;
+
+            if (rows.length === 0) {
+                noLinesWarning.style.display = 'block';
+            } else {
+                noLinesWarning.style.display = 'none';
+            }
+        }
+
+        // Thêm dòng mới
+        btnAddLine.addEventListener('click', function () {
+            const supId = getSelectedSupplierId();
+            if (!supId) {
+                alert('Vui lòng chọn Nhà cung cấp trước khi thêm sản phẩm.');
+                if (supplierSelect) supplierSelect.focus();
+                return;
+            }
+
+            if (currentProducts.length === 0) {
+                alert('Nhà cung cấp này hiện chưa có sản phẩm nào trong danh mục hàng cung ứng.');
+                return;
+            }
+
+            const newRow = document.createElement('tr');
+            let optionsHtml = '<option value="">-- Chọn sản phẩm --</option>';
+            currentProducts.forEach(p => {
+                optionsHtml += `<option value="${p.productId}" data-unit="${p.unit}" data-code="${p.productCode}" data-model="${p.model}">[${p.productCode}] ${p.productName} (${p.model})</option>`;
+            });
+
+            newRow.innerHTML = `
+                <td class="row-num fw-semibold text-muted"></td>
+                <td>
+                    <select class="form-select product-select" required>
+                        ${optionsHtml}
+                    </select>
+                </td>
+                <td>
+                    <span class="unit-label text-muted">—</span>
+                </td>
+                <td>
+                    <input type="number" class="form-control qty-input text-end" min="1" max="1000000" value="1" required />
+                </td>
+                <td style="text-align: center;">
+                    <button type="button" class="po-btn-danger-icon btn-remove-line" title="Xóa dòng">
+                        <i class="bi bi-trash" aria-hidden="true"></i>
+                    </button>
+                </td>
+            `;
+
+            linesTbody.appendChild(newRow);
+            recalcTotal();
+        });
+
+        // Xóa dòng & thay đổi sản phẩm/số lượng
+        linesTbody.addEventListener('click', function (e) {
+            const btn = e.target.closest('.btn-remove-line');
+            if (btn) {
+                const row = btn.closest('tr');
+                row.remove();
+                recalcTotal();
+            }
+        });
+
+        linesTbody.addEventListener('change', function (e) {
+            if (e.target.classList.contains('product-select')) {
+                updateUnitForSelect(e.target);
+                
+                // Kiểm tra trùng lặp sản phẩm
+                const selectedVal = e.target.value;
+                if (selectedVal) {
+                    let count = 0;
+                    linesTbody.querySelectorAll('.product-select').forEach(s => {
+                        if (s.value === selectedVal) count++;
+                    });
+                    if (count > 1) {
+                        alert('Sản phẩm này đã được chọn trong đơn hàng. Vui lòng cộng gộp số lượng vào dòng đã có thay vì chọn trùng.');
+                        e.target.value = '';
+                        updateUnitForSelect(e.target);
+                    }
+                }
+            }
+        });
+
+        linesTbody.addEventListener('input', function (e) {
+            if (e.target.classList.contains('qty-input')) {
+                recalcTotal();
+            }
+        });
+
+        // Khởi tạo tính toán ban đầu
+        recalcTotal();
+
+        // Kiểm tra trước khi submit form
+        const form = document.getElementById('createPoForm') || document.getElementById('editPoForm');
+        if (form) {
+            form.addEventListener('submit', function (e) {
+                const rows = linesTbody.querySelectorAll('tr');
+                if (rows.length === 0) {
+                    e.preventDefault();
+                    alert('Đơn mua hàng phải có ít nhất một dòng sản phẩm. Vui lòng bấm "Thêm sản phẩm" trước khi lưu.');
+                    return false;
+                }
+            });
+        }
+    });
+</script>

@@ -77,3 +77,4 @@ public partial class SerialMovement
 
     public virtual TransferReceipt? TransferReceipt { get; set; }
 }
+

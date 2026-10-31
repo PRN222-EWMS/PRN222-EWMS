@@ -63,3 +63,4 @@ public partial class Product
 
     public virtual ICollection<TransferOrderLine> TransferOrderLines { get; set; } = new List<TransferOrderLine>();
 }
+

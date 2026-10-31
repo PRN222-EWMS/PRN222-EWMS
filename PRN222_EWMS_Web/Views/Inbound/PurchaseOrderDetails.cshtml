@@ -1,0 +1,258 @@
+@model PRN222_EWMS_Web.ViewModels.WarehouseStaff.WarehousePoDetailsViewModel
+@{
+    ViewData["Title"] = $"Đối chiếu đơn mua hàng {Model.Pocode}";
+}
+
+<div class="wh-page">
+    <!-- Header -->
+    <div class="wh-header">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <h1 class="wh-title mb-0">Đơn mua hàng: @Model.Pocode</h1>
+                @if (Model.Status == "CONFIRMED")
+                {
+                    <span class="wh-badge wh-badge-blue">CONFIRMED</span>
+                }
+                else if (Model.Status == "PARTIALLY_RECEIVED")
+                {
+                    <span class="wh-badge wh-badge-amber">PARTIALLY_RECEIVED</span>
+                }
+                else
+                {
+                    <span class="wh-badge wh-badge-gray">@Model.Status</span>
+                }
+            </div>
+            <p class="wh-subtitle">Đối chiếu chủng loại thiết bị, quy cách đóng gói và số lượng thực tế trên phương tiện vận chuyển trước khi quét mã serial nhập kho.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a asp-action="PurchaseOrders" class="wh-btn wh-btn-outline">
+                <i class="bi bi-arrow-left"></i> Danh sách PO
+            </a>
+            @if (Model.CanStartReceiving)
+            {
+                <a asp-action="Create" asp-route-purchaseOrderId="@Model.PurchaseOrderId" class="wh-btn wh-btn-primary">
+                    <i class="bi bi-box-arrow-in-down"></i> Bắt đầu nhận hàng (@Model.TotalRemaining cái còn lại)
+                </a>
+            }
+            else
+            {
+                <button type="button" class="wh-btn wh-btn-outline" disabled title="Đơn hàng đã được tiếp nhận đủ hoặc đã đóng">
+                    <i class="bi bi-check-all"></i> Đã nhận đủ
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Info Summary Grid -->
+    <div class="wh-details-grid">
+        <!-- Nhà cung cấp -->
+        <div class="wh-info-box">
+            <h4><i class="bi bi-truck"></i> Nhà cung cấp</h4>
+            <div class="wh-info-row">
+                <span class="wh-info-label">Đơn vị giao:</span>
+                <span class="wh-info-value">@Model.SupplierName</span>
+            </div>
+            @if (!string.IsNullOrEmpty(Model.SupplierPhone))
+            {
+                <div class="wh-info-row">
+                    <span class="wh-info-label">Điện thoại:</span>
+                    <span class="wh-info-value">@Model.SupplierPhone</span>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(Model.SupplierEmail))
+            {
+                <div class="wh-info-row">
+                    <span class="wh-info-label">Email:</span>
+                    <span class="wh-info-value">@Model.SupplierEmail</span>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(Model.SupplierAddress))
+            {
+                <div class="wh-info-row">
+                    <span class="wh-info-label">Địa chỉ:</span>
+                    <span class="wh-info-value">@Model.SupplierAddress</span>
+                </div>
+            }
+        </div>
+
+        <!-- Kho tiếp nhận -->
+        <div class="wh-info-box">
+            <h4><i class="bi bi-buildings"></i> Kho tiếp nhận</h4>
+            <div class="wh-info-row">
+                <span class="wh-info-label">Tên kho:</span>
+                <span class="wh-info-value">@Model.WarehouseName</span>
+            </div>
+            <div class="wh-info-row">
+                <span class="wh-info-label">Địa chỉ kho:</span>
+                <span class="wh-info-value">@Model.WarehouseAddress</span>
+            </div>
+            <div class="wh-info-row">
+                <span class="wh-info-label">Loại kho:</span>
+                <span class="wh-info-value">@(Model.WarehouseType == "RENTED" ? "Kho thuê" : "Kho sở hữu")</span>
+            </div>
+        </div>
+
+        <!-- Tiến độ & Lịch hẹn -->
+        <div class="wh-info-box">
+            <h4><i class="bi bi-calendar-check"></i> Thông tin giao hàng</h4>
+            <div class="wh-info-row">
+                <span class="wh-info-label">Dự kiến đến:</span>
+                <span class="wh-info-value text-primary">@(Model.ExpectedArrivalDate?.ToString("dd/MM/yyyy") ?? "Chưa chỉ định")</span>
+            </div>
+            <div class="wh-info-row">
+                <span class="wh-info-label">Ngày xác nhận:</span>
+                <span class="wh-info-value">@(Model.ConfirmedAt?.ToString("dd/MM/yyyy HH:mm") ?? "-")</span>
+            </div>
+            <div class="wh-info-row">
+                <span class="wh-info-label">Ghi chú giao:</span>
+                <span class="wh-info-value fst-italic">@(string.IsNullOrWhiteSpace(Model.Note) ? "Không có" : Model.Note)</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Product Lines Table -->
+    <div class="wh-section">
+        <div class="wh-section-title">
+            <span><i class="bi bi-boxes"></i> Danh mục sản phẩm cần đối chiếu & tiếp nhận</span>
+            <span class="wh-badge wh-badge-blue">Tổng: @Model.TotalOrdered cái • Đã nhận: @Model.TotalReceived • Còn lại: @Model.TotalRemaining</span>
+        </div>
+
+        <div class="wh-table-container">
+            <table class="wh-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Mã SP</th>
+                        <th>Tên sản phẩm / Model</th>
+                        <th>Phân loại / Hiệu</th>
+                        <th>Kích thước & Trọng lượng</th>
+                        <th class="text-center">Số lượng đặt</th>
+                        <th class="text-center">Đã nhận</th>
+                        <th class="text-center">Còn lại đợt này</th>
+                        <th>Trạng thái</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (int i = 0; i < Model.Lines.Count; i++)
+                    {
+                        var line = Model.Lines[i];
+                        <tr>
+                            <td>@(i + 1)</td>
+                            <td><strong class="font-monospace text-secondary">@line.ProductCode</strong></td>
+                            <td>
+                                <strong>@line.ProductName</strong>
+                                @if (!string.IsNullOrEmpty(line.Model))
+                                {
+                                    <small class="text-muted d-block">Model: @line.Model</small>
+                                }
+                            </td>
+                            <td>
+                                <div>@line.CategoryName</div>
+                                <small class="text-muted">@line.BrandName</small>
+                            </td>
+                            <td>
+                                @if (line.LengthCm.HasValue && line.WidthCm.HasValue && line.HeightCm.HasValue)
+                                {
+                                    <span>@line.LengthCm × @line.WidthCm × @line.HeightCm cm</span>
+                                }
+                                @if (line.GrossWeightKg.HasValue)
+                                {
+                                    <small class="text-muted d-block">Trọng lượng: @line.GrossWeightKg kg</small>
+                                }
+                                else if (!line.LengthCm.HasValue)
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                            <td class="text-center fw-semibold">@line.OrderedQuantity @line.Unit</td>
+                            <td class="text-center text-success fw-semibold">@line.ReceivedQuantity</td>
+                            <td class="text-center">
+                                @if (line.RemainingQuantity > 0)
+                                {
+                                    <span class="badge bg-primary px-2 py-1 fs-6">@line.RemainingQuantity</span>
+                                }
+                                else
+                                {
+                                    <span class="wh-badge wh-badge-green"><i class="bi bi-check2"></i> Đủ</span>
+                                }
+                            </td>
+                            <td>
+                                @if (line.RemainingQuantity == 0)
+                                {
+                                    <span class="wh-badge wh-badge-green">Hoàn thành</span>
+                                }
+                                else if (line.ReceivedQuantity > 0)
+                                {
+                                    <span class="wh-badge wh-badge-amber">Nhận một phần</span>
+                                }
+                                else
+                                {
+                                    <span class="wh-badge wh-badge-blue">Chờ tiếp nhận</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Previous Receipts History -->
+    <div class="wh-section">
+        <div class="wh-section-title">
+            <span><i class="bi bi-journal-text"></i> Lịch sử các đợt tiếp nhận trước (Inbound Receipts)</span>
+            <span class="wh-badge wh-badge-gray">@Model.PreviousReceipts.Count phiếu nhận</span>
+        </div>
+
+        @if (Model.PreviousReceipts.Count == 0)
+        {
+            <div class="text-center py-4 text-muted">
+                <i class="bi bi-card-checklist fs-2 d-block mb-1 text-secondary"></i>
+                Đơn mua hàng này chưa phát sinh đợt tiếp nhận hàng nào trước đó.
+            </div>
+        }
+        else
+        {
+            <div class="wh-table-container">
+                <table class="wh-table">
+                    <thead>
+                        <tr>
+                            <th>Mã phiếu nhận</th>
+                            <th>Ngày nhận</th>
+                            <th>Người thực hiện</th>
+                            <th class="text-center">Số lượng serial thực nhận</th>
+                            <th>Trạng thái phiếu</th>
+                            <th>Ghi chú</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var rec in Model.PreviousReceipts)
+                        {
+                            <tr>
+                                <td><strong class="font-monospace text-primary">@rec.ReceiptCode</strong></td>
+                                <td>@rec.ReceiptDate.ToString("dd/MM/yyyy")</td>
+                                <td>@rec.PerformedByName</td>
+                                <td class="text-center fw-bold">@rec.ItemCount thiết bị</td>
+                                <td>
+                                    @if (rec.Status == "DONE" || rec.Status == "COMPLETED")
+                                    {
+                                        <span class="wh-badge wh-badge-green">DONE</span>
+                                    }
+                                    else if (rec.Status == "DRAFT")
+                                    {
+                                        <span class="wh-badge wh-badge-amber">DRAFT</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="wh-badge wh-badge-gray">@rec.Status</span>
+                                    }
+                                </td>
+                                <td class="text-muted">@(string.IsNullOrEmpty(rec.Note) ? "-" : rec.Note)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

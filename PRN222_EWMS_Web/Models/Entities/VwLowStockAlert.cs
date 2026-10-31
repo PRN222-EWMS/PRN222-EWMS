@@ -13,3 +13,4 @@ public partial class VwLowStockAlert
 
     public long GoodPhysicalQuantity { get; set; }
 }
+

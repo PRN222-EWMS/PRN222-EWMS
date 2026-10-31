@@ -27,3 +27,4 @@ public partial class InventoryAlertThreshold
 
     public virtual Warehouse Warehouse { get; set; } = null!;
 }
+

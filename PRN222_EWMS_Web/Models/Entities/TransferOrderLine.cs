@@ -27,3 +27,4 @@ public partial class TransferOrderLine
 
     public virtual TransferOrder TransferOrder { get; set; } = null!;
 }
+

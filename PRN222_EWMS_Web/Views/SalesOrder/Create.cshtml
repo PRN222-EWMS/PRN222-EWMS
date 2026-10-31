@@ -1,0 +1,24 @@
+@model PRN222_EWMS_Web.ViewModels.Sales.SalesOrderFormViewModel
+@{
+    ViewData["Title"] = "Tạo đơn bán hàng";
+}
+
+<div class="sales-page">
+    <div class="workspace-heading">
+        <div>
+            <p class="eyebrow">BÁN HÀNG / TẠO ĐƠN MỚI</p>
+            <h1>Tạo đơn bán hàng</h1>
+            <p class="muted">Thiết lập đơn đặt hàng xuất kho, chụp ảnh thông tin khách hàng và kiểm tra nguồn cung ứng.</p>
+        </div>
+        <div class="sales-toolbar">
+            <a asp-action="Index" class="workspace-button sales-button-secondary">
+                <i class="bi bi-arrow-left me-1"></i> Danh sách đơn
+            </a>
+        </div>
+    </div>
+
+    <form method="post" asp-action="Create" id="salesOrderForm">
+        @Html.AntiForgeryToken()
+        <partial name="_Form" model="Model" />
+    </form>
+</div>

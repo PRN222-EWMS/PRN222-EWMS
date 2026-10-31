@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 
-
 namespace PRN222_EWMS_Web.Models;
 
 public partial class EwmsDbContext : DbContext
@@ -2040,6 +2039,7 @@ public partial class EwmsDbContext : DbContext
             entity.Property(e => e.SupplierId).HasColumnName("SupplierID");
             entity.Property(e => e.Address).HasMaxLength(500);
             entity.Property(e => e.Email).HasMaxLength(254);
+            entity.Property(e => e.Nickname).HasMaxLength(50);
             entity.Property(e => e.Phone).HasMaxLength(30);
             entity.Property(e => e.Status)
                 .HasMaxLength(32)

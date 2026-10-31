@@ -41,3 +41,4 @@ public partial class TransferReceipt
 
     public virtual ICollection<TransferReceiptItem> TransferReceiptItemTransferReceipts { get; set; } = new List<TransferReceiptItem>();
 }
+

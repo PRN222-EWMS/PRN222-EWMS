@@ -43,3 +43,4 @@ public partial class PurchaseOrder
 
     public virtual Warehouse Warehouse { get; set; } = null!;
 }
+

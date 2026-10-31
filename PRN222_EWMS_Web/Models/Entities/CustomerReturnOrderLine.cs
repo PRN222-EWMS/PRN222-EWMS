@@ -31,3 +31,4 @@ public partial class CustomerReturnOrderLine
 
     public virtual SalesOrderLine Soline { get; set; } = null!;
 }
+

@@ -15,3 +15,4 @@ public partial class Category
 
     public virtual ICollection<ZoneStorageRule> ZoneStorageRules { get; set; } = new List<ZoneStorageRule>();
 }
+

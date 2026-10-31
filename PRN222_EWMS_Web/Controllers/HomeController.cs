@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+Susing Microsoft.AspNetCore.Mvc;
 using PRN222_EWMS_Web.Models;
 using System.Diagnostics;
 
@@ -18,7 +18,9 @@ namespace PRN222_EWMS_Web.Controllers
             if (User.IsInRole("MANAGER"))
                 return RedirectToAction("Dashboard", "ManagerDashboard");
 
+            if (User.IsInRole("CEO")) return View("CeoDashboard");
             if (User.IsInRole("SALES_STAFF")) return RedirectToAction("Index", "SalesDashboard");
+            if (User.IsInRole("WAREHOUSE_STAFF")) return RedirectToAction("Index", "WarehouseDashboard");
             return View();
         }
 

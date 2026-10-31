@@ -43,3 +43,4 @@ public partial class Inbound
 
     public virtual ICollection<SupplySource> SupplySources { get; set; } = new List<SupplySource>();
 }
+

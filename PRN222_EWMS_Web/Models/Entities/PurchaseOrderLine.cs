@@ -27,3 +27,4 @@ public partial class PurchaseOrderLine
 
     public virtual SupplySource? SupplySource { get; set; }
 }
+

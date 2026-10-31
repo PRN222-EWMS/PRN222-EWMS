@@ -15,3 +15,4 @@ public partial class Customer
 
     public virtual ICollection<SalesOrder> SalesOrders { get; set; } = new List<SalesOrder>();
 }
+

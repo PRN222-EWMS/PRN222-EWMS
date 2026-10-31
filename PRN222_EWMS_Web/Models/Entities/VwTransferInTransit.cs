@@ -27,3 +27,4 @@ public partial class VwTransferInTransit
 
     public DateTime? DispatchedAt { get; set; }
 }
+

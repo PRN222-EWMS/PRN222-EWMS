@@ -65,3 +65,4 @@ public partial class Reservation
 
     public virtual TransferOrderLine? TransferOrderLine { get; set; }
 }
+

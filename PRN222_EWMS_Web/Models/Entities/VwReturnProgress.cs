@@ -29,3 +29,4 @@ public partial class VwReturnProgress
 
     public long? RemainingQuantity { get; set; }
 }
+

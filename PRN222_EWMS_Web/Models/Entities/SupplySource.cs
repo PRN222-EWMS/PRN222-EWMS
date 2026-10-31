@@ -69,3 +69,4 @@ public partial class SupplySource
 
     public virtual Warehouse Warehouse { get; set; } = null!;
 }
+

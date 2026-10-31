@@ -5,6 +5,8 @@
     var signedIn = User.Identity?.IsAuthenticated == true;
     var actualRole = signedIn ? User.FindFirst(ClaimTypes.Role)?.Value : null;
     var role = actualRole ?? "";
+    var isCeo = User.IsInRole("CEO");
+    var isManager = User.IsInRole("MANAGER");
     var displayName = signedIn ? (User.Identity?.Name ?? "Nhân viên") : "Xem trước giao diện";
     var controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
     var action = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
@@ -18,14 +20,15 @@
         ("Quản trị", new[]
         {
             ("Người dùng", "bi-people", "User", "Index", new[] { "ADMIN" }),
-            ("Tạo tài khoản", "bi-person-plus", "User", "Create", new[] { "ADMIN" }),
+            ("Tài khoản", "bi-person-vcard", "AccountList", "Index", new[] { "ADMIN" }),
             ("Kho hàng", "bi-buildings", "Warehouse", "Index", new[] { "CEO", "MANAGER" })
         }),
         ("Danh mục & giao dịch", new[]
         {
-            ("Sản phẩm", "bi-box-seam", "Product", "Index", new[] { "CEO", "MANAGER", "PURCHASING_STAFF" }),
+            ("Sản phẩm", "bi-box-seam", "Product", "Index", new[] { "CEO", "MANAGER" }),
             ("Nhà cung cấp", "bi-truck", "Supplier", "Index", new[] { "PURCHASING_STAFF" }),
             ("Đơn mua hàng", "bi-bag-plus", "PurchaseOrder", "Index", new[] { "PURCHASING_STAFF", "MANAGER" }),
+            ("Tạo đơn mua", "bi-plus-circle", "PurchaseOrder", "Create", new[] { "PURCHASING_STAFF" }),
             ("Đơn bán hàng", "bi-receipt", "SalesOrder", "Index", new[] { "SALES_STAFF", "MANAGER" }),
             ("Khách hàng", "bi-person-lines-fill", "Customer", "Index", new[] { "SALES_STAFF" })
         }),
@@ -54,6 +57,27 @@
                 ("Tạo khách hàng", "bi-person-plus", "Customer", "Create", Array.Empty<string>()) })
         };
     }
+    else if (role == "WAREHOUSE_STAFF")
+    {
+        sections = new (string Heading, (string Label, string Icon, string Controller, string Action, string[] Roles)[] Items)[]
+        {
+            ("Tổng quan", new[] {
+                ("Dashboard", "bi-grid-1x2", "WarehouseDashboard", "Index", Array.Empty<string>())
+            }),
+            ("Nhập kho", new[] {
+                ("Đơn mua cần nhận", "bi-box-arrow-in-down", "Inbound", "PurchaseOrders", Array.Empty<string>())
+            }),
+            ("Đơn bán hàng", new[] {
+                ("Danh sách đơn bán hàng", "bi-receipt", "SalesOrder", "Index", Array.Empty<string>())
+            }),
+            ("Vận hành kho", new[] {
+                ("Lưu kho / Kệ hàng", "bi-boxes", "Putaway", "Index", Array.Empty<string>()),
+                ("Xuất kho", "bi-box-arrow-up", "Outbound", "Index", Array.Empty<string>()),
+                ("Chuyển kho", "bi-arrow-left-right", "Transfer", "Index", Array.Empty<string>()),
+                ("Kiểm kê", "bi-clipboard-check", "Stocktake", "Index", Array.Empty<string>())
+            })
+        };
+    }
 }
 
 <aside class="ewms-sidebar" id="ewmsSidebar" aria-label="Điều hướng chính">
@@ -66,7 +90,12 @@
     <nav class="ewms-nav" aria-label="Menu theo vai trò">
         @foreach (var section in sections)
         {
-            var allowedItems = section.Items.Where(i => i.Roles.Length == 0 || i.Roles.Contains(role, StringComparer.OrdinalIgnoreCase)).ToArray();
+            var allowedItems = section.Items
+                .Where(i => i.Roles.Length == 0 || i.Roles.Contains(role, StringComparer.OrdinalIgnoreCase))
+                // Keep CEO's scope and include the merged modules available to Manager.
+                .Where(i => !isCeo || (i.Action == "Index" && (i.Controller is "Home" or "Warehouse")))
+                .Where(i => !isManager || (i.Action == "Index" && (i.Controller is "Home" or "Warehouse" or "PurchaseOrder" or "SalesOrder" or "Inbound")))
+                .ToArray();
             if (allowedItems.Length == 0) { continue; }
             <div class="ewms-nav-section">
                 <div class="ewms-nav-heading">@(section.Heading)</div>
@@ -74,6 +103,7 @@
                 {
                     var active = string.Equals(controller, item.Controller, StringComparison.OrdinalIgnoreCase)
                               && (string.Equals(action, item.Action, StringComparison.OrdinalIgnoreCase)
+                                  || (item.Controller == "Warehouse" && item.Action == "Index")
                                   || (item.Action == "Index" && (action == "Details" || action == "Edit")));
                     <a class="ewms-nav-link @(active ? "is-active" : "")"
                        href="@($"/{item.Controller}/{item.Action}")"

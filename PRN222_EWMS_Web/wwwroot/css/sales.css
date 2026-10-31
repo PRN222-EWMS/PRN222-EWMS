@@ -5,3 +5,84 @@
 .sales-page .workspace-table a.workspace-button { color: #fff; }
 .sales-pagination a.workspace-button { background: var(--workspace-blue); color: #fff; border: 0; border-radius: 9999px; }
 .sales-pagination a.workspace-button:hover { background: #005bab; }
+
+/* Sales Order Forms & Line Items */
+.sales-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+}
+@media (max-width: 900px) {
+    .sales-form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.sales-form-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.sales-lines-table th {
+    background: #f6f5f4;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--workspace-muted);
+}
+.sales-lines-table td {
+    vertical-align: middle;
+}
+.sales-lines-table .form-select,
+.sales-lines-table .form-control {
+    font-size: 14px;
+}
+
+.sales-danger-icon {
+    background: transparent;
+    border: 1px solid #fed7aa;
+    color: #e11d48;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+}
+.sales-danger-icon:hover {
+    background: #fff1f2;
+    border-color: #fca5a5;
+    color: #be123c;
+}
+
+.sales-alert {
+    padding: 12px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 20px;
+}
+.sales-alert-success {
+    background: #ecfdf5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+.stock-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.badge-stock {
+    background: #f1f5f9;
+    color: #475569;
+}
+.badge-stock-ok {
+    background: #dcfce7;
+    color: #15803d;
+}
+.badge-stock-zero {
+    background: #fee2e2;
+    color: #b91c1c;
+}
