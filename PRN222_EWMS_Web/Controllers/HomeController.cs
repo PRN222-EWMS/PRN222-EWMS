@@ -15,6 +15,9 @@ namespace PRN222_EWMS_Web.Controllers
 
         public IActionResult Index()
         {
+            if (User.IsInRole("MANAGER"))
+                return RedirectToAction("Dashboard", "ManagerDashboard");
+
             if (User.IsInRole("CEO")) return View("CeoDashboard");
             if (User.IsInRole("SALES_STAFF")) return RedirectToAction("Index", "SalesDashboard");
             if (User.IsInRole("WAREHOUSE_STAFF")) return RedirectToAction("Index", "WarehouseDashboard");

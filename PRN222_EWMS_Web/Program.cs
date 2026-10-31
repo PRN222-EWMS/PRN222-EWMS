@@ -54,6 +54,23 @@ builder.Services.AddRateLimiter(options =>
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
+
+builder.Services.AddScoped<
+    PRN222_EWMS_Web.Repositories.Products.IProductRepository,
+    PRN222_EWMS_Web.Repositories.Products.ProductRepository>();
+
+builder.Services.AddScoped<
+    PRN222_EWMS_Web.Services.Products.IProductService,
+    PRN222_EWMS_Web.Services.Products.ProductService>();
+
+builder.Services.AddScoped<
+    PRN222_EWMS_Web.Repositories.Manager.IManagerDashboardRepository,
+    PRN222_EWMS_Web.Repositories.Manager.ManagerDashboardRepository>();
+
+builder.Services.AddScoped<
+    PRN222_EWMS_Web.Services.Manager.IManagerDashboardService,
+    PRN222_EWMS_Web.Services.Manager.ManagerDashboardService>();
+
 var app = builder.Build();
 if (!app.Environment.IsDevelopment())
 {

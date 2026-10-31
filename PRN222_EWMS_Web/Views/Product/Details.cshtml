@@ -1,0 +1,130 @@
+﻿@model PRN222_EWMS_Web.Models.Product
+@using System.Text.Json
+
+@{
+    ViewData["Title"] = "Chi tiết sản phẩm";
+
+    var specifications = new List<KeyValuePair<string, string>>();
+
+    var labels = new Dictionary<string, string>
+    {
+        ["LoaiMay"] = "Loại máy",
+        ["KhoiLuongGiat"] = "Khối lượng giặt",
+        ["CongNghe"] = "Công nghệ",
+        ["MauSac"] = "Màu sắc",
+        ["BaoHanh"] = "Bảo hành"
+    };
+
+    bool isJsonObject = false;
+
+    if (!string.IsNullOrWhiteSpace(Model.Specifications))
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(Model.Specifications);
+
+            if (document.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var property in document.RootElement.EnumerateObject())
+                {
+                    var label = labels.TryGetValue(property.Name, out var name)
+                        ? name
+                        : property.Name;
+
+                    specifications.Add(
+                        new KeyValuePair<string, string>(
+                            label,
+                            property.Value.ToString()));
+                }
+
+                isJsonObject = true;
+            }
+        }
+        catch (JsonException)
+        {
+            // Thông số dạng văn bản thường sẽ được hiển thị nguyên văn.
+        }
+    }
+
+    var statusLabel = Model.Status switch
+    {
+        "ACTIVE" => "Đang hoạt động",
+        "INACTIVE" => "Ngừng hoạt động",
+        _ => Model.Status
+    };
+}
+
+<h2 class="mb-4">@Model.ProductName</h2>
+
+<dl class="row">
+    <dt class="col-sm-3">Mã sản phẩm</dt>
+    <dd class="col-sm-9">@Model.ProductCode</dd>
+
+    <dt class="col-sm-3">Model</dt>
+    <dd class="col-sm-9">@Model.Model</dd>
+
+    <dt class="col-sm-3">Danh mục</dt>
+    <dd class="col-sm-9">@(Model.Category?.CategoryName ?? "Chưa có")</dd>
+
+    <dt class="col-sm-3">Thương hiệu</dt>
+    <dd class="col-sm-9">@(Model.Brand?.BrandName ?? "Chưa có")</dd>
+
+    <dt class="col-sm-3">Đơn vị</dt>
+    <dd class="col-sm-9">@Model.Unit</dd>
+
+    <dt class="col-sm-3">Thông số kỹ thuật</dt>
+    <dd class="col-sm-9">
+        @if (isJsonObject && specifications.Count > 0)
+        {
+            <table class="table table-bordered table-sm mb-2">
+                <tbody>
+                    @foreach (var specification in specifications)
+                    {
+                        <tr>
+                            <th scope="row" class="w-50">
+                                @specification.Key
+                            </th>
+                            <td>@specification.Value</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else if (isJsonObject || string.IsNullOrWhiteSpace(Model.Specifications))
+        {
+            <span class="text-muted">Chưa có thông số</span>
+        }
+        else
+        {
+            <div style="white-space: pre-wrap;">@Model.Specifications</div>
+        }
+    </dd>
+
+    <dt class="col-sm-3">Kích thước đóng gói</dt>
+    <dd class="col-sm-9">
+        @Model.LengthCm.ToString("0.##") ×
+        @Model.WidthCm.ToString("0.##") ×
+        @Model.HeightCm.ToString("0.##") cm
+    </dd>
+
+    <dt class="col-sm-3">Trọng lượng</dt>
+    <dd class="col-sm-9">
+        @Model.GrossWeightKg.ToString("0.###") kg
+    </dd>
+
+    <dt class="col-sm-3">Trạng thái</dt>
+    <dd class="col-sm-9">@statusLabel</dd>
+</dl>
+
+<a asp-action="Index" class="btn btn-secondary">
+    Quay lại danh sách
+</a>
+
+@if (User.IsInRole("PURCHASING_STAFF"))
+{
+    <a asp-action="Edit"
+       asp-route-id="@Model.ProductId"
+       class="btn btn-primary">
+        Sửa sản phẩm
+    </a>
+}
