@@ -1,0 +1,173 @@
+@using System.Globalization
+@model PRN222_EWMS_Web.ViewModels.Warehouse.WarehouseListViewModel
+@{
+    ViewData["Title"] = "Danh sách kho";
+    var canManage = User.IsInRole("MANAGER");
+    var pagingFilters = new Dictionary<string, string>
+    {
+        ["Search"] = Model.Search ?? "",
+        ["WarehouseType"] = Model.WarehouseType ?? "",
+        ["Status"] = Model.Status ?? "",
+        ["RentalFrom"] = Model.RentalFrom?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "",
+        ["RentalTo"] = Model.RentalTo?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? ""
+    };
+}
+
+<div class="workspace-heading">
+    <div>
+        <p class="eyebrow">QUẢN TRỊ</p>
+        <h1>Danh sách kho</h1>
+        <p class="muted">Thông tin kho, thời hạn thuê và trạng thái hoạt động trong hệ thống.</p>
+    </div>
+    @if (canManage)
+    {
+        <a asp-action="Create" class="workspace-button">Tạo kho</a>
+    }
+</div>
+
+<div class="warehouse-list">
+    <section class="workspace-card warehouse-panel" aria-label="Bộ lọc kho">
+        <form asp-controller="Warehouse" asp-action="Index" method="get" class="workspace-form">
+            <div asp-validation-summary="All" class="validation-message" role="alert"></div>
+            <div class="warehouse-filter-grid">
+                <div>
+                    <label asp-for="Search"></label>
+                    <input asp-for="Search" type="search" maxlength="150" placeholder="Nhập tên hoặc ID kho" />
+                </div>
+                <div>
+                    <label asp-for="WarehouseType"></label>
+                    <select asp-for="WarehouseType">
+                        <option value="">Tất cả loại kho</option>
+                        <option value="MAIN">Kho chính</option>
+                        <option value="RENTED">Kho thuê</option>
+                    </select>
+                </div>
+                <div>
+                    <label asp-for="Status"></label>
+                    <select asp-for="Status">
+                        <option value="">Tất cả trạng thái</option>
+                        <option value="ACTIVE">Đang hoạt động</option>
+                        <option value="INACTIVE">Ngừng hoạt động</option>
+                    </select>
+                </div>
+                <div>
+                    <label asp-for="RentalFrom"></label>
+                    <input asp-for="RentalFrom" asp-format="{0:yyyy-MM-dd}" type="date" aria-describedby="rental-filter-hint" />
+                </div>
+                <div>
+                    <label asp-for="RentalTo"></label>
+                    <input asp-for="RentalTo" asp-format="{0:yyyy-MM-dd}" type="date" aria-describedby="rental-filter-hint" />
+                </div>
+                <div class="warehouse-filter-actions">
+                    <button type="submit" class="workspace-button">Tìm kiếm</button>
+                    <a asp-controller="Warehouse" asp-action="Index" class="workspace-link">Xóa bộ lọc</a>
+                </div>
+            </div>
+            <p id="rental-filter-hint" class="muted warehouse-filter-hint">Lọc ngày chỉ áp dụng cho kho thuê có thời hạn giao với khoảng ngày đã chọn, bao gồm cả hai ngày đầu và cuối.</p>
+        </form>
+    </section>
+
+    @if (Model.LoadError is not null)
+    {
+        <div class="warehouse-error" role="alert">@Model.LoadError</div>
+    }
+
+    <section class="workspace-card warehouse-panel" aria-label="Kết quả danh sách kho">
+        @if (Model.DataLoaded)
+        {
+            <p class="muted warehouse-result-count" role="status">Tìm thấy @Model.TotalCount kho.</p>
+        }
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Bảng danh sách kho, có thể cuộn ngang">
+            <table class="workspace-table warehouse-table">
+                <caption class="visually-hidden">Thông tin cơ bản của các kho trong hệ thống</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">ID</th>
+                        <th scope="col">Tên kho</th>
+                        <th scope="col">Địa chỉ</th>
+                        <th scope="col">Loại kho</th>
+                        <th scope="col">Thời hạn thuê</th>
+                        <th scope="col">Trạng thái</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var warehouse in Model.Items)
+                    {
+                        <tr>
+                            <td>@warehouse.WarehouseId</td>
+                            <td class="warehouse-name">
+                                @if (canManage)
+                                {
+                                    <a asp-action="Details" asp-route-id="@warehouse.WarehouseId" class="warehouse-detail-link" aria-label="Xem chi tiết @warehouse.WarehouseName">@warehouse.WarehouseName</a>
+                                }
+                                else
+                                {
+                                    <strong>@warehouse.WarehouseName</strong>
+                                }
+                            </td>
+                            <td class="warehouse-address">@warehouse.Address</td>
+                            <td><span class="role-badge">@warehouse.TypeLabel</span></td>
+                            <td>
+                                @if (warehouse.WarehouseType == "MAIN")
+                                {
+                                    <span class="muted">Không áp dụng</span>
+                                }
+                                else if (warehouse.WarehouseType == "RENTED")
+                                {
+                                    <span class="warehouse-rental">
+                                        <span>Từ: @(warehouse.RentalStartDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "Chưa có thông tin")</span>
+                                        <span>Đến: @(warehouse.RentalEndDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "Chưa có thông tin")</span>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="muted">Chưa có thông tin</span>
+                                }
+                            </td>
+                            <td><span class="warehouse-status @(warehouse.Status == "ACTIVE" ? "warehouse-status-active" : "")">@warehouse.StatusLabel</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Model.DataLoaded && Model.Items.Count == 0)
+        {
+            <div class="warehouse-empty" role="status">
+                <i class="bi bi-buildings" aria-hidden="true"></i>
+                <p>@(Model.TotalWarehouses == 0 ? "Chưa có kho nào trong hệ thống." : "Không tìm thấy kho phù hợp.")</p>
+                @if (Model.TotalWarehouses > 0)
+                {
+                    <a asp-controller="Warehouse" asp-action="Index" class="workspace-link">Xóa bộ lọc</a>
+                }
+            </div>
+        }
+        else if (!Model.DataLoaded && Model.LoadError is null)
+        {
+            <p class="muted warehouse-empty">Vui lòng kiểm tra bộ lọc để tải danh sách kho.</p>
+        }
+
+        @if (Model.DataLoaded && Model.TotalPages > 1)
+        {
+            <nav class="warehouse-pagination" aria-label="Phân trang danh sách kho">
+                @if (Model.Page > 1)
+                {
+                    <a asp-controller="Warehouse" asp-action="Index" asp-all-route-data="pagingFilters" asp-route-Page="@(Model.Page - 1)" class="workspace-link" rel="prev">← Trang trước</a>
+                }
+                else
+                {
+                    <span class="warehouse-page-disabled" aria-disabled="true">← Trang trước</span>
+                }
+                <span class="warehouse-page-current" aria-current="page">Trang @Model.Page / @Model.TotalPages</span>
+                @if (Model.Page < Model.TotalPages)
+                {
+                    <a asp-controller="Warehouse" asp-action="Index" asp-all-route-data="pagingFilters" asp-route-Page="@(Model.Page + 1)" class="workspace-link" rel="next">Trang sau →</a>
+                }
+                else
+                {
+                    <span class="warehouse-page-disabled" aria-disabled="true">Trang sau →</span>
+                }
+            </nav>
+        }
+    </section>
+</div>

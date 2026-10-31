@@ -15,6 +15,7 @@ namespace PRN222_EWMS_Web.Controllers
 
         public IActionResult Index()
         {
+            if (User.IsInRole("CEO")) return View("CeoDashboard");
             return View();
         }
 

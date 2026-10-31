@@ -1,0 +1,98 @@
+@using System.Globalization
+@model PRN222_EWMS_Web.ViewModels.Warehouse.StorageLocationViewModel
+@{
+    var culture = CultureInfo.GetCultureInfo("vi-VN");
+    string Dimension(decimal? cm) => cm.HasValue ? (cm.Value / 100m).ToString("0.###", culture) : "—";
+    var configuring = ViewData["Configuring"] is true;
+    var warehouseId = ViewData["WarehouseId"];
+    var childLabel = Model.LocationType switch
+    {
+        "ZONE" => "dãy", "ROW" when Model.StorageType == "RACK" => "kệ",
+        "ROW" when Model.StorageType == "FLOOR" => "ô sàn", "RACK" => "tầng", _ => null
+    };
+}
+
+@if (Model.LocationType is "ZONE" or "ROW" or "RACK")
+{
+    <details class="warehouse-tree-node" open="@(Model.LocationType == "ZONE")">
+        <summary>
+            <span class="warehouse-node-name"><span class="muted">@Model.TypeLabel</span> <strong>@Model.Name</strong></span>
+            @if (Model.LocationType == "ZONE")
+            {
+                <span class="role-badge">@(Model.ZoneType == "RESERVE" ? "Dự trữ" : Model.ZoneType == "STANDARD" ? "Tiêu chuẩn" : "Chưa cấu hình")</span>
+            }
+            @if (Model.LocationType == "ROW")
+            {
+                <span class="role-badge">@(Model.StorageType == "FLOOR" ? "Để sàn" : Model.StorageType == "RACK" ? "Để kệ" : "Chưa cấu hình")</span>
+            }
+            @if (Model.LocationType == "RACK")
+            {
+                <span class="role-badge">@Model.ConditionLabel</span>
+            }
+            <span class="warehouse-status @(Model.Status == "ACTIVE" ? "warehouse-status-active" : "")">@Model.StatusLabel</span>
+        </summary>
+        <div class="warehouse-node-content">
+            @if (configuring)
+            {
+                <div class="warehouse-node-actions">
+                    <a asp-action="ConfigureLocation" asp-route-id="@warehouseId" asp-route-locationId="@Model.LocationId" class="warehouse-detail-link">Chỉnh sửa @Model.TypeLabel.ToLower()</a>
+                    @if (Model.Status == "ACTIVE" && childLabel is not null)
+                    {
+                        <a asp-action="ConfigureLocation" asp-route-id="@warehouseId" asp-route-parentId="@Model.LocationId" class="warehouse-detail-link">Thêm @childLabel</a>
+                    }
+                </div>
+            }
+            @if (Model.LocationType == "ZONE")
+            {
+                @if (Model.ZoneType == "RESERVE")
+                {
+                    <p class="muted warehouse-rule-note">Zone dự trữ tiếp nhận các loại hàng/hãng phù hợp với tình trạng hàng và sức chứa vị trí.</p>
+                }
+                else if (Model.Rules.Count == 0)
+                {
+                    <p class="muted warehouse-rule-note">Chưa cấu hình quy tắc loại hàng và hãng cho Zone này.</p>
+                }
+                @if (Model.Rules.Count > 0)
+                {
+                    <p class="warehouse-rule-note">Loại hàng — Hãng được phép:</p>
+                    <ul class="warehouse-rules">
+                        @foreach (var rule in Model.Rules) { <li>@rule</li> }
+                    </ul>
+                }
+            }
+            @if (Model.Children.Count == 0)
+            {
+                <p class="muted warehouse-rule-note">Chưa có vị trí con.</p>
+            }
+            @foreach (var child in Model.Children)
+            {
+                <partial name="_StorageLocation" model="child" />
+            }
+        </div>
+    </details>
+}
+else
+{
+    <div class="warehouse-storage-slot">
+        <div class="warehouse-slot-heading">
+            <strong>@Model.TypeLabel @Model.Name</strong>
+            <span class="warehouse-status @(Model.Status == "ACTIVE" ? "warehouse-status-active" : "")">@Model.StatusLabel</span>
+        </div>
+        @if (configuring)
+        {
+            <div class="warehouse-node-actions">
+                <a asp-action="ConfigureLocation" asp-route-id="@warehouseId" asp-route-locationId="@Model.LocationId" class="warehouse-detail-link">Chỉnh sửa @Model.TypeLabel.ToLower()</a>
+            </div>
+        }
+        <dl class="warehouse-slot-info">
+            <div><dt>Dài × Rộng × Cao (m)</dt><dd>@Dimension(Model.LengthCm) × @Dimension(Model.WidthCm) × @Dimension(Model.HeightCm)</dd></div>
+            <div><dt>Sức chứa cấu hình</dt><dd>@(Model.LocationType == "TIER" ? $"{Model.VolumeM3?.ToString("N3", culture) ?? "—"} m³" : $"{Model.FloorAreaM2?.ToString("N2", culture) ?? "—"} m²")</dd></div>
+            <div><dt>Tải trọng tối đa</dt><dd>@(Model.MaxWeightKg.HasValue ? $"{Model.MaxWeightKg.Value.ToString("0.###", culture)} kg" : "Chưa cấu hình")</dd></div>
+            <div><dt>Tình trạng hàng</dt><dd>@Model.ConditionLabel @(Model.LocationType == "TIER" ? "(theo kệ)" : "")</dd></div>
+        </dl>
+        @if (Model.LocationType == "FLOOR_SLOT")
+        {
+            <p class="muted warehouse-filter-hint">Không xếp chồng. @(Model.HeightCm is null ? "Chưa cấu hình giới hạn chiều cao." : "Chiều cao là giới hạn kiện hàng.")</p>
+        }
+    </div>
+}

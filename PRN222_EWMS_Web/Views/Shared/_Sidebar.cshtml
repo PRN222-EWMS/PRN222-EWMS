@@ -5,6 +5,7 @@
     var signedIn = User.Identity?.IsAuthenticated == true;
     var actualRole = signedIn ? User.FindFirst(ClaimTypes.Role)?.Value : null;
     var role = actualRole ?? "";
+    var isWarehouseRole = User.IsInRole("CEO") || User.IsInRole("MANAGER");
     var displayName = signedIn ? (User.Identity?.Name ?? "Nhân viên") : "Xem trước giao diện";
     var controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
     var action = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
@@ -50,14 +51,19 @@
     <nav class="ewms-nav" aria-label="Menu theo vai trò">
         @foreach (var section in sections)
         {
-            var allowedItems = section.Items.Where(i => i.Roles.Length == 0 || i.Roles.Contains(role, StringComparer.OrdinalIgnoreCase)).ToArray();
+            var allowedItems = section.Items
+                .Where(i => i.Roles.Length == 0 || i.Roles.Contains(role, StringComparer.OrdinalIgnoreCase))
+                // Only show warehouse-role destinations implemented in this iteration.
+                .Where(i => !isWarehouseRole || (i.Action == "Index" && (i.Controller == "Home" || i.Controller == "Warehouse")))
+                .ToArray();
             if (allowedItems.Length == 0) { continue; }
             <div class="ewms-nav-section">
                 <div class="ewms-nav-heading">@(section.Heading)</div>
                 @foreach (var item in allowedItems)
                 {
                     var active = string.Equals(controller, item.Controller, StringComparison.OrdinalIgnoreCase)
-                              && string.Equals(action, item.Action, StringComparison.OrdinalIgnoreCase);
+                              && (string.Equals(action, item.Action, StringComparison.OrdinalIgnoreCase)
+                                  || item.Controller == "Warehouse");
                     <a class="ewms-nav-link @(active ? "is-active" : "")"
                        asp-controller="@item.Controller" asp-action="@item.Action"
                        aria-current="@(active ? "page" : null)"
