@@ -1,7 +1,20 @@
-@model PRN222_EWMS_Web.ViewModels.Sales.CustomerFormViewModel
-<div asp-validation-summary="All" class="validation-message" role="alert"></div>
+@model PRN222_EWMS_Web.ViewModels.Customer.CreateCustomerViewModel
+<input asp-for="ReturnFilter.Search" type="hidden" />
+<input asp-for="ReturnFilter.Page" type="hidden" />
+<div asp-validation-summary="ModelOnly" class="validation-message" role="alert"></div>
+@if (Model.HasDuplicatePhoneWarning)
+{
+    <div class="alert alert-warning" role="alert">
+        <strong><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> Cảnh báo trùng số điện thoại</strong>
+        <p class="mt-2 mb-2">Số điện thoại <strong>@Model.Phone</strong> đã được sử dụng bởi khách hàng khác. Kiểm tra thông tin trước khi tiếp tục.</p>
+        <label class="checkbox-row"><input asp-for="ConfirmDuplicatePhone" /><span>Tôi xác nhận vẫn muốn lưu khách hàng với số điện thoại này.</span></label>
+        <span asp-validation-for="ConfirmDuplicatePhone"></span>
+    </div>
+}
 <div class="form-grid">
-    <div><label asp-for="CustomerName"></label><input asp-for="CustomerName" autocomplete="name" maxlength="200" /><span asp-validation-for="CustomerName"></span></div>
-    <div><label asp-for="Phone"></label><input asp-for="Phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10" /><span asp-validation-for="Phone"></span></div>
+    <div><label asp-for="CustomerName">Tên khách hàng <span class="text-danger">*</span></label><input asp-for="CustomerName" maxlength="200" autocomplete="name" placeholder="Nhập tên chính thức của khách hàng" required /><span asp-validation-for="CustomerName"></span></div>
+    <div><label asp-for="Nickname">Tên gợi nhớ (Nickname)</label><input asp-for="Nickname" maxlength="50" autocomplete="off" placeholder="Tên viết tắt hoặc tên thường dùng" /><span asp-validation-for="Nickname"></span></div>
+    <div><label asp-for="Phone">Số điện thoại <span class="text-danger">*</span></label><input asp-for="Phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10" pattern="0[0-9]{9}" title="Số điện thoại gồm 10 chữ số và bắt đầu bằng số 0." placeholder="Ví dụ: 0912345678" required /><span asp-validation-for="Phone"></span></div>
+    <div><label asp-for="Email">Email</label><input asp-for="Email" type="email" maxlength="254" autocomplete="email" placeholder="Ví dụ: contact@example.com" /><span asp-validation-for="Email"></span></div>
 </div>
-<div><label asp-for="Address"></label><textarea asp-for="Address" rows="3" autocomplete="street-address" maxlength="500"></textarea><span asp-validation-for="Address"></span></div>
+<div><label asp-for="Address">Địa chỉ <span class="text-danger">*</span></label><textarea asp-for="Address" rows="3" autocomplete="street-address" maxlength="500" required placeholder="Số nhà, đường, phường/xã, tỉnh/thành phố"></textarea><span asp-validation-for="Address"></span></div>

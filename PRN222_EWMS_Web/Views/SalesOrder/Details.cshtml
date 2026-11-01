@@ -113,7 +113,17 @@ else if (User.IsInRole("SALES_STAFF") && !Model.CanEdit)
 </section>
 
 <section class="workspace-card">
-    <h2>Các đợt xuất hàng (Outbounds)</h2>
+    <div class="sales-section-heading">
+        <h2>Các đợt xuất hàng (Outbounds)</h2>
+        @if (User.IsInRole("WAREHOUSE_STAFF")
+            && (Model.Status == "SUBMITTED" || Model.Status == "PARTIALLY_FULFILLED")
+            && Model.Lines.Any(line => line.RemainingQuantity > 0))
+        {
+            <a class="workspace-button" href="@Url.Content($"~/Outbound/Create?salesOrderId={Model.Id}")">
+                <i class="bi bi-plus-circle me-1" aria-hidden="true"></i> Tạo phiếu xuất
+            </a>
+        }
+    </div>
     <div class="table-wrap">
         <table class="workspace-table">
             <thead>

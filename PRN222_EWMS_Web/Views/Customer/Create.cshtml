@@ -1,5 +1,12 @@
-@model PRN222_EWMS_Web.ViewModels.Sales.CustomerFormViewModel
+@model PRN222_EWMS_Web.ViewModels.Customer.CreateCustomerViewModel
 @{ ViewData["Title"] = "Tạo khách hàng"; }
-<div class="sales-page"><div class="workspace-heading"><div><p class="eyebrow">KHÁCH HÀNG / TẠO MỚI</p><h1>Tạo khách hàng</h1><p class="muted">Bổ sung khách hàng vào danh mục dùng chung.</p></div></div>
-<section class="workspace-card"><form asp-action="Create" method="post" class="workspace-form"><partial name="_Form" model="Model" /><div class="form-actions"><button type="submit" class="workspace-button">Tạo khách hàng</button><a class="workspace-button sales-button-secondary" asp-action="Index">Hủy</a></div></form></section></div>
+<div class="sales-page">
+    <div class="workspace-heading"><div><p class="eyebrow">BÁN HÀNG / KHÁCH HÀNG</p><h1>Tạo khách hàng</h1><p class="muted">Bổ sung thông tin định danh và liên hệ vào danh mục dùng chung.</p></div><a class="workspace-button sales-button-secondary" asp-action="Index" asp-route-search="@Model.ReturnFilter.Search" asp-route-page="@Model.ReturnFilter.Page">← Danh sách</a></div>
+    <section class="workspace-card" aria-label="Form tạo khách hàng">
+        <form asp-action="Create" method="post" class="workspace-form mt-0">
+            <partial name="_Form" model="Model" />
+            <div class="form-actions justify-content-end"><button type="submit" class="workspace-button"><i class="bi bi-plus-lg" aria-hidden="true"></i> Tạo khách hàng</button><a class="workspace-button sales-button-secondary" asp-action="Index" asp-route-search="@Model.ReturnFilter.Search" asp-route-page="@Model.ReturnFilter.Page">Hủy</a></div>
+        </form>
+    </section>
+</div>
 @section Scripts { <partial name="_ValidationScriptsPartial" /> }

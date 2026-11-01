@@ -192,6 +192,8 @@ public partial class EwmsDbContext : DbContext
             entity.Property(e => e.CustomerId).HasColumnName("CustomerID");
             entity.Property(e => e.Address).HasMaxLength(500);
             entity.Property(e => e.CustomerName).HasMaxLength(200);
+            entity.Property(e => e.Email).HasMaxLength(254);
+            entity.Property(e => e.Nickname).HasMaxLength(50);
             entity.Property(e => e.Phone).HasMaxLength(30);
         });
 
