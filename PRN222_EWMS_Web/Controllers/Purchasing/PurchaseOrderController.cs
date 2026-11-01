@@ -7,7 +7,9 @@ using PRN222_EWMS_Web.ViewModels.Purchasing;
 namespace PRN222_EWMS_Web.Controllers.Purchasing;
 
 [Authorize(Roles = "MANAGER,PURCHASING_STAFF,WAREHOUSE_STAFF")]
-public class PurchaseOrderController(IPurchaseOrderService poService) : Controller
+public class PurchaseOrderController(
+    IPurchaseOrderService poService, 
+    IWarehouseCapacityEngine capacityEngine) : Controller
 {
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string CurrentUserRole => User.FindFirstValue(ClaimTypes.Role)!;
@@ -203,5 +205,20 @@ public class PurchaseOrderController(IPurchaseOrderService poService) : Controll
     {
         var products = await poService.GetProductsBySupplierAsync(supplierId);
         return Json(products);
+    }
+
+    // =========================================================================
+    // 8. API AJAX KIỂM TRA SỨC CHỨA KHO (CAPACITY CHECK)
+    // =========================================================================
+    [HttpGet]
+    public async Task<IActionResult> CheckCapacity(int warehouseId, int productId, int quantity = 1, long? excludePoId = null)
+    {
+        if (warehouseId <= 0 || productId <= 0)
+        {
+            return BadRequest(new { message = "warehouseId và productId phải hợp lệ." });
+        }
+
+        var result = await capacityEngine.CalculateCapacityAsync(warehouseId, productId, quantity, excludePoId);
+        return Json(result);
     }
 }

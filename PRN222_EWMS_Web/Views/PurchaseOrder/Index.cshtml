@@ -202,9 +202,15 @@
                                 </a>
                                 @if (order.CanEdit)
                                 {
-                                    <a class="workspace-button sales-button-secondary sales-button-small ms-1" asp-action="Edit" asp-route-id="@order.PurchaseOrderId" title="Chỉnh sửa">
+                                    <a class="workspace-button sales-button-secondary sales-button-small ms-1" asp-action="Edit" asp-route-id="@order.PurchaseOrderId" title="Chỉnh sửa đơn hàng">
                                         <i class="bi bi-pencil" aria-hidden="true"></i>
                                     </a>
+                                }
+                                else
+                                {
+                                    <button type="button" class="workspace-button sales-button-small po-btn-disabled ms-1" disabled title="Đơn hàng ở trạng thái @statusText không thể chỉnh sửa">
+                                        <i class="bi bi-pencil" aria-hidden="true"></i>
+                                    </button>
                                 }
                             </td>
                         </tr>

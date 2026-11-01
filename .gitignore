@@ -72,3 +72,11 @@ DocumentLayout.json
 
 # Local developer configuration overrides
 appsettings.Local.json
+
+# AI-generated analysis docs (do not push)
+PRN222_EWMS_Web/docs/EWMS_Phan_tich_*.md
+PRN222_EWMS_Web/docs/EWMS_Phan_tich_*.txt
+PRN222_EWMS_Web/docs/HUONG_DAN_TINH_TOAN_*.md
+PRN222_EWMS_Web/docs/Nghiep_Vu_Chi_Tiet_*.md
+PRN222_EWMS_Web/docs/full_spec_text.txt
+

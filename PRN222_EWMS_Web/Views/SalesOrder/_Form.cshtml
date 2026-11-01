@@ -193,7 +193,7 @@
 
 @* JSON cache danh mục sản phẩm ban đầu *@
 <script id="initialProductsJson" type="application/json">
-    @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AvailableProducts))
+    @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AvailableProducts, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }))
 </script>
 
 <script>
@@ -241,13 +241,19 @@
                 const currentVal = select.value;
                 select.innerHTML = '<option value="">-- Chọn sản phẩm --</option>';
                 currentProducts.forEach(p => {
+                    const id = p.productId ?? p.ProductId;
+                    const code = p.productCode ?? p.ProductCode ?? '';
+                    const name = p.productName ?? p.ProductName ?? '';
+                    const unit = p.unit ?? p.Unit ?? '—';
+                    const unreserved = p.unreservedQuantity ?? p.UnreservedQuantity ?? 0;
+
                     const opt = document.createElement('option');
-                    opt.value = p.productId;
-                    opt.textContent = `[${p.productCode}] ${p.productName}`;
-                    opt.dataset.unit = p.unit || '—';
-                    opt.dataset.code = p.productCode;
-                    opt.dataset.unreserved = p.unreservedQuantity;
-                    if (p.productId == currentVal) {
+                    opt.value = id;
+                    opt.textContent = `[${code}] ${name}`;
+                    opt.dataset.unit = unit;
+                    opt.dataset.code = code;
+                    opt.dataset.unreserved = unreserved;
+                    if (id == currentVal) {
                         opt.selected = true;
                     }
                     select.appendChild(opt);
@@ -325,7 +331,12 @@
             const newRow = document.createElement('tr');
             let optionsHtml = '<option value="">-- Chọn sản phẩm --</option>';
             currentProducts.forEach(p => {
-                optionsHtml += `<option value="${p.productId}" data-unit="${p.unit || '—'}" data-code="${p.productCode}" data-unreserved="${p.unreservedQuantity}">[${p.productCode}] ${p.productName}</option>`;
+                const id = p.productId ?? p.ProductId;
+                const code = p.productCode ?? p.ProductCode ?? '';
+                const name = p.productName ?? p.ProductName ?? '';
+                const unit = p.unit ?? p.Unit ?? '—';
+                const unreserved = p.unreservedQuantity ?? p.UnreservedQuantity ?? 0;
+                optionsHtml += `<option value="${id}" data-unit="${unit}" data-code="${code}" data-unreserved="${unreserved}">[${code}] ${name}</option>`;
             });
 
             newRow.innerHTML = `

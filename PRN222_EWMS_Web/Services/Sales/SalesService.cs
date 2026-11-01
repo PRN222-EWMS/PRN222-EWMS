@@ -433,6 +433,12 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
                 };
             })
             .Where(x => x.Unreserved > 0)
+            // Áp dụng Cutoff ngày theo Mục 11 & Test Case SO15:
+            // Nguồn incoming chỉ được dùng nếu ngày hàng về AvailableFrom <= RequestedDate của khách
+            .Where(x => x.SupplyState == "PHYSICAL" 
+                     || !order.RequestedDate.HasValue 
+                     || x.AvailableFrom == null 
+                     || x.AvailableFrom <= order.RequestedDate.Value)
             .ToList();
 
         var orderedSources = sources
@@ -487,6 +493,17 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
             if (needed > 0)
             {
                 hasShortage = true;
+
+                // Theo Phân tích SO Mục 4, Mục 7 & Test Case SO06 (MSG-037):
+                // Khi Gửi đơn (Submit): Bắt buộc đủ nguồn, nếu thiếu nguồn thì từ chối Submit ngay lập tức!
+                // Chỉ cho phép lưu nháp (Draft) khi chưa đủ nguồn theo Test Case SO04.
+                if (isSubmit)
+                {
+                    var prod = await repository.Products.FirstOrDefaultAsync(p => p.ProductId == line.ProductId);
+                    var prodCode = prod?.ProductCode ?? $"ID {line.ProductId}";
+                    var prodName = prod?.ProductName ?? "Sản phẩm";
+                    throw new InvalidOperationException($"Số lượng yêu cầu cho sản phẩm [{prodCode}] {prodName} ({line.RequestedQuantity}) vượt quá số lượng hiện có thể đặt từ kho này (còn khả dụng: {line.RequestedQuantity - needed}) theo quy định MSG-037.");
+                }
             }
         }
 

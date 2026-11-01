@@ -303,6 +303,28 @@
     color: #be123c;
 }
 
+/* Disabled button state */
+.po-btn-disabled,
+button.workspace-button.po-btn-disabled,
+button.workspace-button:disabled,
+.workspace-button.po-btn-disabled {
+    background: #cbd5e1 !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #64748b !important;
+    cursor: not-allowed !important;
+    pointer-events: auto !important;
+    opacity: 0.7 !important;
+    box-shadow: none !important;
+}
+
+.po-btn-disabled:hover,
+button.workspace-button.po-btn-disabled:hover,
+button.workspace-button:disabled:hover {
+    background: #cbd5e1 !important;
+    border-color: #cbd5e1 !important;
+    color: #64748b !important;
+}
+
 /* Alert banners */
 .po-alert {
     padding: 14px 18px;

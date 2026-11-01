@@ -146,6 +146,7 @@
                                max="1000000" 
                                value="@Model.Lines[i].OrderedQuantity" 
                                required />
+                        <div class="capacity-hint mt-1" style="font-size: 11px;"></div>
                     </td>
                     <td style="text-align: center;">
                         <button type="button" class="po-btn-danger-icon btn-remove-line" title="Xóa dòng">
@@ -230,13 +231,19 @@
                 const currentVal = select.value;
                 select.innerHTML = '<option value="">-- Chọn sản phẩm --</option>';
                 currentProducts.forEach(p => {
+                    const id = p.productId ?? p.ProductId;
+                    const code = p.productCode ?? p.ProductCode ?? '';
+                    const name = p.productName ?? p.ProductName ?? '';
+                    const model = p.model ?? p.Model ?? '';
+                    const unit = p.unit ?? p.Unit ?? '';
+
                     const opt = document.createElement('option');
-                    opt.value = p.productId;
-                    opt.textContent = `[${p.productCode}] ${p.productName} (${p.model})`;
-                    opt.dataset.unit = p.unit;
-                    opt.dataset.code = p.productCode;
-                    opt.dataset.model = p.model;
-                    if (p.productId == currentVal) {
+                    opt.value = id;
+                    opt.textContent = `[${code}] ${name}${model ? ` (${model})` : ''}`;
+                    opt.dataset.unit = unit;
+                    opt.dataset.code = code;
+                    opt.dataset.model = model;
+                    if (id == currentVal) {
                         opt.selected = true;
                     }
                     select.appendChild(opt);
@@ -303,7 +310,12 @@
             const newRow = document.createElement('tr');
             let optionsHtml = '<option value="">-- Chọn sản phẩm --</option>';
             currentProducts.forEach(p => {
-                optionsHtml += `<option value="${p.productId}" data-unit="${p.unit}" data-code="${p.productCode}" data-model="${p.model}">[${p.productCode}] ${p.productName} (${p.model})</option>`;
+                const id = p.productId ?? p.ProductId;
+                const code = p.productCode ?? p.ProductCode ?? '';
+                const name = p.productName ?? p.ProductName ?? '';
+                const model = p.model ?? p.Model ?? '';
+                const unit = p.unit ?? p.Unit ?? '';
+                optionsHtml += `<option value="${id}" data-unit="${unit}" data-code="${code}" data-model="${model}">[${code}] ${name}${model ? ` (${model})` : ''}</option>`;
             });
 
             newRow.innerHTML = `
@@ -318,6 +330,7 @@
                 </td>
                 <td>
                     <input type="number" class="form-control qty-input text-end" min="1" max="1000000" value="1" required />
+                    <div class="capacity-hint mt-1" style="font-size: 11px;"></div>
                 </td>
                 <td style="text-align: center;">
                     <button type="button" class="po-btn-danger-icon btn-remove-line" title="Xóa dòng">
@@ -363,11 +376,79 @@
         linesTbody.addEventListener('input', function (e) {
             if (e.target.classList.contains('qty-input')) {
                 recalcTotal();
+                const row = e.target.closest('tr');
+                if (row) triggerCapacityCheck(row);
+            }
+        });
+
+        // Tự động kiểm tra sức chứa thời gian thực (Real-time Capacity Feedback)
+        const warehouseSelect = document.querySelector('select[name="WarehouseId"]');
+        if (warehouseSelect) {
+            warehouseSelect.addEventListener('change', function () {
+                linesTbody.querySelectorAll('tr').forEach(r => triggerCapacityCheck(r));
+            });
+        }
+
+        const poId = @(Model.PurchaseOrderId > 0 ? Model.PurchaseOrderId.ToString() : "null");
+        const debounceTimers = new Map();
+
+        function triggerCapacityCheck(row) {
+            const prodSelect = row.querySelector('.product-select');
+            const qtyInput = row.querySelector('.qty-input');
+            const hintDiv = row.querySelector('.capacity-hint');
+            if (!prodSelect || !qtyInput || !hintDiv) return;
+
+            const productId = parseInt(prodSelect.value);
+            const qty = parseInt(qtyInput.value) || 0;
+            const warehouseId = warehouseSelect ? parseInt(warehouseSelect.value) : 0;
+
+            if (!warehouseId || !productId || qty <= 0) {
+                hintDiv.innerHTML = '';
+                return;
+            }
+
+            if (debounceTimers.has(row)) {
+                clearTimeout(debounceTimers.get(row));
+            }
+
+            hintDiv.innerHTML = '<span class="text-muted"><i class="bi bi-hourglass-split me-1"></i>Đang kiểm tra sức chứa...</span>';
+
+            const timer = setTimeout(async () => {
+                try {
+                    let url = `/PurchaseOrder/CheckCapacity?warehouseId=${warehouseId}&productId=${productId}&quantity=${qty}`;
+                    if (poId) url += `&excludePoId=${poId}`;
+
+                    const res = await fetch(url);
+                    if (!res.ok) {
+                        hintDiv.innerHTML = '';
+                        return;
+                    }
+                    const data = await res.json();
+                    if (!data.hasValidZone) {
+                        hintDiv.innerHTML = '<span class="text-danger fw-semibold"><i class="bi bi-x-circle me-1"></i>Ngành hàng không hợp lệ tại kho này (MSG-015)</span>';
+                    } else if (qty > data.maxOrderQuantity) {
+                        hintDiv.innerHTML = `<span class="text-danger fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>Vượt sức chứa! Tối đa: <strong>${data.maxOrderQuantity}</strong> (Kệ: ${data.rackTierCapacity}, Sàn: ${data.floorSlotCapacity})</span>`;
+                    } else {
+                        hintDiv.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>Khả dụng: <strong>${data.maxOrderQuantity}</strong> chiếc (Kệ: ${data.rackTierCapacity}, Sàn: ${data.floorSlotCapacity})</span>`;
+                    }
+                } catch {
+                    hintDiv.innerHTML = '';
+                }
+            }, 300);
+
+            debounceTimers.set(row, timer);
+        }
+
+        linesTbody.addEventListener('change', function (e) {
+            if (e.target.classList.contains('product-select')) {
+                const row = e.target.closest('tr');
+                if (row) triggerCapacityCheck(row);
             }
         });
 
         // Khởi tạo tính toán ban đầu
         recalcTotal();
+        linesTbody.querySelectorAll('tr').forEach(r => triggerCapacityCheck(r));
 
         // Kiểm tra trước khi submit form
         const form = document.getElementById('createPoForm') || document.getElementById('editPoForm');
