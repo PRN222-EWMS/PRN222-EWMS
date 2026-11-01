@@ -33,6 +33,8 @@ builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddScoped<AccountCookieEvents>();
 builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Customers.ICustomerRepository, PRN222_EWMS_Web.Repositories.Customers.CustomerRepository>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.Customers.ICustomerService, PRN222_EWMS_Web.Services.Customers.CustomerService>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options =>
 {
     options.LoginPath = "/Authentication/Login";

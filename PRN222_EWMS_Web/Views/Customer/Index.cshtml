@@ -1,10 +1,53 @@
-@model PRN222_EWMS_Web.ViewModels.Sales.CustomerListViewModel
+@model PRN222_EWMS_Web.ViewModels.Customer.CustomerListViewModel
 @{ ViewData["Title"] = "Khách hàng"; }
-<div class="sales-page">
-<div class="workspace-heading"><div><p class="eyebrow">DANH MỤC DÙNG CHUNG</p><h1>Khách hàng</h1><p class="muted">Tra cứu và cập nhật thông tin liên hệ của khách hàng.</p></div><a class="workspace-button" asp-action="Create">Tạo khách hàng</a></div>
-@if(TempData["Success"] is string message){<div class="workspace-notice" role="status">@message</div>}
-<section class="workspace-card"><form method="get" asp-action="Index" class="sales-filters"><div><label for="Search">Tìm khách hàng</label><input id="Search" name="Search" value="@Model.Search" maxlength="200" placeholder="Tên hoặc số điện thoại" /></div><div class="sales-toolbar"><button class="workspace-button" type="submit">Tìm kiếm</button><a class="workspace-button sales-button-secondary" asp-action="Index">Xóa bộ lọc</a></div></form>
-<div class="table-wrap"><table class="workspace-table"><thead><tr><th>ID</th><th>Khách hàng</th><th>Điện thoại</th><th>Địa chỉ</th><th>Thao tác</th></tr></thead><tbody>@foreach(var customer in Model.Items){<tr><td class="sales-id">@customer.Id</td><td><a class="workspace-button sales-button-small" asp-action="Details" asp-route-id="@customer.Id">@customer.CustomerName</a></td><td>@(customer.Phone ?? "—")</td><td>@(customer.Address ?? "—")</td><td><div class="sales-actions"><a class="workspace-button sales-button-small" asp-action="Details" asp-route-id="@customer.Id">Chi tiết</a><a class="workspace-button sales-button-small" asp-action="Edit" asp-route-id="@customer.Id">Sửa</a></div></td></tr>}</tbody></table></div>
-@if(Model.Items.Count == 0){<p class="sales-empty">Không có khách hàng phù hợp.</p>}
-<div class="sales-pagination"><span class="muted">@Model.TotalCount khách hàng · Trang @Model.Page / @Model.TotalPages</span><nav aria-label="Phân trang khách hàng">@if(Model.Page > 1){<a class="workspace-button sales-button-small" asp-action="Index" asp-route-page="@(Model.Page-1)" asp-route-search="@Model.Search">Trước</a>}@if(Model.Page < Model.TotalPages){<a class="workspace-button sales-button-small" asp-action="Index" asp-route-page="@(Model.Page+1)" asp-route-search="@Model.Search">Sau</a>}</nav></div>
-</section></div>
+<div class="sales-page customer-list-page">
+    <div class="workspace-heading">
+        <div><p class="eyebrow">BÁN HÀNG</p><h1>Khách hàng</h1><p class="muted">Quản lý danh mục khách hàng dùng chung và thông tin liên hệ.</p></div>
+        <a class="workspace-button" asp-action="Create" asp-route-search="@Model.Search" asp-route-page="@Model.Page"><i class="bi bi-plus-lg" aria-hidden="true"></i> Tạo khách hàng</a>
+    </div>
+    @if (TempData["Success"] is string message) { <div class="workspace-notice" role="status">@message</div> }
+    <section class="workspace-card" aria-label="Danh sách khách hàng">
+        <form asp-action="Index" method="get" class="workspace-form mt-0">
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-md-8"><label for="Search">Tìm kiếm khách hàng</label><input id="Search" name="Search" type="search" value="@Model.Search" maxlength="254" placeholder="Tên, tên gợi nhớ, email hoặc số điện thoại" autocomplete="off" /></div>
+                <div class="col-12 col-md-4"><div class="sales-toolbar"><button class="workspace-button" type="submit"><i class="bi bi-search" aria-hidden="true"></i> Tìm kiếm</button><a class="workspace-button sales-button-secondary" asp-action="Index">Xóa bộ lọc</a></div></div>
+            </div>
+        </form>
+        <div class="d-flex justify-content-between align-items-center py-3 text-secondary small" aria-live="polite">
+            @if (Model.TotalCount > 0) { <span>Đang hiển thị <strong>@Model.FirstItem–@Model.LastItem</strong> trên <strong>@Model.TotalCount</strong> khách hàng</span> }
+            else { <span>0 khách hàng</span> }
+        </div>
+        @if (Model.TotalCount == 0)
+        {
+            <div class="text-center py-5"><p class="fs-5 text-secondary">@(Model.IsFiltered ? "Không tìm thấy khách hàng phù hợp." : "Chưa có khách hàng nào.")</p>@if (!Model.IsFiltered) { <a class="workspace-button" asp-action="Create">Tạo khách hàng</a> }</div>
+        }
+        else
+        {
+            <div class="table-wrap"><table class="workspace-table customer-table">
+                <colgroup><col class="customer-name-column" /><col class="customer-phone-column" /><col class="customer-email-column" /><col /><col class="customer-actions-column" /></colgroup>
+                <thead><tr><th scope="col">Khách hàng</th><th scope="col">Điện thoại</th><th scope="col">Email</th><th scope="col">Địa chỉ</th><th scope="col" class="text-center sales-actions-cell">Thao tác</th></tr></thead>
+                <tbody>
+                    @foreach (var customer in Model.Items)
+                    {
+                        <tr><td><strong>@customer.DisplayName</strong>@if (!string.IsNullOrWhiteSpace(customer.Nickname)) { <div class="sales-muted-small">@customer.CustomerName</div> }</td><td class="customer-phone">@(customer.Phone ?? "—")</td><td>@(customer.Email ?? "—")</td><td>@(customer.Address ?? "—")</td>
+                            <td class="text-end"><div class="sales-actions sales-row-actions"><a class="workspace-button sales-button-small" asp-action="Details" asp-route-id="@customer.Id" asp-route-search="@Model.Search" asp-route-page="@Model.Page"><i class="bi bi-eye" aria-hidden="true"></i> Chi tiết</a><a class="workspace-button sales-button-small sales-button-secondary" asp-action="Edit" asp-route-id="@customer.Id" asp-route-search="@Model.Search" asp-route-page="@Model.Page"><i class="bi bi-pencil" aria-hidden="true"></i> Sửa</a></div></td></tr>
+                    }
+                </tbody>
+            </table></div>
+            @if (Model.TotalPages > 1)
+            {
+                <nav class="d-flex justify-content-between align-items-center gap-3 flex-wrap pt-4" aria-label="Phân trang khách hàng">
+                    <span class="text-secondary small">Trang @Model.Page / @Model.TotalPages</span>
+                    <ul class="pagination pagination-sm mb-0 flex-wrap">
+                        <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">@if (Model.Page > 1) { <a class="page-link" asp-action="Index" asp-route-search="@Model.Search" asp-route-page="@(Model.Page - 1)">Trước</a> } else { <span class="page-link">Trước</span> }</li>
+                        @for (var p = 1; p <= Model.TotalPages; p++)
+                        {
+                            <li class="page-item @(p == Model.Page ? "active" : "")">@if (p == Model.Page) { <span class="page-link" aria-current="page">@p</span> } else { <a class="page-link" asp-action="Index" asp-route-search="@Model.Search" asp-route-page="@p">@p</a> }</li>
+                        }
+                        <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">@if (Model.Page < Model.TotalPages) { <a class="page-link" asp-action="Index" asp-route-search="@Model.Search" asp-route-page="@(Model.Page + 1)">Sau</a> } else { <span class="page-link">Sau</span> }</li>
+                    </ul>
+                </nav>
+            }
+        }
+    </section>
+</div>

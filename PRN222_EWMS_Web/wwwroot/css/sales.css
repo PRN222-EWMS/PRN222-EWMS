@@ -3,8 +3,26 @@
 .sales-page .sales-button-secondary { background: #fff; color: #005bab; border: 1px solid #b9d6f2; }
 .sales-page .sales-button-secondary:hover { background: #eef4fb; color: #005bab; }
 .sales-page .workspace-table a.workspace-button { color: #fff; }
+.sales-page .workspace-table a.workspace-button.sales-button-secondary { color: #005bab; }
 .sales-pagination a.workspace-button { background: var(--workspace-blue); color: #fff; border: 0; border-radius: 9999px; }
 .sales-pagination a.workspace-button:hover { background: #005bab; }
+
+/* Customer list: compact rows and a reserved action column. */
+.customer-list-page .customer-table { table-layout: fixed; min-width: 1040px; }
+.customer-table .customer-name-column { width: 27%; }
+.customer-table .customer-phone-column { width: 132px; }
+.customer-table .customer-email-column { width: 24%; }
+.customer-table .customer-actions-column { width: 210px; }
+.customer-list-page .customer-table th,
+.customer-list-page .customer-table td { padding: 14px 16px; }
+.customer-list-page .customer-table td { font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.customer-table td:first-child strong { display: block; font-size: 15px; font-weight: 600; }
+.customer-table .sales-muted-small { margin-top: 3px; font-size: 13px; line-height: 1.4; }
+.customer-table .customer-phone { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.customer-table tbody tr:hover { background: #f8fafc; }
+.sales-page .sales-actions-cell { width: 210px; min-width: 210px; }
+.sales-page .sales-row-actions { justify-content: center; flex-wrap: nowrap; gap: 8px; }
+.sales-page .sales-row-actions .workspace-button { flex-shrink: 0; gap: 6px; padding: 7px 12px; border-radius: 8px; white-space: nowrap; }
 
 /* Sales Order Forms & Line Items */
 .sales-form-grid {

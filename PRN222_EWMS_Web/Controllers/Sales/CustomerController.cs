@@ -1,50 +1,64 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PRN222_EWMS_Web.Services.Sales;
-using PRN222_EWMS_Web.ViewModels.Sales;
+using PRN222_EWMS_Web.Services.Customers;
+using PRN222_EWMS_Web.ViewModels.Customer;
 
 namespace PRN222_EWMS_Web.Controllers.Sales;
 
 [Authorize(Roles = "SALES_STAFF")]
-public class CustomerController(ISalesService sales) : Controller
+public class CustomerController(ICustomerService customers) : Controller
 {
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    public async Task<IActionResult> Index(CustomerListViewModel filter) => View(await sales.GetCustomersAsync(filter));
+    [HttpGet]
+    public async Task<IActionResult> Index([FromQuery] CustomerListFilter filter) =>
+        View(await customers.GetCustomerListAsync(filter));
 
-    public async Task<IActionResult> Details(int id)
+    [HttpGet]
+    public async Task<IActionResult> Details(int id, [FromQuery] CustomerListFilter returnFilter)
     {
-        var model = await sales.GetCustomerAsync(id, CurrentUserId);
+        var model = await customers.GetCustomerDetailsAsync(id, CurrentUserId, returnFilter);
         return model is null ? NotFound() : View(model);
     }
 
     [HttpGet]
-    public IActionResult Create() => View(new CustomerFormViewModel());
+    public IActionResult Create([FromQuery] CustomerListFilter returnFilter) =>
+        View(new CreateCustomerViewModel { ReturnFilter = returnFilter });
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(CustomerFormViewModel model)
+    public async Task<IActionResult> Create(CreateCustomerViewModel model)
     {
         if (!ModelState.IsValid) return View(model);
-        var id = await sales.CreateCustomerAsync(model, CurrentUserId);
+        var (id, errors) = await customers.CreateAsync(model, CurrentUserId);
+        AddErrors(errors);
+        if (errors.Count != 0 || !id.HasValue) return View(model);
         TempData["Success"] = "Tạo khách hàng thành công.";
-        return RedirectToAction(nameof(Details), new { id });
+        return RedirectToAction(nameof(Details), new { id, search = model.ReturnFilter.Search, page = model.ReturnFilter.Page });
     }
 
     [HttpGet]
-    public async Task<IActionResult> Edit(int id)
+    public async Task<IActionResult> Edit(int id, [FromQuery] CustomerListFilter returnFilter)
     {
-        var model = await sales.GetCustomerFormAsync(id);
+        var model = await customers.GetEditCustomerAsync(id, returnFilter);
         return model is null ? NotFound() : View(model);
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit([FromRoute] int id, CustomerFormViewModel model)
+    public async Task<IActionResult> Edit([FromRoute] int id, EditCustomerViewModel model)
     {
         if (id != model.Id) return BadRequest();
         if (!ModelState.IsValid) return View(model);
-        if (!await sales.UpdateCustomerAsync(id, model, CurrentUserId)) return NotFound();
+        var errors = await customers.UpdateAsync(id, model, CurrentUserId);
+        AddErrors(errors);
+        if (errors.Count != 0) return View(model);
         TempData["Success"] = "Cập nhật khách hàng thành công. Thông tin đã lưu trên chứng từ được giữ nguyên.";
-        return RedirectToAction(nameof(Details), new { id });
+        return RedirectToAction(nameof(Details), new { id, search = model.ReturnFilter.Search, page = model.ReturnFilter.Page });
+    }
+
+    private void AddErrors(Dictionary<string, string> errors)
+    {
+        foreach (var error in errors)
+            ModelState.AddModelError(error.Key == "General" ? "" : error.Key, error.Value);
     }
 }
