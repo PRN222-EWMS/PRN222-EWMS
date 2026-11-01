@@ -18,6 +18,7 @@ public class CreateCustomerViewModel
     [Display(Name = "Email")]
     public string? Email { get; set; }
 
+    [Required(ErrorMessage = "Vui lòng nhập địa chỉ khách hàng.")]
     [StringLength(500, ErrorMessage = "Địa chỉ tối đa 500 ký tự.")]
     [Display(Name = "Địa chỉ")]
     public string? Address { get; set; }

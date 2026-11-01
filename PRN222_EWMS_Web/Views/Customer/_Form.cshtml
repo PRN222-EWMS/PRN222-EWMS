@@ -17,4 +17,4 @@
     <div><label asp-for="Phone">Số điện thoại <span class="text-danger">*</span></label><input asp-for="Phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10" pattern="0[0-9]{9}" title="Số điện thoại gồm 10 chữ số và bắt đầu bằng số 0." placeholder="Ví dụ: 0912345678" required /><span asp-validation-for="Phone"></span></div>
     <div><label asp-for="Email">Email</label><input asp-for="Email" type="email" maxlength="254" autocomplete="email" placeholder="Ví dụ: contact@example.com" /><span asp-validation-for="Email"></span></div>
 </div>
-<div><label asp-for="Address">Địa chỉ</label><textarea asp-for="Address" rows="3" autocomplete="street-address" maxlength="500" placeholder="Số nhà, đường, phường/xã, tỉnh/thành phố"></textarea><span asp-validation-for="Address"></span></div>
+<div><label asp-for="Address">Địa chỉ <span class="text-danger">*</span></label><textarea asp-for="Address" rows="3" autocomplete="street-address" maxlength="500" required placeholder="Số nhà, đường, phường/xã, tỉnh/thành phố"></textarea><span asp-validation-for="Address"></span></div>
