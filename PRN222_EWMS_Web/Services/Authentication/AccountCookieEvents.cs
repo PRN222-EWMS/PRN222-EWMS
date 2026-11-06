@@ -13,6 +13,7 @@ public class AccountCookieEvents(IUserRepository users) : CookieAuthenticationEv
         var user = int.TryParse(id, out var userId) ? await users.FindByIdAsync(userId) : null;
         if (user is null || user.Status != "ACTIVE"
             || user.Role.RoleName != context.Principal?.FindFirstValue(ClaimTypes.Role)
+            || (user.GoogleSubject ?? "") != context.Principal?.FindFirstValue(AccountClaims.GoogleSubject)
             || AccountClaims.GetPasswordVersion(user.PasswordHash) != context.Principal?.FindFirstValue(AccountClaims.PasswordVersion))
         {
             context.RejectPrincipal();

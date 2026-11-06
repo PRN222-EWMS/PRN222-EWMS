@@ -2,6 +2,9 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authentication.OAuth;
+using System.Net.Http.Headers;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Models;
 using PRN222_EWMS_Web.Repositories.User;
@@ -30,13 +33,15 @@ builder.Services.AddScoped<IWarehouseRepository, WarehouseRepository>();
 builder.Services.AddScoped<IWarehouseService, WarehouseService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Authentication.IAuthenticationService, AuthenticationService>();
+builder.Services.AddScoped<SmtpEmailSender>();
+builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddScoped<AccountCookieEvents>();
 builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Customers.ICustomerRepository, PRN222_EWMS_Web.Repositories.Customers.CustomerRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Customers.ICustomerService, PRN222_EWMS_Web.Services.Customers.CustomerService>();
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options =>
+var authenticationBuilder = builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options =>
 {
     options.LoginPath = "/Authentication/Login";
     options.AccessDeniedPath = "/Authentication/AccessDenied";
@@ -48,6 +53,59 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     options.SlidingExpiration = true;
     options.EventsType = typeof(AccountCookieEvents);
 });
+authenticationBuilder.AddCookie("GoogleExternal", options =>
+{
+    options.Cookie.Name = "EWMS.GoogleExternal";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.ExpireTimeSpan = TimeSpan.FromMinutes(5);
+});
+var googleClientId = builder.Configuration["Authentication:Google:ClientId"];
+var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
+if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(googleClientSecret))
+{
+    authenticationBuilder.AddOAuth("Google", options =>
+    {
+        options.ClientId = googleClientId;
+        options.ClientSecret = googleClientSecret;
+        options.SignInScheme = "GoogleExternal";
+        options.CallbackPath = "/signin-google";
+        options.UsePkce = true;
+        options.AuthorizationEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
+        options.TokenEndpoint = "https://oauth2.googleapis.com/token";
+        options.UserInformationEndpoint = "https://openidconnect.googleapis.com/v1/userinfo";
+        options.Scope.Add("openid");
+        options.Scope.Add("email");
+        options.Scope.Add("profile");
+        options.Events = new OAuthEvents
+        {
+            OnRemoteFailure = context =>
+            {
+                context.HandleResponse();
+                context.Response.Redirect("/Authentication/Login?googleError=1");
+                return Task.CompletedTask;
+            },
+            OnCreatingTicket = async context =>
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, context.Options.UserInformationEndpoint);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", context.AccessToken);
+                using var response = await context.Backchannel.SendAsync(request, context.HttpContext.RequestAborted);
+                response.EnsureSuccessStatusCode();
+                using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(context.HttpContext.RequestAborted));
+                var profile = document.RootElement;
+                if (!profile.TryGetProperty("sub", out var sub) || string.IsNullOrWhiteSpace(sub.GetString())
+                    || !profile.TryGetProperty("email", out var email) || string.IsNullOrWhiteSpace(email.GetString())
+                    || !profile.TryGetProperty("email_verified", out var verified) || verified.ValueKind != JsonValueKind.True)
+                    throw new InvalidOperationException("Google did not provide a verified account identifier.");
+                context.Identity!.AddClaim(new System.Security.Claims.Claim("google:sub", sub.GetString()!));
+                context.Identity.AddClaim(new System.Security.Claims.Claim("google:email", email.GetString()!));
+                if (profile.TryGetProperty("hd", out var hostedDomain) && !string.IsNullOrWhiteSpace(hostedDomain.GetString()))
+                    context.Identity.AddClaim(new System.Security.Claims.Claim("google:hd", hostedDomain.GetString()!));
+            }
+        };
+    });
+}
 builder.Services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 builder.Services.AddRateLimiter(options =>
 {

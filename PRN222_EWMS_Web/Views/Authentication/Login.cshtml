@@ -36,13 +36,22 @@
     {
         <div class="workspace-notice" role="status">@message</div>
     }
+    @if (TempData["GoogleError"] is string googleError)
+    {
+        <div class="validation-message" role="alert">@googleError</div>
+    }
     <form asp-action="Login" method="post" class="workspace-form login-form">
         <input asp-for="ReturnUrl" type="hidden" />
         <div asp-validation-summary="ModelOnly" class="validation-message" role="alert"></div>
-        <div><label asp-for="Username">Tài khoản</label><input asp-for="Username" autocomplete="username" autofocus /><span asp-validation-for="Username"></span></div>
+        <div><label asp-for="Email"></label><input asp-for="Email" type="email" autocomplete="username" autofocus /><span asp-validation-for="Email"></span></div>
         <div><label asp-for="Password"></label><input asp-for="Password" autocomplete="current-password" /><span asp-validation-for="Password"></span></div>
         <label class="checkbox-row"><input asp-for="RememberMe" /> Ghi nhớ đăng nhập</label>
+        <a asp-action="ForgotPassword">Quên mật khẩu?</a>
         <button class="workspace-button login-submit" type="submit">Đăng nhập<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6" /></svg></button>
+    </form>
+    <form asp-action="GoogleLogin" method="post" class="workspace-form login-form">
+        <input asp-for="ReturnUrl" type="hidden" />
+        <button class="workspace-button" type="submit">Đăng nhập bằng Google</button>
     </form>
 </section>
 @section Scripts { <partial name="_ValidationScriptsPartial" /> }

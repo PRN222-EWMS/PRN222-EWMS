@@ -13,7 +13,7 @@ public class WarehouseStaffService(IWarehouseStaffRepository repo) : IWarehouseS
             return new WarehouseDashboardViewModel
             {
                 UserFullName = user?.FullName ?? "Nhân viên kho",
-                Username = user?.Username ?? "",
+                UserEmail = user?.Email,
                 WarehouseName = "Chưa được phân công kho làm việc",
                 Address = "Vui lòng liên hệ Quản trị viên (Admin) để được gán kho trước khi tác nghiệp."
             };
@@ -21,7 +21,7 @@ public class WarehouseStaffService(IWarehouseStaffRepository repo) : IWarehouseS
 
         var dashboard = await repo.GetDashboardMetricsAsync(user.WarehouseId.Value, userId);
         dashboard.UserFullName = user.FullName;
-        dashboard.Username = user.Username;
+        dashboard.UserEmail = user.Email;
         return dashboard;
     }
 

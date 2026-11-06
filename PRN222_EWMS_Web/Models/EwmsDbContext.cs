@@ -2651,11 +2651,14 @@ public partial class EwmsDbContext : DbContext
 
             entity.HasIndex(e => e.WarehouseId, "IX_User_011");
 
-            entity.HasIndex(e => e.Username, "UX_User_01").IsUnique();
 
             entity.HasIndex(e => e.Email, "UX_User_02")
                 .IsUnique()
                 .HasFilter("([Email] IS NOT NULL)");
+
+            entity.HasIndex(e => e.GoogleSubject, "UX_User_GoogleSubject")
+                .IsUnique()
+                .HasFilter("([GoogleSubject] IS NOT NULL)");
 
             entity.Property(e => e.UserId).HasColumnName("UserID");
             entity.Property(e => e.CreatedAt)
@@ -2663,6 +2666,7 @@ public partial class EwmsDbContext : DbContext
                 .HasDefaultValueSql("(sysutcdatetime())");
             entity.Property(e => e.Email).HasMaxLength(254);
             entity.Property(e => e.FullName).HasMaxLength(150);
+            entity.Property(e => e.GoogleSubject).HasMaxLength(255).IsUnicode(false);
             entity.Property(e => e.PasswordHash).HasMaxLength(512);
             entity.Property(e => e.Phone).HasMaxLength(30);
             entity.Property(e => e.RoleId).HasColumnName("RoleID");
@@ -2673,7 +2677,6 @@ public partial class EwmsDbContext : DbContext
                 .HasMaxLength(32)
                 .IsUnicode(false)
                 .HasDefaultValue("ACTIVE");
-            entity.Property(e => e.Username).HasMaxLength(100);
             entity.Property(e => e.WarehouseId).HasColumnName("WarehouseID");
 
             entity.HasOne(d => d.Role).WithMany(p => p.Users)

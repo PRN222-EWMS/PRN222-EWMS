@@ -6,9 +6,10 @@ namespace PRN222_EWMS_Web.Repositories.User;
 
 public interface IUserRepository
 {
-    Task<UserEntity?> FindByUsernameAsync(string username);
+    Task<UserEntity?> FindByEmailAsync(string email);
+    Task<UserEntity?> FindByGoogleSubjectAsync(string subject);
     Task<UserEntity?> FindByIdAsync(int id);
-    Task<bool> UsernameExistsAsync(string username);
+    Task<UserEntity?> FindForPasswordResetAsync(int id);
     Task<bool> EmailExistsAsync(string email);
     Task<bool> EmailExistsForOtherUserAsync(string email, int userId);
     Task<List<UserEntity>> GetAllAsync();
@@ -19,4 +20,5 @@ public interface IUserRepository
     Task<List<WarehouseEntity>> GetActiveWarehousesAsync();
     Task AddAsync(UserEntity user);
     Task SaveAsync();
+    Task SavePasswordResetAsync();
 }

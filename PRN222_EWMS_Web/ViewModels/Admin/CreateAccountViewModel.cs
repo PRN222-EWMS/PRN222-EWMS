@@ -6,17 +6,12 @@ namespace PRN222_EWMS_Web.ViewModels.Admin;
 
 public class CreateAccountViewModel
 {
-    [Required(ErrorMessage = "Nhập tên đăng nhập."), StringLength(100)]
-    [RegularExpression(@"^[a-zA-Z0-9._-]+$", ErrorMessage = "Chỉ dùng chữ không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang.")]
-    [Display(Name = "Tên đăng nhập")]
-    public string Username { get; set; } = "";
-
     [Required(ErrorMessage = "Nhập họ tên."), StringLength(150)]
     [Display(Name = "Họ và tên")]
     public string FullName { get; set; } = "";
 
-    [EmailAddress(ErrorMessage = "Email không hợp lệ."), StringLength(254)]
-    public string? Email { get; set; }
+    [Required(ErrorMessage = "Nhập email."), EmailAddress(ErrorMessage = "Email không hợp lệ."), StringLength(254)]
+    public string Email { get; set; } = "";
 
     [Phone(ErrorMessage = "Số điện thoại không hợp lệ."), StringLength(30)]
     [Display(Name = "Số điện thoại")]

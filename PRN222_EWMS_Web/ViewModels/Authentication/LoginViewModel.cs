@@ -4,9 +4,9 @@ namespace PRN222_EWMS_Web.ViewModels.Authentication;
 
 public class LoginViewModel
 {
-    [Required(ErrorMessage = "Nhập tên đăng nhập."), StringLength(100)]
-    [Display(Name = "Tên đăng nhập")]
-    public string Username { get; set; } = "";
+    [Required(ErrorMessage = "Nhập email."), EmailAddress(ErrorMessage = "Email không hợp lệ."), StringLength(254)]
+    [Display(Name = "Email")]
+    public string Email { get; set; } = "";
 
     [Required(ErrorMessage = "Nhập mật khẩu."), StringLength(128), DataType(DataType.Password)]
     [Display(Name = "Mật khẩu")]

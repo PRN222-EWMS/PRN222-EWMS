@@ -16,7 +16,6 @@ public class AccountService(IUserRepository users, IPasswordHasher<User> hasher)
         if (user is null || user.Status != "ACTIVE") return null;
         return new ProfileViewModel
         {
-            Username = user.Username,
             RoleName = user.Role.RoleName,
             WarehouseName = user.Warehouse?.WarehouseName,
             Profile = new EditProfileViewModel { FullName = user.FullName, Email = user.Email, Phone = user.Phone }
@@ -31,6 +30,7 @@ public class AccountService(IUserRepository users, IPasswordHasher<User> hasher)
         if (email is not null && await users.EmailExistsForOtherUserAsync(email, userId))
             return new() { [nameof(model.Email)] = "Email đã được sử dụng." };
         user.FullName = model.FullName.Trim();
+        if (!string.Equals(user.Email, email, StringComparison.OrdinalIgnoreCase)) user.GoogleSubject = null;
         user.Email = email;
         user.Phone = string.IsNullOrWhiteSpace(model.Phone) ? null : model.Phone.Trim();
         try { await users.SaveAsync(); }

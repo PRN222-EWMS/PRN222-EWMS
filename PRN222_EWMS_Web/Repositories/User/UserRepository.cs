@@ -7,11 +7,38 @@ namespace PRN222_EWMS_Web.Repositories.User;
 
 public class UserRepository(EwmsDbContext db) : IUserRepository
 {
-    public Task<UserEntity?> FindByUsernameAsync(string username) => db.Users.Include(u => u.Role).SingleOrDefaultAsync(u => u.Username == username);
+    public Task<UserEntity?> FindByEmailAsync(string email) => FindForAuthenticationAsync(db.Users.Include(u => u.Role).Where(u => u.Email == email));
+    public Task<UserEntity?> FindByGoogleSubjectAsync(string subject) => FindForAuthenticationAsync(db.Users.Include(u => u.Role).Where(u => u.GoogleSubject == subject));
     public Task<UserEntity?> FindByIdAsync(int id) => db.Users.Include(u => u.Role).Include(u => u.Warehouse).SingleOrDefaultAsync(u => u.UserId == id);
-    public Task<bool> UsernameExistsAsync(string username) => db.Users.AnyAsync(u => u.Username == username);
+    public async Task<UserEntity?> FindForPasswordResetAsync(int id)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        try { return await db.Users.SingleOrDefaultAsync(u => u.UserId == id, timeout.Token); }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        { throw new TimeoutException("The password reset account lookup timed out."); }
+        catch (Microsoft.Data.SqlClient.SqlException) when (timeout.IsCancellationRequested)
+        { throw new TimeoutException("The password reset account lookup timed out."); }
+    }
+    private static async Task<UserEntity?> FindForAuthenticationAsync(IQueryable<UserEntity> query)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        try { return await query.SingleOrDefaultAsync(timeout.Token); }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        { throw new TimeoutException("The account lookup timed out."); }
+        catch (Microsoft.Data.SqlClient.SqlException) when (timeout.IsCancellationRequested)
+        { throw new TimeoutException("The account lookup timed out."); }
+    }
     public Task<bool> EmailExistsAsync(string email) => db.Users.AnyAsync(u => u.Email == email);
     public Task<bool> EmailExistsForOtherUserAsync(string email, int userId) => db.Users.AnyAsync(u => u.Email == email && u.UserId != userId);
+    public async Task SavePasswordResetAsync()
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        try { await db.SaveChangesAsync(timeout.Token); }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        { throw new TimeoutException("The password reset update timed out."); }
+        catch (DbUpdateException) when (timeout.IsCancellationRequested)
+        { throw new TimeoutException("The password reset update timed out."); }
+    }
     public Task<List<UserEntity>> GetAllAsync() => db.Users.AsNoTracking().Include(u => u.Role).Include(u => u.Warehouse).OrderByDescending(u => u.CreatedAt).ToListAsync();
     public async Task<(List<UserListRecord> Items, int TotalCount, int PageNumber, int TotalPages)> GetPageAsync(
         string? search, int? roleId, string? status, int? warehouseId, int pageNumber, int pageSize)

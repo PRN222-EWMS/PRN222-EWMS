@@ -28,7 +28,7 @@ public class WarehouseDashboardViewModel
     public List<WarehousePoListItemDto> RecentReceivableOrders { get; set; } = new();
 
     public string UserFullName { get; set; } = "";
-    public string Username { get; set; } = "";
+    public string? UserEmail { get; set; }
     public bool HasWarehouse => WarehouseId.HasValue && WarehouseId.Value > 0;
 }
 
