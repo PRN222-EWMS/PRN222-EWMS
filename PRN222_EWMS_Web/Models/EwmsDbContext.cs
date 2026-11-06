@@ -2660,6 +2660,10 @@ public partial class EwmsDbContext : DbContext
                 .IsUnique()
                 .HasFilter("([GoogleSubject] IS NOT NULL)");
 
+            entity.HasIndex(e => e.Phone, "UX_User_Phone")
+                .IsUnique()
+                .HasFilter("([Phone] IS NOT NULL)");
+
             entity.Property(e => e.UserId).HasColumnName("UserID");
             entity.Property(e => e.CreatedAt)
                 .HasPrecision(3)

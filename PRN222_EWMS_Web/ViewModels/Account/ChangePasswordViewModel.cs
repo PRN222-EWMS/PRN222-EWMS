@@ -9,8 +9,9 @@ public class ChangePasswordViewModel
     public string CurrentPassword { get; set; } = "";
 
     [Required(ErrorMessage = "Nhập mật khẩu mới.")]
-    [StringLength(128, MinimumLength = 8, ErrorMessage = "Mật khẩu phải từ 8 đến 128 ký tự.")]
+    [StringLength(128, MinimumLength = 11, ErrorMessage = AccountValidation.PasswordLengthMessage)]
     [DataType(DataType.Password), Display(Name = "Mật khẩu mới")]
+    [RegularExpression(AccountValidation.PasswordPattern, ErrorMessage = AccountValidation.PasswordComplexityMessage)]
     public string NewPassword { get; set; } = "";
 
     [Required(ErrorMessage = "Xác nhận mật khẩu mới.")]

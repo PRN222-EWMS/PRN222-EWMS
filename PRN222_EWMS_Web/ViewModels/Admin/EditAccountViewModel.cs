@@ -16,7 +16,7 @@ public class EditAccountViewModel
     [Display(Name = "Email")]
     public string? Email { get; set; }
 
-    [Phone(ErrorMessage = "Số điện thoại không hợp lệ."), StringLength(30)]
+    [RegularExpression(AccountValidation.PhonePattern, ErrorMessage = AccountValidation.PhoneMessage)]
     [Display(Name = "Số điện thoại")]
     public string? Phone { get; set; }
 

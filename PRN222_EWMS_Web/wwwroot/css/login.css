@@ -110,6 +110,28 @@
 .login-submit { gap: 9px; width: 100%; border-radius: 5px; font-size: 14px; font-weight: 600; }
 .login-submit svg { width: 18px; height: 18px; }
 
+.login-google {
+    gap: 12px;
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 20px;
+    border: 1px solid #dadce0;
+    background: #fff;
+    color: #3c4043;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.5;
+    transition: background-color .15s ease, border-color .15s ease;
+}
+
+.login-google:hover { border-color: #c6d5ea; background: #f6f9fe; color: #3c4043; }
+.login-google:active { border-color: #a8c7fa; background: #eaf1fb; }
+.login-google-icon { flex: 0 0 20px; width: 20px; height: 20px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .login-google { transition: none; }
+}
+
 .recovery-card .login-card-description { line-height: 1.7; }
 .recovery-card .login-form { margin-top: 28px; }
 .recovery-card .login-form input[type=hidden] { display: none; }

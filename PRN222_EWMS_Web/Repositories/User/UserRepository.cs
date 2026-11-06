@@ -30,6 +30,8 @@ public class UserRepository(EwmsDbContext db) : IUserRepository
     }
     public Task<bool> EmailExistsAsync(string email) => db.Users.AnyAsync(u => u.Email == email);
     public Task<bool> EmailExistsForOtherUserAsync(string email, int userId) => db.Users.AnyAsync(u => u.Email == email && u.UserId != userId);
+    public Task<bool> PhoneExistsForOtherUserAsync(string phone, int? userId = null) =>
+        db.Users.AnyAsync(u => u.Phone == phone && (!userId.HasValue || u.UserId != userId.Value));
     public async Task SavePasswordResetAsync()
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));

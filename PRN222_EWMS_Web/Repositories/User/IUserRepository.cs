@@ -12,6 +12,7 @@ public interface IUserRepository
     Task<UserEntity?> FindForPasswordResetAsync(int id);
     Task<bool> EmailExistsAsync(string email);
     Task<bool> EmailExistsForOtherUserAsync(string email, int userId);
+    Task<bool> PhoneExistsForOtherUserAsync(string phone, int? userId = null);
     Task<List<UserEntity>> GetAllAsync();
     Task<(List<UserListRecord> Items, int TotalCount, int PageNumber, int TotalPages)> GetPageAsync(
         string? search, int? roleId, string? status, int? warehouseId, int pageNumber, int pageSize);

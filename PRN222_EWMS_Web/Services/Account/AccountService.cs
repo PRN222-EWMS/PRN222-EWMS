@@ -29,15 +29,18 @@ public class AccountService(IUserRepository users, IPasswordHasher<User> hasher)
         var email = string.IsNullOrWhiteSpace(model.Email) ? null : model.Email.Trim();
         if (email is not null && await users.EmailExistsForOtherUserAsync(email, userId))
             return new() { [nameof(model.Email)] = "Email đã được sử dụng." };
+        var phone = string.IsNullOrWhiteSpace(model.Phone) ? null : model.Phone.Trim();
+        if (phone is not null && await users.PhoneExistsForOtherUserAsync(phone, userId))
+            return new() { [nameof(model.Phone)] = "Số điện thoại đã được sử dụng." };
         user.FullName = model.FullName.Trim();
         if (!string.Equals(user.Email, email, StringComparison.OrdinalIgnoreCase)) user.GoogleSubject = null;
         user.Email = email;
-        user.Phone = string.IsNullOrWhiteSpace(model.Phone) ? null : model.Phone.Trim();
+        user.Phone = phone;
         try { await users.SaveAsync(); }
         catch (DbUpdateConcurrencyException)
         { return new() { [""] = "Thông tin đã thay đổi. Vui lòng tải lại trang và thử lại." }; }
         catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
-        { return new() { [nameof(model.Email)] = "Email đã được sử dụng." }; }
+        { return new() { [""] = "Email hoặc số điện thoại đã được sử dụng." }; }
         return new();
     }
 
