@@ -110,6 +110,14 @@
 .login-submit { gap: 9px; width: 100%; border-radius: 5px; font-size: 14px; font-weight: 600; }
 .login-submit svg { width: 18px; height: 18px; }
 
+.recovery-card .login-card-description { line-height: 1.7; }
+.recovery-card .login-form { margin-top: 28px; }
+.recovery-card .login-form input[type=hidden] { display: none; }
+.recovery-card .recovery-note { margin: 22px 0 0; padding: 14px 16px; border-radius: 7px; background: #f1f6fc; color: #4c5968; font-size: 13px; line-height: 1.6; }
+.recovery-card .recovery-action { display: flex; margin-top: 28px; }
+.recovery-card .recovery-back { display: inline-block; margin-top: 18px; color: #0068c7; font-size: 13px; text-underline-offset: 3px; }
+.recovery-card .recovery-back:focus-visible { outline: 2px solid #0075de; outline-offset: 4px; border-radius: 3px; }
+
 @media (max-width: 1000px) {
     .login-shell { gap: 64px; }
     .login-intro h1 { font-size: 52px; }

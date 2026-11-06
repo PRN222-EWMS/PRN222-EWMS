@@ -6,9 +6,9 @@ namespace PRN222_EWMS_Web.Services.Authentication;
 
 public class AuthenticationService(IUserRepository users, IPasswordHasher<User> hasher) : IAuthenticationService
 {
-    public async Task<User?> AuthenticateAsync(string username, string password)
+    public async Task<User?> AuthenticateAsync(string email, string password)
     {
-        var user = await users.FindByUsernameAsync(username.Trim());
+        var user = await users.FindByEmailAsync(email.Trim());
         if (user is null || user.Status != "ACTIVE") return null;
         PasswordVerificationResult result;
         try { result = hasher.VerifyHashedPassword(user, user.PasswordHash, password); }

@@ -11,13 +11,14 @@ public partial class User
 
     public int? WarehouseId { get; set; }
 
-    public string Username { get; set; } = null!;
 
     public string PasswordHash { get; set; } = null!;
 
     public string FullName { get; set; } = null!;
 
     public string? Email { get; set; }
+
+    public string? GoogleSubject { get; set; }
 
     public string? Phone { get; set; }
 
