@@ -24,6 +24,7 @@ namespace PRN222_EWMS_Web.Controllers
             if (User.IsInRole("CEO")) return View("CeoDashboard");
             if (User.IsInRole("SALES_STAFF")) return RedirectToAction("Index", "SalesDashboard");
             if (User.IsInRole("WAREHOUSE_STAFF")) return RedirectToAction("Index", "WarehouseDashboard");
+            if (User.IsInRole("PURCHASING_STAFF")) return RedirectToAction("Index", "PurchasingDashboard");
             if (User.IsInRole("ADMIN"))
             {
                 return View("AdminDashboard", await _adminDashboard.GetDashboardAsync());
