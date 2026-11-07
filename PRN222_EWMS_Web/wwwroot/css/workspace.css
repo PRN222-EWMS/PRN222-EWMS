@@ -137,3 +137,7 @@ h1{font-size:40px;font-weight:700;line-height:1.1;letter-spacing:-1px;margin:0 0
         grid-template-columns: 1fr;
     }
 }
+
+.col-span-2 {
+    grid-column: span 2;
+}

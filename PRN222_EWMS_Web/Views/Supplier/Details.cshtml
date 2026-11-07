@@ -47,43 +47,44 @@
 }
 
 <section class="workspace-card" aria-label="Thông tin nhà cung cấp">
-    <div class="workspace-heading">
-        <div>
-            <p class="eyebrow">MÃ ĐỐI TÁC: #@Model.SupplierId</p>
-            <h2>@Model.DisplayName</h2>
+    <div class="workspace-form mt-0">
+        <div class="form-grid">
+            <div>
+                <label>Mã nhà cung cấp (ID)</label>
+                <input type="text" value="#@Model.SupplierId" disabled class="form-control bg-light" />
+            </div>
+
+            <div>
+                <label>Trạng thái</label>
+                <select disabled class="form-select bg-light">
+                    <option selected>@Model.StatusLabel</option>
+                </select>
+            </div>
+
+            <div class="col-span-2">
+                <label>Tên nhà cung cấp</label>
+                <input type="text" value="@Model.SupplierName" disabled class="form-control bg-light fw-semibold" />
+            </div>
+
+            <div>
+                <label>Tên gợi nhớ (Nickname)</label>
+                <input type="text" value="@(string.IsNullOrWhiteSpace(Model.Nickname) ? "—" : Model.Nickname)" disabled class="form-control bg-light" />
+            </div>
+
+            <div>
+                <label>Số điện thoại</label>
+                <input type="text" value="@Model.PhoneDisplay" disabled class="form-control bg-light" />
+            </div>
+
+            <div class="col-span-2">
+                <label>Email</label>
+                <input type="text" value="@Model.EmailDisplay" disabled class="form-control bg-light" />
+            </div>
+
+            <div class="col-span-2">
+                <label>Địa chỉ</label>
+                <textarea rows="3" disabled class="form-control bg-light">@Model.AddressDisplay</textarea>
+            </div>
         </div>
-        <span class="@Model.StatusClass">@Model.StatusLabel</span>
     </div>
-
-    <dl class="profile-details">
-        <div>
-            <dt>Mã nhà cung cấp</dt>
-            <dd>#@Model.SupplierId</dd>
-        </div>
-        <div>
-            <dt>Tên nhà cung cấp</dt>
-            <dd>@Model.SupplierName</dd>
-        </div>
-        <div>
-            <dt>Tên gợi nhớ (Nickname)</dt>
-            <dd>@(string.IsNullOrWhiteSpace(Model.Nickname) ? "—" : Model.Nickname)</dd>
-        </div>
-        <div>
-            <dt>Trạng thái</dt>
-            <dd><span class="@Model.StatusClass">@Model.StatusLabel</span></dd>
-        </div>
-        <div>
-            <dt>Số điện thoại</dt>
-            <dd>@Model.PhoneDisplay</dd>
-        </div>
-        <div>
-            <dt>Email</dt>
-            <dd>@Model.EmailDisplay</dd>
-        </div>
-        <div class="w-100">
-            <dt>Địa chỉ</dt>
-            <dd>@Model.AddressDisplay</dd>
-        </div>
-    </dl>
 </section>
-
