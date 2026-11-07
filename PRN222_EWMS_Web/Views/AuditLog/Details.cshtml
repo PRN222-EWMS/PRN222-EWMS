@@ -1,20 +1,27 @@
+@using PRN222_EWMS_Web.ViewModels.Admin
 @model PRN222_EWMS_Web.Models.AuditLog
-@{ ViewData["Title"] = "Chi tiết nhật ký"; }
+@{ ViewData["Title"] = "Chi tiết lịch sử thao tác"; var changes = AuditLogDisplay.Changes(Model); }
 
-<div class="workspace-heading"><div><p class="eyebrow">QUẢN TRỊ / NHẬT KÝ HOẠT ĐỘNG</p><h1>Chi tiết #@Model.AuditId</h1></div><a class="workspace-link" asp-action="Index"><i class="bi bi-arrow-left" aria-hidden="true"></i> Quay lại</a></div>
-<section class="workspace-card">
-    <dl class="admin-log-detail">
-        <div><dt>Thời gian</dt><dd>@Model.OccurredAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</dd></div>
-        <div><dt>Người thực hiện</dt><dd>@(Model.ActorUser?.FullName ?? "Không xác định")</dd></div>
-        <div><dt>Tài khoản database</dt><dd>@Model.DatabasePrincipal</dd></div>
-        <div><dt>Hành động</dt><dd>@Model.ActionType</dd></div>
-        <div><dt>Bảng</dt><dd>@Model.TableName</dd></div>
-        <div><dt>Mã đối tượng</dt><dd>@Model.EntityKey</dd></div>
-        <div><dt>Lý do</dt><dd>@(Model.Reason ?? "—")</dd></div>
-        <div><dt>Request ID</dt><dd>@(Model.RequestId ?? "—")</dd></div>
-    </dl>
-    <div class="admin-log-payloads">
-        <div><h2 class="h5">Dữ liệu trước</h2><pre>@(Model.BeforeData ?? "Không có dữ liệu")</pre></div>
-        <div><h2 class="h5">Dữ liệu sau</h2><pre>@(Model.AfterData ?? "Không có dữ liệu")</pre></div>
-    </div>
-</section>
+<div class="audit-page audit-detail-page">
+    <a asp-action="Index" class="audit-back"><i class="bi bi-arrow-left" aria-hidden="true"></i> Lịch sử thao tác</a>
+    <header class="audit-detail-hero"><div><p class="audit-eyebrow">CHI TIẾT AUDIT LOG · #@Model.AuditId</p><h1>@AuditLogDisplay.Action(Model.ActionType) · @Model.TableName</h1><p>@AuditLogDisplay.Document(Model)</p></div><span class="audit-success">Thành công</span></header>
+
+    <section class="audit-info-card" aria-labelledby="auditInfoTitle"><h2 id="auditInfoTitle">Thông tin thao tác</h2><dl class="audit-info-grid">
+        <div><dt>Người thực hiện</dt><dd>@(Model.ActorUser?.FullName ?? Model.DatabasePrincipal) @if (Model.ActorUserId.HasValue) { <small>· ID @Model.ActorUserId</small> }</dd></div>
+        <div><dt>Thời điểm (giờ Việt Nam)</dt><dd>@AuditLogDisplay.ToVietnam(Model.OccurredAt).ToString("HH:mm:ss dd/MM/yyyy")</dd></div>
+        <div><dt>Nhóm nghiệp vụ</dt><dd>@AuditLogDisplay.Group(Model.TableName)</dd></div>
+        <div><dt>Hành động</dt><dd>@AuditLogDisplay.Action(Model.ActionType) <small>· @Model.ActionType</small></dd></div>
+        <div><dt>Dữ liệu được thao tác</dt><dd>@Model.TableName · ID @Model.EntityKey</dd></div>
+        <div><dt>Nguồn lịch sử</dt><dd>@Model.DatabasePrincipal</dd></div>
+        @if (!string.IsNullOrWhiteSpace(Model.Reason)) { <div><dt>Lý do</dt><dd>@Model.Reason</dd></div> }
+        @if (!string.IsNullOrWhiteSpace(Model.RequestId)) { <div><dt>Request ID</dt><dd>@Model.RequestId</dd></div> }
+    </dl></section>
+
+    <section class="audit-changes" aria-labelledby="auditChangesTitle"><h2 id="auditChangesTitle">Nội dung thay đổi</h2><div class="audit-table-card"><div class="audit-table-scroll" role="region" aria-label="Các trường dữ liệu thay đổi" tabindex="0"><table class="audit-table audit-change-table"><thead><tr><th>Trường dữ liệu</th><th>Trước thao tác</th><th>Sau thao tác</th></tr></thead><tbody>
+        @foreach (var change in changes) { <tr><th scope="row">@change.Name</th><td class="audit-before">@change.Before</td><td class="audit-after">@change.After</td></tr> }
+        @if (changes.Count == 0) { <tr><td colspan="3" class="audit-empty">Không có trường thay đổi có thể đối chiếu. Xem dữ liệu gốc bên dưới.</td></tr> }
+    </tbody></table></div></div></section>
+
+    <section class="audit-raw-grid" aria-label="Dữ liệu gốc"><div class="audit-raw-card"><h2>Trước thao tác</h2><pre>@AuditLogDisplay.Pretty(Model.BeforeData)</pre></div><div class="audit-raw-card"><h2>Sau thao tác</h2><pre>@AuditLogDisplay.Pretty(Model.AfterData)</pre></div></section>
+    <p class="audit-footnote">Bản ghi lịch sử chỉ được xem, không thể sửa hoặc xóa.</p>
+</div>

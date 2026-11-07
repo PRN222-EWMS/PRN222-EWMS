@@ -383,6 +383,7 @@ public partial class EwmsDbContext : DbContext
                 .HasDefaultValueSql("(sysutcdatetime())");
             entity.Property(e => e.CreatedByUserId).HasColumnName("CreatedByUserID");
             entity.Property(e => e.Note).HasMaxLength(1000);
+            entity.Property(e => e.CancelReason).HasMaxLength(1000);
             entity.Property(e => e.PerformedByUserId).HasColumnName("PerformedByUserID");
             entity.Property(e => e.PurchaseOrderId).HasColumnName("PurchaseOrderID");
             entity.Property(e => e.ReceiptCode)
@@ -435,6 +436,8 @@ public partial class EwmsDbContext : DbContext
 
             entity.Property(e => e.InboundItemId).HasColumnName("InboundItemID");
             entity.Property(e => e.ConditionNote).HasMaxLength(1000);
+            entity.Property(e => e.CaptureMethod).HasMaxLength(20).IsUnicode(false);
+            entity.Property(e => e.ScannedByUserId).HasColumnName("ScannedByUserID");
             entity.Property(e => e.InboundId).HasColumnName("InboundID");
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.PolineId).HasColumnName("POLineID");

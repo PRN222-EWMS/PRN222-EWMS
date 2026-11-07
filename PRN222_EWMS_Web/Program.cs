@@ -29,6 +29,8 @@ builder.Services.AddScoped<PRN222_EWMS_Web.Services.Purchasing.IWarehouseCapacit
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Purchasing.IPurchaseOrderService, PRN222_EWMS_Web.Services.Purchasing.PurchaseOrderService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.WarehouseStaff.IWarehouseStaffRepository, PRN222_EWMS_Web.Repositories.WarehouseStaff.WarehouseStaffRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.WarehouseStaff.IWarehouseStaffService, PRN222_EWMS_Web.Services.WarehouseStaff.WarehouseStaffService>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.WarehouseStaff.IInboundRepository, PRN222_EWMS_Web.Repositories.WarehouseStaff.InboundRepository>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.WarehouseStaff.IInboundService, PRN222_EWMS_Web.Services.WarehouseStaff.InboundService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAdminDashboardRepository, AdminDashboardRepository>();
 builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();

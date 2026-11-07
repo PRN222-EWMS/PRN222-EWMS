@@ -25,6 +25,8 @@ public partial class Inbound
 
     public string? Note { get; set; }
 
+    public string? CancelReason { get; set; }
+
     public byte[] RowVersion { get; set; } = null!;
 
     public virtual User CreatedByUser { get; set; } = null!;

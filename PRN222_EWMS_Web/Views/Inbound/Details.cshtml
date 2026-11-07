@@ -1,0 +1,50 @@
+@model PRN222_EWMS_Web.ViewModels.Inbound.InboundDetailViewModel
+@{ ViewData["Title"] = "Phiếu nhập " + Model.Code; var draft = Model.Status == "DRAFT"; }
+
+<div class="inbound-page inbound-detail-page">
+    <a asp-action="Index" class="inbound-back"><i class="bi bi-arrow-left" aria-hidden="true"></i> Phiếu nhập kho</a>
+    <header class="inbound-page-header inbound-detail-header">
+        <div class="inbound-detail-title"><p class="inbound-kicker">PHIẾU NHẬP KHO</p><h1>@Model.Code</h1><span class="inbound-status inbound-status-@Model.Status.ToLowerInvariant()">@(Model.Status switch { "DRAFT" => "Đang tiếp nhận", "DONE" => "Đã hoàn tất", "CANCELLED" => "Đã hủy", _ => Model.Status })</span></div>
+        @if (draft)
+        {
+            <div class="inbound-header-actions">
+                <button type="button" class="inbound-secondary" data-open-cancel>Hủy phiếu</button>
+                <form asp-action="Complete" asp-route-id="@Model.Id" method="post" data-confirm="Hoàn tất phiếu nhập và ghi nhận tồn kho?" data-submit-once><input type="hidden" name="version" value="@Model.Version" /><button class="inbound-primary">Hoàn tất phiếu nhập</button></form>
+            </div>
+        }
+    </header>
+    <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+    <section class="inbound-form-card inbound-overview-card"><div class="inbound-overview-grid"><div><small>Đơn mua</small><strong>@Model.PoCode</strong></div><div><small>Nhà cung cấp</small><strong>@Model.Supplier</strong></div><div><small>Kho nhận</small><strong>@Model.Warehouse</strong></div><div><small>Người tạo</small><strong>@Model.CreatedBy</strong></div><div><small>Ngày tạo</small><strong>@Model.CreatedAt.ToLocalTime().ToString("HH:mm dd/MM/yyyy")</strong></div><div><small>Hoàn tất</small><strong>@(Model.CompletedAt?.ToLocalTime().ToString("HH:mm dd/MM/yyyy") ?? "—")</strong></div></div>@if (!string.IsNullOrWhiteSpace(Model.Note)) { <p class="inbound-overview-note">@Model.Note</p> }@if (!string.IsNullOrWhiteSpace(Model.CancelReason)) { <p class="inbound-overview-note">Lý do hủy: @Model.CancelReason</p> }</section>
+
+    <section class="inbound-progress-section"><h2>Tiến độ tiếp nhận theo sản phẩm</h2><div class="inbound-progress-grid">@foreach (var line in Model.Lines) { <article class="inbound-progress-card"><h3>@line.ProductCode</h3><p>@line.ProductName</p><dl><div><dt>Đặt mua</dt><dd>@line.Ordered</dd></div><div><dt>Đã nhận chính thức</dt><dd>@line.Received</dd></div><div><dt>Trong phiếu này</dt><dd>@line.InThisDraft</dd></div><div><dt>Giữ ở DRAFT khác</dt><dd>@line.InOtherDrafts</dd></div><div><dt>Đóng thiếu</dt><dd>@line.Closed</dd></div><div><dt>Còn được nhận</dt><dd>@line.Available</dd></div></dl><progress max="@Math.Max(1, line.Ordered - line.Closed)" value="@Math.Min(line.Ordered - line.Closed, line.Received + line.InThisDraft + line.InOtherDrafts)"></progress></article> }</div></section>
+
+    <div class="inbound-work-grid">
+        <section class="inbound-serial-list"><h2>Serial đã tiếp nhận <span>@Model.Serials.Count(x => x.IsActive)</span></h2><p>Serial trong DRAFT chưa được ghi nhận vào tồn kho chính thức.</p>
+            @if (!Model.Serials.Any(x => x.IsActive)) { <div class="inbound-empty"><h3>Bắt đầu từ serial đầu tiên</h3><p>Chọn sản phẩm, tháng/năm sản xuất rồi quét camera, tải ảnh tem hoặc nhập tay.</p></div> }
+            else { <div class="inbound-serial-cards">@foreach (var item in Model.Serials.Where(x => x.IsActive)) { <article class="inbound-serial-card"><div><strong>@item.Serial</strong><p>@item.Product · @item.Month/@item.Year · @item.Condition</p><small>@(item.CaptureMethod ?? "Chưa ghi nhận") · @(item.ScannedBy ?? "—") · @item.ScannedAt.ToLocalTime().ToString("HH:mm dd/MM/yyyy")</small>@if (!string.IsNullOrWhiteSpace(item.Note)) { <p>@item.Note</p> }</div>@if (draft) { <div class="inbound-serial-actions"><details><summary>Sửa Serial</summary><form asp-action="UpdateItem" asp-route-id="@Model.Id" asp-route-itemId="@item.Id" method="post" class="inbound-edit-form"><input type="hidden" name="Version" value="@Model.Version" /><label>Sản phẩm<select name="LineId">@foreach (var line in Model.Lines) { <option value="@line.Id" selected="@(item.LineId == line.Id)">@line.ProductCode</option> }</select></label><label>Serial<input name="Serial" value="@item.Serial" required maxlength="100" /></label><label>Tháng<input type="number" name="Month" min="1" max="12" value="@item.Month" required /></label><label>Năm<input type="number" name="Year" min="1900" value="@item.Year" required /></label><label>Tình trạng<select name="Condition"><option value="GOOD" selected="@(item.Condition == "GOOD")">GOOD</option><option value="DAMAGED" selected="@(item.Condition == "DAMAGED")">DAMAGED</option></select></label><label>Ghi chú<input name="ConditionNote" value="@item.Note" maxlength="1000" /></label><input type="hidden" name="CaptureMethod" value="@(item.CaptureMethod ?? "MANUAL")" /><button class="inbound-primary">Lưu thay đổi</button></form></details><form asp-action="RemoveItem" asp-route-id="@Model.Id" asp-route-itemId="@item.Id" method="post" class="inbound-remove-form" data-confirm="Hủy Serial nháp này?"><input type="hidden" name="version" value="@Model.Version" /><button class="inbound-danger-link">Hủy Serial</button></form></div> }</article> }</div> }
+        </section>
+
+        @if (draft)
+        {
+            <aside class="inbound-form-card inbound-receive-panel"><h2>Tiếp nhận Serial</h2><form asp-action="AddItem" asp-route-id="@Model.Id" method="post" class="inbound-serial-form" data-submit-once><input type="hidden" asp-for="NewSerial.Version" value="@Model.Version" />
+                <fieldset><legend>1. Thông tin sản phẩm</legend><label asp-for="NewSerial.LineId">Sản phẩm</label><select asp-for="NewSerial.LineId" required><option value="">Chọn sản phẩm</option>@foreach (var line in Model.Lines.Where(x => x.Available > 0)) { <option value="@line.Id">@line.ProductCode · @line.ProductName · còn @line.Available</option> }</select></fieldset>
+                <fieldset><legend>2. Thông tin sản xuất</legend><div class="inbound-two"><label asp-for="NewSerial.Month">Tháng sản xuất<select asp-for="NewSerial.Month" required><option value="">Tháng</option>@for (var month = 1; month <= 12; month++) { <option value="@month">@month</option> }</select></label><label asp-for="NewSerial.Year">Năm sản xuất<input asp-for="NewSerial.Year" type="number" min="1900" required /></label></div><label class="inbound-check"><input type="checkbox" data-keep-production checked /> Giữ tháng/năm cho Serial tiếp theo</label></fieldset>
+                <fieldset><legend>3. Nhận diện Serial</legend><p>Quét hoặc đọc ảnh chỉ điền Serial. Kiểm tra kết quả rồi bấm thêm để lưu.</p><div class="inbound-capture-actions"><button type="button" class="inbound-secondary" data-camera-open>Quét bằng camera</button><label class="inbound-secondary inbound-upload">Tải ảnh tem<input type="file" accept="image/jpeg,image/png,image/webp" data-image-upload hidden /></label><button type="button" class="inbound-secondary" data-capture-retry title="Chỉ xóa ô Serial để bạn quét hoặc nhập lại">Xóa Serial</button></div><small>JPEG, PNG, WebP · tối đa 10 MB · chọn ảnh hoặc chụp ảnh từ điện thoại.</small><div class="inbound-camera" data-camera-box hidden><video data-camera-video playsinline autoplay muted></video><span aria-hidden="true"></span><button type="button" class="inbound-secondary" data-camera-close>Đóng camera</button></div><p data-capture-message class="inbound-capture-message" aria-live="polite"></p><div data-candidates></div><label asp-for="NewSerial.Serial">Serial</label><input asp-for="NewSerial.Serial" maxlength="100" required autocomplete="off" data-serial-input /><small data-capture-source>Nguồn: Nhập tay · Enter để thêm nhanh.</small><input type="hidden" asp-for="NewSerial.CaptureMethod" value="MANUAL" data-capture-method /></fieldset>
+                <fieldset><legend>4. Tình trạng hàng</legend><label asp-for="NewSerial.Condition">Tình trạng</label><select asp-for="NewSerial.Condition"><option value="GOOD">GOOD — Hàng tốt</option><option value="DAMAGED">DAMAGED — Hàng hỏng</option></select><label asp-for="NewSerial.ConditionNote">Ghi chú tình trạng</label><textarea asp-for="NewSerial.ConditionNote" maxlength="1000" rows="2"></textarea><small>Hàng hỏng cần ghi chú và sẽ được cách ly.</small></fieldset>
+                <button class="inbound-primary" type="submit">Xác nhận thêm Serial</button>
+            </form></aside>
+        }
+    </div>
+
+    @if (draft)
+    {
+        <dialog class="inbound-cancel-dialog" data-cancel-dialog aria-labelledby="cancelTitle">
+            <h2 id="cancelTitle">Hủy phiếu nhập?</h2><p>Phiếu nháp và các Serial đã tiếp nhận trong phiếu sẽ bị hủy.</p>
+            <form asp-action="Cancel" asp-route-id="@Model.Id" method="post" data-submit-once><input type="hidden" name="version" value="@Model.Version" /><label for="cancelReason">Lý do hủy</label><textarea id="cancelReason" name="reason" required maxlength="900" rows="3"></textarea><div class="inbound-dialog-actions"><button type="button" class="inbound-secondary" data-close-cancel>Quay lại</button><button type="submit" class="inbound-danger-button">Xác nhận hủy phiếu</button></div></form>
+        </dialog>
+    }
+</div>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
+<script src="https://unpkg.com/@@zxing/browser@0.2.1" defer></script>
+<script src="~/js/inbound.js" asp-append-version="true" defer></script>
