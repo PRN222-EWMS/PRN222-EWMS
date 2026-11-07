@@ -107,7 +107,8 @@
                     var active = string.Equals(controller, item.Controller, StringComparison.OrdinalIgnoreCase)
                               && (string.Equals(action, item.Action, StringComparison.OrdinalIgnoreCase)
                                   || (item.Controller == "Warehouse" && item.Action == "Index")
-                                  || (item.Action == "Index" && (action == "Details" || action == "Edit")));
+                                  || (item.Action == "Index" && (action == "Details" || action == "Edit")))
+                              || (item.Controller == "Home" && item.Action == "Index" && controller == "PurchasingDashboard");
                     <a class="ewms-nav-link @(active ? "is-active" : "")"
                        href="@($"/{item.Controller}/{item.Action}")"
                        aria-current="@(active ? "page" : null)"
