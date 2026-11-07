@@ -14,8 +14,7 @@
     {
         ("Không gian làm việc", new[]
         {
-            ("Tổng quan", "bi-grid-1x2", "Home", "Index", Array.Empty<string>()),
-            ("Thông báo", "bi-bell", "Notice", "Index", Array.Empty<string>())
+            ("Tổng quan", "bi-grid-1x2", "Home", "Index", Array.Empty<string>())
         }),
         ("Quản trị", new[]
         {
@@ -94,7 +93,7 @@
                 .Where(i => i.Roles.Length == 0 || i.Roles.Contains(role, StringComparer.OrdinalIgnoreCase))
                 // Keep CEO's scope and include the merged modules available to Manager.
                 .Where(i => !isCeo || (i.Action == "Index" && (i.Controller is "Home" or "Warehouse")))
-                .Where(i => !isManager || (i.Action == "Index" && (i.Controller is "Home" or "Warehouse" or "PurchaseOrder" or "SalesOrder" or "Inbound" or "Outbound" or "Notice" or "Transfer")))
+                .Where(i => !isManager || (i.Action == "Index" && (i.Controller is "Home" or "Warehouse" or "PurchaseOrder" or "SalesOrder" or "Inbound" or "Outbound" or "Transfer")))
                 .ToArray();
             if (allowedItems.Length == 0) { continue; }
             <div class="ewms-nav-section">
