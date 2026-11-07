@@ -1,0 +1,31 @@
+@model PRN222_EWMS_Web.ViewModels.Admin.AuditLogListViewModel
+@{ ViewData["Title"] = "Nhật ký hoạt động"; }
+
+<div class="workspace-heading"><div><p class="eyebrow">QUẢN TRỊ</p><h1>Nhật ký hoạt động</h1><p class="muted">Tra cứu các thay đổi được ghi trong AuditLog.</p></div></div>
+<section class="workspace-card">
+    <form method="get" asp-action="Index" class="admin-log-filters">
+        <div><label for="tableName">Bảng dữ liệu</label><input id="tableName" name="tableName" value="@Model.TableName" maxlength="128" placeholder="Ví dụ: User" /></div>
+        <div><label for="actionType">Hành động</label><select id="actionType" name="actionType"><option value="">Tất cả</option><option value="INSERT" selected="@(Model.ActionType == "INSERT")">Thêm</option><option value="UPDATE" selected="@(Model.ActionType == "UPDATE")">Sửa</option><option value="DELETE" selected="@(Model.ActionType == "DELETE")">Xóa</option></select></div>
+        <button class="workspace-button" type="submit">Lọc</button><a class="workspace-link" asp-action="Index">Xóa lọc</a>
+    </form>
+    <p class="muted small mt-3">@Model.TotalCount bản ghi</p>
+    @if (Model.Logs.Count == 0) { <p class="muted py-4">Không có bản ghi phù hợp.</p> }
+    else
+    {
+        <div class="table-wrap"><table class="workspace-table"><thead><tr><th>Thời gian</th><th>Người thực hiện</th><th>Hành động</th><th>Bảng</th><th>Mã đối tượng</th><th></th></tr></thead><tbody>
+        @foreach (var log in Model.Logs)
+        {
+            <tr><td>@log.OccurredAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</td><td>@(log.ActorUser?.FullName ?? log.DatabasePrincipal)</td><td>@log.ActionType</td><td>@log.TableName</td><td>@log.EntityKey</td><td><a asp-action="Details" asp-route-id="@log.AuditId">Chi tiết</a></td></tr>
+        }
+        </tbody></table></div>
+    }
+    @if (Model.TotalPages > 1)
+    {
+        <nav class="d-flex justify-content-between align-items-center mt-3" aria-label="Phân trang nhật ký">
+            <span class="muted">Trang @Model.Page / @Model.TotalPages</span><div class="d-flex gap-2">
+                @if (Model.Page > 1) { <a class="workspace-link" asp-action="Index" asp-route-tableName="@Model.TableName" asp-route-actionType="@Model.ActionType" asp-route-page="@(Model.Page - 1)">Trước</a> }
+                @if (Model.Page < Model.TotalPages) { <a class="workspace-link" asp-action="Index" asp-route-tableName="@Model.TableName" asp-route-actionType="@Model.ActionType" asp-route-page="@(Model.Page + 1)">Sau</a> }
+            </div>
+        </nav>
+    }
+</section>

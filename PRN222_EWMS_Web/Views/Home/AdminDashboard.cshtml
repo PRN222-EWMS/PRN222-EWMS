@@ -1,0 +1,44 @@
+@model PRN222_EWMS_Web.ViewModels.Admin.AdminDashboardViewModel
+@{ ViewData["Title"] = "Tổng quan quản trị"; }
+
+<div class="workspace-heading">
+    <div><p class="eyebrow">QUẢN TRỊ</p><h1>Tổng quan</h1><p class="muted">Tình trạng tài khoản và hoạt động gần đây trong hệ thống.</p></div>
+    <a class="workspace-button" asp-controller="User" asp-action="Create"><i class="bi bi-person-plus me-2" aria-hidden="true"></i>Tạo tài khoản</a>
+</div>
+
+<div class="admin-stat-grid">
+    <a class="admin-stat" asp-controller="AccountList" asp-action="Index"><span>Tổng tài khoản</span><strong>@Model.TotalAccounts</strong><i class="bi bi-people" aria-hidden="true"></i></a>
+    <a class="admin-stat" asp-controller="AccountList" asp-action="Index" asp-route-status="ACTIVE"><span>Đang hoạt động</span><strong>@Model.ActiveAccounts</strong><i class="bi bi-person-check" aria-hidden="true"></i></a>
+    <a class="admin-stat" asp-controller="AccountList" asp-action="Index" asp-route-status="LOCKED"><span>Bị khóa</span><strong>@Model.LockedAccounts</strong><i class="bi bi-person-lock" aria-hidden="true"></i></a>
+    <div class="admin-stat"><span>Mới trong 30 ngày</span><strong>@Model.NewAccounts</strong><i class="bi bi-person-plus" aria-hidden="true"></i></div>
+</div>
+
+<div class="admin-dashboard-grid">
+    <section class="workspace-card">
+        <h2 class="h5">Cần chú ý</h2>
+        <p class="muted mb-2">Nhân viên kho chưa được phân kho</p>
+        <strong class="admin-attention-count">@Model.UnassignedWarehouseStaff</strong>
+        <div class="mt-3"><a asp-controller="AccountList" asp-action="Index" class="workspace-link">Xem tài khoản <i class="bi bi-arrow-right" aria-hidden="true"></i></a></div>
+    </section>
+    <section class="workspace-card">
+        <h2 class="h5">Truy cập nhanh</h2>
+        <div class="d-flex flex-wrap gap-2 mt-3">
+            <a class="workspace-button" asp-controller="AccountList" asp-action="Index">Danh sách tài khoản</a>
+            <a class="workspace-button" asp-controller="AuditLog" asp-action="Index">Nhật ký hoạt động</a>
+        </div>
+    </section>
+</div>
+
+<section class="workspace-card mt-4">
+    <div class="d-flex justify-content-between align-items-center gap-3 mb-3"><h2 class="h5 mb-0">Hoạt động gần đây</h2><a asp-controller="AuditLog" asp-action="Index" class="workspace-link">Xem tất cả</a></div>
+    @if (Model.RecentActivity.Count == 0) { <p class="muted mb-0">Chưa có hoạt động được ghi nhận.</p> }
+    else
+    {
+        <div class="table-wrap"><table class="workspace-table"><thead><tr><th>Thời gian</th><th>Người thực hiện</th><th>Hành động</th><th>Đối tượng</th><th></th></tr></thead><tbody>
+        @foreach (var log in Model.RecentActivity)
+        {
+            <tr><td>@log.OccurredAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td><td>@(log.ActorUser?.FullName ?? log.DatabasePrincipal)</td><td>@log.ActionType</td><td>@log.TableName #@log.EntityKey</td><td><a asp-controller="AuditLog" asp-action="Details" asp-route-id="@log.AuditId">Chi tiết</a></td></tr>
+        }
+        </tbody></table></div>
+    }
+</section>

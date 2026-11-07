@@ -1,0 +1,20 @@
+@model PRN222_EWMS_Web.Models.AuditLog
+@{ ViewData["Title"] = "Chi tiết nhật ký"; }
+
+<div class="workspace-heading"><div><p class="eyebrow">QUẢN TRỊ / NHẬT KÝ HOẠT ĐỘNG</p><h1>Chi tiết #@Model.AuditId</h1></div><a class="workspace-link" asp-action="Index"><i class="bi bi-arrow-left" aria-hidden="true"></i> Quay lại</a></div>
+<section class="workspace-card">
+    <dl class="admin-log-detail">
+        <div><dt>Thời gian</dt><dd>@Model.OccurredAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</dd></div>
+        <div><dt>Người thực hiện</dt><dd>@(Model.ActorUser?.FullName ?? "Không xác định")</dd></div>
+        <div><dt>Tài khoản database</dt><dd>@Model.DatabasePrincipal</dd></div>
+        <div><dt>Hành động</dt><dd>@Model.ActionType</dd></div>
+        <div><dt>Bảng</dt><dd>@Model.TableName</dd></div>
+        <div><dt>Mã đối tượng</dt><dd>@Model.EntityKey</dd></div>
+        <div><dt>Lý do</dt><dd>@(Model.Reason ?? "—")</dd></div>
+        <div><dt>Request ID</dt><dd>@(Model.RequestId ?? "—")</dd></div>
+    </dl>
+    <div class="admin-log-payloads">
+        <div><h2 class="h5">Dữ liệu trước</h2><pre>@(Model.BeforeData ?? "Không có dữ liệu")</pre></div>
+        <div><h2 class="h5">Dữ liệu sau</h2><pre>@(Model.AfterData ?? "Không có dữ liệu")</pre></div>
+    </div>
+</section>
