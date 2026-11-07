@@ -35,6 +35,7 @@
         ("Vận hành kho", new[]
         {
             ("Nhập kho", "bi-box-arrow-in-down", "Inbound", "Index", new[] { "WAREHOUSE_STAFF", "MANAGER" }),
+            ("Chờ Putaway", "bi-boxes", "Inbound", "PendingPutaway", new[] { "WAREHOUSE_STAFF" }),
             ("Xuất kho", "bi-box-arrow-up", "Outbound", "Index", new[] { "WAREHOUSE_STAFF", "MANAGER" }),
             ("Chuyển kho", "bi-arrow-left-right", "Transfer", "Index", new[] { "MANAGER", "WAREHOUSE_STAFF" }),
             ("Kiểm kê", "bi-clipboard-check", "Stocktake", "Index", new[] { "MANAGER", "WAREHOUSE_STAFF" }),
@@ -65,7 +66,9 @@
                 ("Dashboard", "bi-grid-1x2", "WarehouseDashboard", "Index", Array.Empty<string>())
             }),
             ("Nhập kho", new[] {
-                ("Đơn mua cần nhận", "bi-box-arrow-in-down", "Inbound", "PurchaseOrders", Array.Empty<string>())
+                ("Phiếu nhập kho", "bi-box-arrow-in-down", "Inbound", "Index", Array.Empty<string>()),
+                ("Đơn mua cần nhận", "bi-bag-check", "Inbound", "PurchaseOrders", Array.Empty<string>()),
+                ("Chờ Putaway", "bi-boxes", "Inbound", "PendingPutaway", Array.Empty<string>())
             }),
             ("Đơn bán hàng", new[] {
                 ("Danh sách đơn bán hàng", "bi-receipt", "SalesOrder", "Index", Array.Empty<string>())

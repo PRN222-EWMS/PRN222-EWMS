@@ -27,6 +27,10 @@ public partial class InboundItem
 
     public bool IsActive { get; set; }
 
+    public string? CaptureMethod { get; set; }
+
+    public int? ScannedByUserId { get; set; }
+
     public long PurchaseOrderId { get; set; }
 
     public int ProductId { get; set; }

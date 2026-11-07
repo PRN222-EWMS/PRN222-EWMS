@@ -1,31 +1,38 @@
-@model PRN222_EWMS_Web.ViewModels.Admin.AuditLogListViewModel
-@{ ViewData["Title"] = "Nhật ký hoạt động"; }
+@using PRN222_EWMS_Web.ViewModels.Admin
+@model AuditLogListViewModel
+@{ ViewData["Title"] = "Lịch sử thao tác"; var firstPage = Math.Max(1, Math.Min(Model.Page - 2, Model.TotalPages - 4)); var lastPage = Math.Min(Model.TotalPages, firstPage + 4); }
 
-<div class="workspace-heading"><div><p class="eyebrow">QUẢN TRỊ</p><h1>Nhật ký hoạt động</h1><p class="muted">Tra cứu các thay đổi được ghi trong AuditLog.</p></div></div>
-<section class="workspace-card">
-    <form method="get" asp-action="Index" class="admin-log-filters">
-        <div><label for="tableName">Bảng dữ liệu</label><input id="tableName" name="tableName" value="@Model.TableName" maxlength="128" placeholder="Ví dụ: User" /></div>
-        <div><label for="actionType">Hành động</label><select id="actionType" name="actionType"><option value="">Tất cả</option><option value="INSERT" selected="@(Model.ActionType == "INSERT")">Thêm</option><option value="UPDATE" selected="@(Model.ActionType == "UPDATE")">Sửa</option><option value="DELETE" selected="@(Model.ActionType == "DELETE")">Xóa</option></select></div>
-        <button class="workspace-button" type="submit">Lọc</button><a class="workspace-link" asp-action="Index">Xóa lọc</a>
+<div class="audit-page">
+    <header class="audit-hero"><div><p class="audit-eyebrow">LỊCH SỬ HỆ THỐNG</p><h1>Mỗi thao tác. Một dấu vết.</h1><p>Đối chiếu ai đã làm gì, vào lúc nào và trên dữ liệu nào.</p></div><div class="audit-hero-icon" aria-hidden="true"><i class="bi bi-journal-text"></i></div></header>
+    <div class="audit-note"><i class="bi bi-info-circle" aria-hidden="true"></i><span>Lịch sử chỉ đọc. Audit Log ghi nhận thay đổi dữ liệu; lịch sử di chuyển hàng hóa được quản lý riêng.</span></div>
+
+    <form asp-action="Index" method="get" class="audit-filter-card" aria-label="Bộ lọc lịch sử thao tác">
+        <div class="audit-filter-grid">
+            <label>Nhân viên<select name="actorUserId"><option value="">Tất cả nhân viên</option>@foreach (var actor in Model.Actors) { <option value="@actor.Id" selected="@(Model.ActorUserId == actor.Id)">@actor.Name</option> }</select></label>
+            <label>Nhóm nghiệp vụ<select name="tableName"><option value="">Tất cả nghiệp vụ</option>@foreach (var table in Model.Tables) { <option value="@table" selected="@(Model.TableName == table)">@AuditLogDisplay.Group(table) · @table</option> }</select></label>
+            <label>Hành động<select name="actionType"><option value="">Tất cả hành động</option><option value="INSERT" selected="@(Model.ActionType == "INSERT")">Tạo mới</option><option value="UPDATE" selected="@(Model.ActionType == "UPDATE")">Cập nhật</option><option value="DELETE" selected="@(Model.ActionType == "DELETE")">Xóa</option></select></label>
+            <label>Mã chứng từ<input name="documentCode" value="@Model.DocumentCode" maxlength="100" placeholder="Tìm mã PO, phiếu nhập..." /></label>
+            <label>Từ ngày<input type="date" name="fromDate" value="@Model.FromDate?.ToString("yyyy-MM-dd")" /></label>
+            <label>Đến ngày<input type="date" name="toDate" value="@Model.ToDate?.ToString("yyyy-MM-dd")" /></label>
+        </div>
+        <div class="audit-filter-footer"><small>Thời gian theo giờ Việt Nam (UTC+7).</small><div><a asp-action="Index" class="audit-button audit-button-quiet">Đặt lại</a><button type="submit" class="audit-button audit-button-primary">Áp dụng bộ lọc <i class="bi bi-arrow-right" aria-hidden="true"></i></button></div></div>
     </form>
-    <p class="muted small mt-3">@Model.TotalCount bản ghi</p>
-    @if (Model.Logs.Count == 0) { <p class="muted py-4">Không có bản ghi phù hợp.</p> }
-    else
-    {
-        <div class="table-wrap"><table class="workspace-table"><thead><tr><th>Thời gian</th><th>Người thực hiện</th><th>Hành động</th><th>Bảng</th><th>Mã đối tượng</th><th></th></tr></thead><tbody>
+
+    <div class="audit-section-heading"><h2>Lịch sử thao tác</h2><span>@Model.TotalCount bản ghi</span></div>
+    <div class="audit-table-card"><div class="audit-table-scroll" role="region" aria-label="Bảng lịch sử thao tác" tabindex="0"><table class="audit-table"><thead><tr><th>Thời điểm</th><th>Người thực hiện</th><th>Nghiệp vụ / Hành động</th><th>Chứng từ</th><th>Kết quả</th><th><span class="visually-hidden">Chi tiết</span></th></tr></thead><tbody>
         @foreach (var log in Model.Logs)
         {
-            <tr><td>@log.OccurredAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</td><td>@(log.ActorUser?.FullName ?? log.DatabasePrincipal)</td><td>@log.ActionType</td><td>@log.TableName</td><td>@log.EntityKey</td><td><a asp-action="Details" asp-route-id="@log.AuditId">Chi tiết</a></td></tr>
+            <tr><td class="audit-time">@AuditLogDisplay.ToVietnam(log.OccurredAt).ToString("HH:mm:ss dd/MM/yyyy")</td><td><strong>@(log.ActorUser?.FullName ?? log.DatabasePrincipal)</strong><small>@(log.ActorUserId.HasValue ? $"ID {log.ActorUserId}" : "Hệ thống")</small></td><td><strong>@AuditLogDisplay.Action(log.ActionType)</strong><small>@AuditLogDisplay.Group(log.TableName) · @log.TableName</small></td><td class="audit-document"><strong>@AuditLogDisplay.Document(log)</strong><small>@log.TableName · #@log.EntityKey</small></td><td><span class="audit-success">Thành công</span></td><td><a asp-action="Details" asp-route-id="@log.AuditId" class="audit-detail-link">Xem chi tiết <i class="bi bi-arrow-right" aria-hidden="true"></i></a></td></tr>
         }
-        </tbody></table></div>
-    }
-    @if (Model.TotalPages > 1)
-    {
-        <nav class="d-flex justify-content-between align-items-center mt-3" aria-label="Phân trang nhật ký">
-            <span class="muted">Trang @Model.Page / @Model.TotalPages</span><div class="d-flex gap-2">
-                @if (Model.Page > 1) { <a class="workspace-link" asp-action="Index" asp-route-tableName="@Model.TableName" asp-route-actionType="@Model.ActionType" asp-route-page="@(Model.Page - 1)">Trước</a> }
-                @if (Model.Page < Model.TotalPages) { <a class="workspace-link" asp-action="Index" asp-route-tableName="@Model.TableName" asp-route-actionType="@Model.ActionType" asp-route-page="@(Model.Page + 1)">Sau</a> }
-            </div>
-        </nav>
-    }
-</section>
+        @if (Model.Logs.Count == 0) { <tr><td colspan="6" class="audit-empty">Không có bản ghi phù hợp với bộ lọc.</td></tr> }
+    </tbody></table></div></div>
+    <nav class="audit-pagination" aria-label="Phân trang lịch sử thao tác"><span>Trang @Model.Page / @Model.TotalPages</span><div>
+        @if (Model.Page > 1) { <a asp-action="Index" asp-route-actorUserId="@Model.ActorUserId" asp-route-tableName="@Model.TableName" asp-route-actionType="@Model.ActionType" asp-route-documentCode="@Model.DocumentCode" asp-route-fromDate="@Model.FromDate" asp-route-toDate="@Model.ToDate" asp-route-page="@(Model.Page - 1)" aria-label="Trang trước"><i class="bi bi-chevron-left"></i></a> }
+        @for (var number = firstPage; number <= lastPage; number++)
+        {
+            if (number == Model.Page) { <span aria-current="page">@number</span> }
+            else { <a asp-action="Index" asp-route-actorUserId="@Model.ActorUserId" asp-route-tableName="@Model.TableName" asp-route-actionType="@Model.ActionType" asp-route-documentCode="@Model.DocumentCode" asp-route-fromDate="@Model.FromDate" asp-route-toDate="@Model.ToDate" asp-route-page="@number">@number</a> }
+        }
+        @if (Model.Page < Model.TotalPages) { <a asp-action="Index" asp-route-actorUserId="@Model.ActorUserId" asp-route-tableName="@Model.TableName" asp-route-actionType="@Model.ActionType" asp-route-documentCode="@Model.DocumentCode" asp-route-fromDate="@Model.FromDate" asp-route-toDate="@Model.ToDate" asp-route-page="@(Model.Page + 1)" aria-label="Trang sau"><i class="bi bi-chevron-right"></i></a> }
+    </div></nav>
+</div>

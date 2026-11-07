@@ -1,0 +1,52 @@
+@model PRN222_EWMS_Web.ViewModels.Inbound.InboundListViewModel
+@{ ViewData["Title"] = "Phiếu nhập kho"; }
+
+<div class="inbound-page inbound-list-page">
+    <header class="inbound-page-header">
+        <div><p class="inbound-kicker">INBOUND MANAGEMENT</p><h1>Phiếu nhập kho</h1><p>Tiếp nhận từng thiết bị. Theo dõi từng serial.</p></div>
+        <a class="inbound-primary" asp-action="Create"><i class="bi bi-plus-lg" aria-hidden="true"></i> Tạo phiếu nhập</a>
+    </header>
+
+    <form method="get" class="inbound-list-filters" aria-label="Lọc phiếu nhập">
+        <label class="inbound-search">Tìm mã phiếu / PO<input name="search" value="@Model.Search" placeholder="IN-... hoặc PO-..." /></label>
+        <label>Trạng thái<select name="status"><option value="">Tất cả</option><option value="DRAFT" selected="@(Model.Status == "DRAFT")">Đang tiếp nhận</option><option value="DONE" selected="@(Model.Status == "DONE")">Đã hoàn tất</option><option value="CANCELLED" selected="@(Model.Status == "CANCELLED")">Đã hủy</option></select></label>
+        <label>Từ ngày<input type="date" name="fromDate" value="@Model.FromDate?.ToString("yyyy-MM-dd")" /></label>
+        <label>Đến ngày<input type="date" name="toDate" value="@Model.ToDate?.ToString("yyyy-MM-dd")" /></label>
+        <button class="inbound-primary inbound-filter-button" type="submit"><i class="bi bi-funnel" aria-hidden="true"></i> Lọc</button>
+    </form>
+
+    <div class="inbound-list-summary"><p class="inbound-count">@Model.TotalItems phiếu nhập trong kho được phân công</p><span>Trang @Model.Page / @Model.TotalPages</span></div>
+    <div class="inbound-receipt-list">
+        @if (Model.Items.Count == 0)
+        {
+            <div class="inbound-empty"><i class="bi bi-box-seam" aria-hidden="true"></i><h2>Chưa có phiếu nhập</h2><p>Thử thay đổi bộ lọc hoặc tạo phiếu nhập mới.</p></div>
+        }
+        @foreach (var item in Model.Items)
+        {
+            <article class="inbound-receipt-card">
+                <div class="inbound-receipt-main"><a asp-action="Details" asp-route-id="@item.Id" class="inbound-receipt-code">@item.Code</a><p>@item.PoCode · @item.Supplier</p><p>@item.Warehouse</p></div>
+                <div class="inbound-receipt-state"><span class="inbound-status inbound-status-@item.Status.ToLowerInvariant()">@(item.Status switch { "DRAFT" => "Đang tiếp nhận", "DONE" => "Đã hoàn tất", "CANCELLED" => "Đã hủy", _ => item.Status })</span><p>@item.Received serial / @item.Ordered đặt mua</p></div>
+                <div class="inbound-receipt-meta"><p>Tạo: @item.CreatedAt.ToLocalTime().ToString("HH:mm:ss dd/MM/yyyy")</p><p>@item.CreatedBy</p>@if (item.CompletedAt.HasValue) { <p>Hoàn tất: @item.CompletedAt.Value.ToLocalTime().ToString("HH:mm:ss dd/MM/yyyy")</p> }</div>
+                <a asp-action="Details" asp-route-id="@item.Id" class="inbound-secondary inbound-receipt-action">@(item.Status == "DRAFT" ? "Tiếp tục" : "Chi tiết") <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+            </article>
+        }
+    </div>
+    @{
+        var firstPage = Math.Max(1, Math.Min(Model.Page - 2, Model.TotalPages - 4));
+        var lastPage = Math.Min(Model.TotalPages, firstPage + 4);
+    }
+    <nav class="inbound-pagination" aria-label="Phân trang phiếu nhập">
+        <span>Hiển thị @Model.Items.Count / @Model.TotalItems phiếu</span>
+        <div class="inbound-pagination-links">
+            @if (Model.Page > 1) { <a asp-action="Index" asp-route-search="@Model.Search" asp-route-status="@Model.Status" asp-route-fromDate="@Model.FromDate" asp-route-toDate="@Model.ToDate" asp-route-page="@(Model.Page - 1)" aria-label="Trang trước"><i class="bi bi-chevron-left" aria-hidden="true"></i></a> }
+            else { <span class="is-disabled" aria-hidden="true"><i class="bi bi-chevron-left"></i></span> }
+            @for (var number = firstPage; number <= lastPage; number++)
+            {
+                if (number == Model.Page) { <span class="is-current" aria-current="page">@number</span> }
+                else { <a asp-action="Index" asp-route-search="@Model.Search" asp-route-status="@Model.Status" asp-route-fromDate="@Model.FromDate" asp-route-toDate="@Model.ToDate" asp-route-page="@number">@number</a> }
+            }
+            @if (Model.Page < Model.TotalPages) { <a asp-action="Index" asp-route-search="@Model.Search" asp-route-status="@Model.Status" asp-route-fromDate="@Model.FromDate" asp-route-toDate="@Model.ToDate" asp-route-page="@(Model.Page + 1)" aria-label="Trang sau"><i class="bi bi-chevron-right" aria-hidden="true"></i></a> }
+            else { <span class="is-disabled" aria-hidden="true"><i class="bi bi-chevron-right"></i></span> }
+        </div>
+    </nav>
+</div>

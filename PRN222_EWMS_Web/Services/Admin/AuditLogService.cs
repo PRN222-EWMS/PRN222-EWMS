@@ -8,21 +8,26 @@ public class AuditLogService(IAuditLogRepository repository) : IAuditLogService
 {
     private const int PageSize = 20;
 
-    public async Task<AuditLogListViewModel> GetPageAsync(string? tableName, string? actionType, int page)
+    public async Task<AuditLogListViewModel> GetPageAsync(AuditLogFilter filter)
     {
-        tableName = string.IsNullOrWhiteSpace(tableName) ? null : tableName.Trim();
-        actionType = string.IsNullOrWhiteSpace(actionType) ? null : actionType.Trim().ToUpperInvariant();
-        if (tableName?.Length > 128 || (actionType is not null && actionType is not ("INSERT" or "UPDATE" or "DELETE")))
+        filter.TableName = string.IsNullOrWhiteSpace(filter.TableName) ? null : filter.TableName.Trim();
+        filter.ActionType = string.IsNullOrWhiteSpace(filter.ActionType) ? null : filter.ActionType.Trim().ToUpperInvariant();
+        filter.DocumentCode = string.IsNullOrWhiteSpace(filter.DocumentCode) ? null : filter.DocumentCode.Trim();
+        if (filter.TableName?.Length > 128 || filter.DocumentCode?.Length > 100 || filter.ActorUserId < 1
+            || (filter.ActionType is not null && filter.ActionType is not ("INSERT" or "UPDATE" or "DELETE"))
+            || filter.FromDate > filter.ToDate)
             throw new ArgumentException("Bộ lọc nhật ký không hợp lệ.");
 
-        var totalCount = await repository.CountAsync(tableName, actionType);
+        var totalCount = await repository.CountAsync(filter);
         var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)PageSize));
-        page = Math.Clamp(page, 1, totalPages);
+        var page = Math.Clamp(filter.Page, 1, totalPages);
         return new AuditLogListViewModel
         {
-            TableName = tableName, ActionType = actionType, Page = page,
+            ActorUserId = filter.ActorUserId, TableName = filter.TableName, ActionType = filter.ActionType,
+            DocumentCode = filter.DocumentCode, FromDate = filter.FromDate, ToDate = filter.ToDate, Page = page,
             TotalPages = totalPages, TotalCount = totalCount,
-            Logs = await repository.GetPageAsync(tableName, actionType, page, PageSize)
+            Logs = await repository.GetPageAsync(filter, page, PageSize),
+            Actors = await repository.GetActorsAsync(), Tables = await repository.GetTablesAsync()
         };
     }
 

@@ -5,6 +5,6 @@ namespace PRN222_EWMS_Web.Services.Admin;
 
 public interface IAuditLogService
 {
-    Task<AuditLogListViewModel> GetPageAsync(string? tableName, string? actionType, int page);
+    Task<AuditLogListViewModel> GetPageAsync(AuditLogFilter filter);
     Task<AuditLog?> GetDetailsAsync(long id);
 }

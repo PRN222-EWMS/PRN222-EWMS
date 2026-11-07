@@ -1,15 +1,16 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PRN222_EWMS_Web.Services.Admin;
+using PRN222_EWMS_Web.ViewModels.Admin;
 
 namespace PRN222_EWMS_Web.Controllers.Admin;
 
 [Authorize(Roles = "ADMIN")]
 public class AuditLogController(IAuditLogService auditLogs) : Controller
 {
-    public async Task<IActionResult> Index(string? tableName, string? actionType, int page = 1)
+    public async Task<IActionResult> Index([FromQuery] AuditLogFilter filter)
     {
-        try { return View(await auditLogs.GetPageAsync(tableName, actionType, page)); }
+        try { return View(await auditLogs.GetPageAsync(filter)); }
         catch (ArgumentException) { return BadRequest(); }
     }
 
