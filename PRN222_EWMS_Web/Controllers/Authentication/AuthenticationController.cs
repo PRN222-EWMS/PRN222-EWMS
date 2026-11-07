@@ -6,14 +6,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using PRN222_EWMS_Web.Repositories.User;
 using PRN222_EWMS_Web.ViewModels.Authentication;
 using PRN222_EWMS_Web.Services.Authentication;
 using LoginService = PRN222_EWMS_Web.Services.Authentication.IAuthenticationService;
 
 namespace PRN222_EWMS_Web.Controllers.Authentication;
 
-public class AuthenticationController(LoginService authentication, IUserRepository users, PasswordResetService passwordReset, IConfiguration configuration, ILogger<AuthenticationController> logger) : Controller
+public class AuthenticationController(LoginService authentication, IPasswordResetService passwordReset, IConfiguration configuration, ILogger<AuthenticationController> logger) : Controller
 {
     [AllowAnonymous, HttpGet]
     public IActionResult Login(string? returnUrl = null, bool googleError = false)
@@ -153,33 +152,8 @@ public class AuthenticationController(LoginService authentication, IUserReposito
 
         try
         {
-        var account = await users.FindByGoogleSubjectAsync(subject);
+        var account = await authentication.AuthenticateGoogleAsync(subject, googleEmail, external.Principal?.FindFirstValue("google:hd"));
         if (account is null)
-        {
-            var hostedDomain = external.Principal?.FindFirstValue("google:hd");
-            var googleOwnsAddress = googleEmail.EndsWith("@gmail.com", StringComparison.OrdinalIgnoreCase)
-                || !string.IsNullOrWhiteSpace(hostedDomain)
-                    && googleEmail.EndsWith("@" + hostedDomain, StringComparison.OrdinalIgnoreCase);
-            if (googleOwnsAddress)
-            {
-                account = await users.FindByEmailAsync(googleEmail);
-                if (account is not null && account.Status == "ACTIVE" && account.GoogleSubject is null)
-                {
-                    account.GoogleSubject = subject;
-                    try { await users.SaveAsync(); }
-                    catch (DbUpdateConcurrencyException)
-                    {
-                        account = null;
-                    }
-                    catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
-                    {
-                        account = null;
-                    }
-                }
-                else account = null;
-            }
-        }
-        if (account is null || account.Status != "ACTIVE")
         {
             TempData["GoogleError"] = "Không tìm thấy tài khoản EWMS đang hoạt động với email Google này, hoặc tài khoản đã gắn với Google khác.";
             return RedirectToAction(nameof(Login));

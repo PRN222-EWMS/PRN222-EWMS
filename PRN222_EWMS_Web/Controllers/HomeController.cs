@@ -1,19 +1,22 @@
 using Microsoft.AspNetCore.Mvc;
 using PRN222_EWMS_Web.Models;
 using System.Diagnostics;
+using PRN222_EWMS_Web.Services.Admin;
 
 namespace PRN222_EWMS_Web.Controllers
 {
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
+        private readonly IAdminDashboardService _adminDashboard;
 
-        public HomeController(ILogger<HomeController> logger)
+        public HomeController(ILogger<HomeController> logger, IAdminDashboardService adminDashboard)
         {
             _logger = logger;
+            _adminDashboard = adminDashboard;
         }
 
-        public IActionResult Index()
+        public async Task<IActionResult> Index()
         {
             if (User.IsInRole("MANAGER"))
                 return RedirectToAction("Dashboard", "ManagerDashboard");
@@ -21,6 +24,10 @@ namespace PRN222_EWMS_Web.Controllers
             if (User.IsInRole("CEO")) return View("CeoDashboard");
             if (User.IsInRole("SALES_STAFF")) return RedirectToAction("Index", "SalesDashboard");
             if (User.IsInRole("WAREHOUSE_STAFF")) return RedirectToAction("Index", "WarehouseDashboard");
+            if (User.IsInRole("ADMIN"))
+            {
+                return View("AdminDashboard", await _adminDashboard.GetDashboardAsync());
+            }
             return View();
         }
 

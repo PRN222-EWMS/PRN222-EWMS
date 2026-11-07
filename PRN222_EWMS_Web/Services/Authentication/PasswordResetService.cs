@@ -15,7 +15,7 @@ public class PasswordResetService(
     IDataProtectionProvider dataProtection,
     SmtpEmailSender emailSender,
     IConfiguration configuration,
-    ILogger<PasswordResetService> logger)
+    ILogger<PasswordResetService> logger) : IPasswordResetService
 {
     private ITimeLimitedDataProtector Protector =>
         dataProtection.CreateProtector("EWMS.PasswordReset.v2").ToTimeLimitedDataProtector();
