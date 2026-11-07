@@ -36,6 +36,10 @@ builder.Services.AddScoped<IAdminDashboardRepository, AdminDashboardRepository>(
 builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Ceo.ICeoPurchaseProgressRepository, PRN222_EWMS_Web.Repositories.Ceo.CeoPurchaseProgressRepository>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.Ceo.ICeoPurchaseProgressService, PRN222_EWMS_Web.Services.Ceo.CeoPurchaseProgressService>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Manager.IManagerInboundRepository, PRN222_EWMS_Web.Repositories.Manager.ManagerInboundRepository>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.Manager.IManagerInboundService, PRN222_EWMS_Web.Services.Manager.ManagerInboundService>();
 builder.Services.AddScoped<IWarehouseRepository, WarehouseRepository>();
 builder.Services.AddScoped<IWarehouseService, WarehouseService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
