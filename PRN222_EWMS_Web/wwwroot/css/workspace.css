@@ -103,3 +103,37 @@ h1{font-size:40px;font-weight:700;line-height:1.1;letter-spacing:-1px;margin:0 0
     .warehouse-pagination { gap: 4px; font-size: 13px; }
     .warehouse-pagination .workspace-link, .warehouse-page-disabled { padding: 8px 4px; }
 }
+
+.account-details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin: 0;
+}
+.account-detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.account-detail-item dt {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--workspace-muted);
+}
+.account-detail-value {
+    margin: 0;
+    font-size: 15px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    background: #fdfdfd;
+    border: 1px solid var(--workspace-line);
+    border-radius: 6px;
+    padding: 10px 14px;
+    overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+    .account-details-grid {
+        grid-template-columns: 1fr;
+    }
+}

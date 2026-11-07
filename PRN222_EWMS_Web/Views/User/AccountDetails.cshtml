@@ -19,36 +19,39 @@
     </div>
 </div>
 
-
 <section class="workspace-card" aria-label="Thông tin tài khoản">
-    <div class="workspace-heading">
-        <div>
-            <p class="eyebrow">TÀI KHOẢN</p>
-            <h2>@Model.FullName</h2>
+    <dl class="account-details-grid">
+        <div class="account-detail-item">
+            <dt>Họ và tên</dt>
+            <dd class="account-detail-value fw-semibold">@Model.FullName</dd>
         </div>
-        <span class="badge rounded-pill @Model.StatusClass">@Model.StatusLabel</span>
-    </div>
-
-    <dl class="profile-details">
-        <div>
+        <div class="account-detail-item">
             <dt>Email</dt>
-            <dd>@(string.IsNullOrWhiteSpace(Model.Email) ? "Chưa cung cấp" : Model.Email)</dd>
+            <dd class="account-detail-value">@(string.IsNullOrWhiteSpace(Model.Email) ? "Chưa cung cấp" : Model.Email)</dd>
         </div>
-        <div>
+        <div class="account-detail-item">
             <dt>Số điện thoại</dt>
-            <dd>@(string.IsNullOrWhiteSpace(Model.Phone) ? "Chưa cung cấp" : Model.Phone)</dd>
+            <dd class="account-detail-value">@(string.IsNullOrWhiteSpace(Model.Phone) ? "Chưa cung cấp" : Model.Phone)</dd>
         </div>
-        <div>
+        <div class="account-detail-item">
             <dt>Vai trò</dt>
-            <dd><span class="role-badge">@Model.RoleName</span></dd>
+            <dd class="account-detail-value">
+                <span class="role-badge">@Model.RoleName</span>
+            </dd>
         </div>
-        <div>
+        <div class="account-detail-item">
+            <dt>Trạng thái</dt>
+            <dd class="account-detail-value">
+                <span class="badge rounded-pill @Model.StatusClass">@Model.StatusLabel</span>
+            </dd>
+        </div>
+        <div class="account-detail-item">
             <dt>Kho làm việc</dt>
-            <dd>@Model.WarehouseDisplay</dd>
+            <dd class="account-detail-value">@Model.WarehouseDisplay</dd>
         </div>
-        <div>
+        <div class="account-detail-item">
             <dt>Ngày tạo</dt>
-            <dd>@Model.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</dd>
+            <dd class="account-detail-value">@Model.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</dd>
         </div>
     </dl>
 </section>

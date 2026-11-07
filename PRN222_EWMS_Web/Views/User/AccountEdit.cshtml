@@ -59,11 +59,10 @@
             </div>
             <div>
                 <label asp-for="WarehouseId"></label>
-                <select asp-for="WarehouseId" asp-items="Model.Warehouses" disabled="@(!isWarehouseStaff)" required="@isWarehouseStaff" aria-describedby="warehouse-help">
+                <select asp-for="WarehouseId" asp-items="Model.Warehouses" disabled="@(!isWarehouseStaff)" required="@isWarehouseStaff">
                     <option value="">@(isWarehouseStaff ? "Chọn kho làm việc" : "Chỉ dành cho nhân viên kho")</option>
                 </select>
                 <span asp-validation-for="WarehouseId"></span>
-                <small class="muted" id="warehouse-help">Chỉ áp dụng cho WAREHOUSE_STAFF.</small>
             </div>
         </div>
         <div class="form-actions mt-4 justify-content-end">

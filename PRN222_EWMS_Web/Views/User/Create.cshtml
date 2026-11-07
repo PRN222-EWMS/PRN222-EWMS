@@ -24,7 +24,7 @@
         <div><label asp-for="Password"></label><input asp-for="Password" autocomplete="new-password" aria-describedby="password-help" /><small class="muted" id="password-help">Từ 11 đến 128 ký tự, có ít nhất 1 chữ hoa, 1 chữ số và 1 ký tự đặc biệt.</small><span asp-validation-for="Password"></span></div>
         <div><label asp-for="ConfirmPassword"></label><input asp-for="ConfirmPassword" autocomplete="new-password" /><span asp-validation-for="ConfirmPassword"></span></div>
         <div><label asp-for="RoleId"></label><select asp-for="RoleId" asp-items="Model.Roles"><option value="">Chọn vai trò</option></select><span asp-validation-for="RoleId"></span></div>
-        <div><label asp-for="WarehouseId"></label><select asp-for="WarehouseId" asp-items="Model.Warehouses" disabled="@(!isWarehouseStaff)" required="@isWarehouseStaff" aria-describedby="warehouse-help"><option value="">@(isWarehouseStaff ? "Chọn kho làm việc" : "Chỉ dành cho nhân viên kho")</option></select><span asp-validation-for="WarehouseId"></span><small class="muted" id="warehouse-help">Chỉ áp dụng cho WAREHOUSE_STAFF.</small></div>
+        <div><label asp-for="WarehouseId"></label><select asp-for="WarehouseId" asp-items="Model.Warehouses" disabled="@(!isWarehouseStaff)" required="@isWarehouseStaff"><option value="">@(isWarehouseStaff ? "Chọn kho làm việc" : "Chỉ dành cho nhân viên kho")</option></select><span asp-validation-for="WarehouseId"></span></div>
     </div>
     <div class="form-actions mt-4 justify-content-end">
         <button class="workspace-button" type="submit">Tạo tài khoản</button>
