@@ -1,0 +1,23 @@
+@using PRN222_EWMS_Web.ViewModels.Manager
+@model ManagerStocktakeDetailViewModel
+@{ ViewData["Title"] = "Xóa đợt kiểm kê"; }
+
+<div class="warehouse-list">
+    <header class="workspace-heading"><div><p class="eyebrow">KẾ HOẠCH KIỂM KÊ</p><h1>Xóa đợt @Model.Code</h1></div><a asp-action="Details" asp-route-id="@Model.Id" class="workspace-link">Quay lại chi tiết</a></header>
+    <section class="workspace-card">
+        <div asp-validation-summary="All" class="text-danger mb-3" role="alert"></div>
+        <dl class="warehouse-info-grid mt-0 mb-4">
+            <div><dt>Kho</dt><dd>@Model.WarehouseName</dd></div><div><dt>Trạng thái</dt><dd>@ManagerStocktakeLabels.Status(Model.Status)</dd></div><div><dt>Phạm vi</dt><dd>@(Model.ScopeType == "WHOLE_WAREHOUSE" ? "Toàn kho" : $"{Model.ScopePaths.Count} nhánh vị trí")</dd></div>
+        </dl>
+        @if (Model.CanDelete)
+        {
+            <div class="alert alert-warning" role="alert">Bạn sắp xóa đợt <strong>@Model.Code</strong> cùng phạm vi và phân công của đợt. Chỉ xóa được khi chưa bắt đầu kiểm kê. Lịch sử thao tác vẫn được lưu.</div>
+            <form asp-action="Delete" asp-route-id="@Model.Id" method="post" class="form-actions">
+                <input type="hidden" asp-for="Id" /><input type="hidden" asp-for="RowVersion" />
+                <button type="submit" class="btn btn-danger px-4 py-2">Xác nhận xóa đợt</button>
+                <a asp-action="Details" asp-route-id="@Model.Id" class="workspace-link">Giữ lại đợt</a>
+            </form>
+        }
+        else { <div class="alert alert-warning" role="alert">Đợt này không còn đủ điều kiện xóa. Chỉ đợt Nháp hoặc Đã lập kế hoạch, chưa bắt đầu và chưa có dữ liệu kiểm đếm/điều chỉnh mới được xóa.</div><a asp-action="Details" asp-route-id="@Model.Id" class="workspace-button">Xem chi tiết</a> }
+    </section>
+</div>

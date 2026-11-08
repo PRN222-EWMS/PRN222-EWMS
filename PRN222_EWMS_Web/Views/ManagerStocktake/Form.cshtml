@@ -1,0 +1,144 @@
+@using System.Text.Json
+@using PRN222_EWMS_Web.ViewModels.Manager
+@model ManagerStocktakeFormViewModel
+@{
+    var editing = Model.Id.HasValue;
+    var whole = Model.ScopeType == "WHOLE_WAREHOUSE";
+    ViewData["Title"] = editing ? "Sửa kế hoạch kiểm kê" : "Tạo đợt kiểm kê";
+    var selectedWarehouse = Model.Warehouses.FirstOrDefault(w => w.Id == Model.WarehouseId);
+    var includeAwaiting = whole || Model.IncludeAwaitingPutaway;
+    var scopeKinds = includeAwaiting ? new[] { "LOCATION", "AWAITING_PUTAWAY", "ALL_SCOPE" } : new[] { "LOCATION", "ALL_SCOPE" };
+    var visibleAssignments = Model.Assignments.Where(assignment => includeAwaiting || assignment.ScopeKind != "AWAITING_PUTAWAY").ToList();
+    var locationChildren = Model.Locations.ToLookup(location => location.ParentId ?? 0);
+    var selectedLocations = Model.ScopeLocationIds.ToHashSet();
+    string LocationType(string type) => type switch { "ZONE" => "Zone", "ROW" => "Dãy", "RACK" => "Kệ", "TIER" => "Tầng", "FLOOR_SLOT" => "Ô sàn", _ => type };
+
+    void RenderScopeChoice(ManagerStocktakeLocationOption location, bool covered)
+    {
+        var selected = selectedLocations.Contains(location.Id) && !covered;
+        <label class="d-inline-flex align-items-center gap-2 mb-0 text-break" data-scope-select>
+            <input type="checkbox" class="form-check-input m-0 flex-shrink-0" name="ScopeLocationIds" id="manager-stocktake-scope-@location.Id" value="@location.Id" data-scope-input checked="@(selected || covered)" disabled="@(whole || covered)" />
+            <span>@location.Name</span>
+        </label>
+        <span class="badge rounded-pill text-bg-light ms-2">@LocationType(location.Type)</span>
+        <span class="badge rounded-pill ms-2 @(covered ? "text-bg-light" : "text-bg-primary") @(!selected && !covered ? "d-none" : "")" data-scope-state>@(covered ? "Đã bao gồm" : "Đã chọn")</span>
+    }
+
+    void RenderScopeNode(ManagerStocktakeLocationOption location, bool covered)
+    {
+        var children = locationChildren[location.Id].ToList();
+        if (children.Count > 0)
+        {
+            <details class="warehouse-tree-node mt-2" data-scope-node data-location-id="@location.Id">
+                <summary>@{ RenderScopeChoice(location, covered); }</summary>
+                <div class="warehouse-node-content">
+                    @foreach (var child in children) { RenderScopeNode(child, covered || selectedLocations.Contains(location.Id)); }
+                </div>
+            </details>
+        }
+        else
+        {
+            <div class="border rounded px-3 py-2 mt-2" data-scope-node data-location-id="@location.Id">@{ RenderScopeChoice(location, covered); }</div>
+        }
+    }
+}
+
+<div class="warehouse-list">
+    <header class="workspace-heading"><div><p class="eyebrow">KẾ HOẠCH KIỂM KÊ</p><h1>@ViewData["Title"]</h1>@if (editing) { <p class="muted mb-0">@Model.Code</p> }</div><div class="warehouse-heading-actions"><a asp-action="@(editing ? "Details" : "Index")" asp-route-id="@(editing ? Model.Id : null)" class="warehouse-small-button" data-manager-stocktake-back><i class="bi bi-arrow-left me-2" aria-hidden="true"></i>Quay lại</a><a asp-action="Index" class="workspace-link">Danh sách kiểm kê</a></div></header>
+    <div class="warehouse-config-note mb-0">Lưu kế hoạch chưa tạo snapshot và chưa khóa kho. Tồn gốc chỉ được chụp khi nhân viên bắt đầu kiểm kê. Một vị trí được chọn luôn bao gồm toàn bộ vị trí con.</div>
+    @foreach (var warning in Model.Warnings) { <div class="alert alert-warning mb-0" role="alert">@warning</div> }
+
+    <form asp-action="@(editing ? "Edit" : "Create")" asp-route-id="@Model.Id" method="post" id="manager-stocktake-form" class="workspace-form mt-0" data-planning-url="@Url.Action("PlanningData", "ManagerStocktake")" data-editing="@editing.ToString().ToLowerInvariant()">
+        @if (editing) { <input asp-for="Id" type="hidden" /><input asp-for="RowVersion" type="hidden" /> }
+        <div asp-validation-summary="All" class="text-danger" role="alert"></div>
+        <div id="manager-stocktake-form-notice" class="alert alert-info d-none mb-0" role="status" aria-live="polite"></div>
+
+        <section class="workspace-card">
+            <h2>Thông tin kế hoạch</h2>
+            <div class="form-grid mt-4">
+                <div>
+                    <label for="manager-stocktake-plan-warehouse">Kho kiểm kê</label>
+                    @if (editing)
+                    {
+                        <input asp-for="WarehouseId" type="hidden" id="manager-stocktake-plan-warehouse" />
+                        <input value="@(selectedWarehouse?.Name ?? $"Kho #{Model.WarehouseId}")" readonly aria-label="Kho kiểm kê, không thay đổi sau khi tạo" />
+                        <small class="muted">Kho của đợt được giữ nguyên sau khi tạo.</small>
+                    }
+                    else
+                    {
+                        <select asp-for="WarehouseId" id="manager-stocktake-plan-warehouse"><option value="0">Chọn kho kiểm kê</option>@foreach (var warehouse in Model.Warehouses) { <option value="@warehouse.Id">@warehouse.Name</option> }</select>
+                        <small class="muted">Chỉ lập đợt cho kho đang hoạt động và còn hạn thuê.</small>
+                    }
+                    <span asp-validation-for="WarehouseId"></span>
+                </div>
+                <div><label asp-for="PlannedAt">Ngày, giờ dự kiến (giờ Việt Nam)</label><input asp-for="PlannedAt" type="datetime-local" asp-format="{0:yyyy-MM-ddTHH:mm}" /><span asp-validation-for="PlannedAt"></span><small class="muted">Bắt buộc khi hoàn tất kế hoạch; kho thuê phải còn hạn vào ngày này.</small></div>
+            </div>
+            <div class="mt-4"><label asp-for="Note">Ghi chú</label><textarea asp-for="Note" class="form-control" rows="3" maxlength="1000" placeholder="Mục đích, lưu ý và hướng dẫn kiểm kê..."></textarea><span asp-validation-for="Note"></span></div>
+        </section>
+
+        <section class="workspace-card">
+            <h2>Phạm vi kiểm kê</h2>
+            <div class="form-grid mt-4">
+                <div><label asp-for="ScopeType">Loại phạm vi</label><select asp-for="ScopeType" id="manager-stocktake-scope-type"><option value="WHOLE_WAREHOUSE">Toàn kho</option><option value="LOCATIONS">Một phần kho</option></select><span asp-validation-for="ScopeType"></span></div>
+                <div>
+                    <label class="checkbox-row mt-4" for="manager-stocktake-include-awaiting">
+                        <input id="manager-stocktake-include-awaiting" type="checkbox" name="IncludeAwaitingPutaway" value="true" checked="@(whole || Model.IncludeAwaitingPutaway)" disabled="@whole" /> Kiểm cả hàng chờ xếp
+                    </label>
+                    <input id="manager-stocktake-forced-awaiting" type="hidden" name="IncludeAwaitingPutaway" value="true" disabled="@(!whole)" />
+                    <input type="hidden" name="IncludeAwaitingPutaway" value="false" />
+                </div>
+            </div>
+            <div id="manager-stocktake-partial-scope" class="mt-4 @(whole ? "d-none" : "")">
+                <label for="manager-stocktake-location-search">Tìm nhánh vị trí</label>
+                <input id="manager-stocktake-location-search" type="search" maxlength="150" placeholder="Tìm Zone, Dãy, Kệ, Tầng hoặc ô sàn..." autocomplete="off" />
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
+                    <span id="manager-stocktake-scope-summary" class="muted" role="status" aria-live="polite">Chưa chọn nhánh</span>
+                    <div class="d-flex gap-2"><button type="button" class="btn btn-sm btn-outline-secondary" data-expand-scope>Mở tất cả</button><button type="button" class="btn btn-sm btn-outline-secondary" data-collapse-scope>Thu gọn</button></div>
+                </div>
+                <div id="manager-stocktake-selected-scopes" class="d-flex flex-wrap gap-2 mt-3" aria-label="Các nhánh đã chọn"></div>
+                <div id="manager-stocktake-scope-options" class="warehouse-tree mt-3 overflow-auto" style="max-height: 30rem;" role="group" aria-label="Cây vị trí kiểm kê">
+                    @foreach (var location in locationChildren[0]) { RenderScopeNode(location, false); }
+                    @if (Model.Locations.Count == 0) { <p class="muted mb-0" data-no-locations>Chưa có vị trí để chọn. Hãy chọn kho có cấu trúc hoặc lập phạm vi toàn kho.</p> }
+                </div>
+                <p id="manager-stocktake-scope-no-match" class="muted mt-3 mb-0 d-none" role="status">Không tìm thấy vị trí phù hợp.</p>
+                <span asp-validation-for="ScopeLocationIds"></span>
+            </div>
+        </section>
+
+        <section class="workspace-card">
+            <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap"><h2 class="mb-0">Phân công nhân viên</h2><button type="button" id="manager-stocktake-add-assignment" class="warehouse-small-button"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Thêm phân công</button></div>
+            <p class="muted mt-3">Chọn Warehouse Staff đang hoạt động và thuộc đúng kho. Một người có thể nhận nhiều nhánh; mỗi phần chỉ được giao cho một người. Chọn “Toàn phạm vi đợt” khi giao toàn bộ công việc cho một người.</p>
+            <p id="manager-stocktake-no-staff" class="alert alert-warning @(Model.Staff.Count > 0 || Model.WarehouseId == 0 ? "d-none" : "")">Kho chưa có Warehouse Staff đang hoạt động. Bạn có thể lưu nháp và phân công sau.</p>
+            <div class="table-wrap">
+                <table class="workspace-table"><thead><tr><th>Nhân viên</th><th>Loại phân công</th><th>Nhánh vị trí</th><th>Thao tác</th></tr></thead>
+                    <tbody id="manager-stocktake-assignment-rows">
+                        @for (var i = 0; i < visibleAssignments.Count; i++)
+                        {
+                            var assignment = visibleAssignments[i];
+                            <tr data-assignment-row>
+                                <td><label class="visually-hidden" for="manager-stocktake-user-@i">Nhân viên phân công @(i + 1)</label><select name="Assignments[@i].UserId" id="manager-stocktake-user-@i" data-assignment-user><option value="0">Chọn nhân viên</option>@if (assignment.UserId > 0 && Model.Staff.All(s => s.Id != assignment.UserId)) { <option value="@assignment.UserId" selected>Nhân viên #@assignment.UserId (không còn hợp lệ)</option> }@foreach (var staff in Model.Staff) { <option value="@staff.Id" selected="@(staff.Id == assignment.UserId)">@staff.Name</option> }</select></td>
+                                <td><label class="visually-hidden" for="manager-stocktake-kind-@i">Loại phân công @(i + 1)</label><select name="Assignments[@i].ScopeKind" id="manager-stocktake-kind-@i" data-assignment-kind>@if (!scopeKinds.Contains(assignment.ScopeKind)) { <option value="@assignment.ScopeKind" selected>Loại không hợp lệ</option> }<option value="LOCATION" selected="@(assignment.ScopeKind == "LOCATION")">Nhánh vị trí</option>@if (includeAwaiting) { <option value="AWAITING_PUTAWAY" selected="@(assignment.ScopeKind == "AWAITING_PUTAWAY")">Chỉ hàng chờ xếp</option> }<option value="ALL_SCOPE" selected="@(assignment.ScopeKind == "ALL_SCOPE")">Toàn phạm vi đợt</option></select></td>
+                                <td><label class="visually-hidden" for="manager-stocktake-position-@i">Nhánh vị trí phân công @(i + 1)</label><select name="Assignments[@i].LocationId" id="manager-stocktake-position-@i" data-assignment-location disabled="@(assignment.ScopeKind != "LOCATION")"><option value="">Chọn nhánh vị trí</option>@if (assignment.LocationId.HasValue && Model.Locations.All(l => l.Id != assignment.LocationId)) { <option value="@assignment.LocationId" selected>Vị trí #@assignment.LocationId (không còn hợp lệ)</option> }@foreach (var location in Model.Locations) { <option value="@location.Id" selected="@(assignment.LocationId == location.Id)">@location.Path</option> }</select></td>
+                                <td><button type="button" class="btn btn-outline-danger" data-remove-assignment aria-label="Xóa phân công @(i + 1)"><i class="bi bi-trash" aria-hidden="true"></i></button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p id="manager-stocktake-empty-assignments" class="muted mt-3 mb-0 @(visibleAssignments.Count > 0 ? "d-none" : "")">Chưa có phân công. Hệ thống không tự giao việc cho nhân viên.</p>
+            <span asp-validation-for="Assignments"></span>
+        </section>
+
+        <div class="form-actions mt-0">
+            <button type="submit" name="SaveMode" value="DRAFT" class="warehouse-small-button" data-save-plan>Lưu nháp</button>
+            <button type="submit" name="SaveMode" value="PLANNED" class="workspace-button" data-save-plan>Hoàn tất kế hoạch</button>
+            @if (editing) { <a asp-action="Details" asp-route-id="@Model.Id" class="workspace-link" data-manager-stocktake-back>Quay lại</a> } else { <a asp-action="Index" class="workspace-link" data-manager-stocktake-back>Quay lại</a> }
+        </div>
+        <p class="muted mb-0">Hoàn tất kế hoạch yêu cầu đủ lịch, phạm vi và phân công không chồng, không bỏ sót. Thao tác này chưa bắt đầu kiểm kê.</p>
+    </form>
+</div>
+
+<script type="application/json" id="manager-stocktake-planning-data">@Html.Raw(JsonSerializer.Serialize(new { locations = Model.Locations, staff = Model.Staff, scopeLocationIds = Model.ScopeLocationIds }, new JsonSerializerOptions(JsonSerializerDefaults.Web)))</script>
+@section Scripts {
+    <script src="~/js/manager-stocktake.js" asp-append-version="true"></script>
+}

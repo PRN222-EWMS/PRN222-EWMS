@@ -1,0 +1,20 @@
+@model PRN222_EWMS_Web.ViewModels.Shared.SerialCaptureViewModel
+<div class="serial-capture" data-serial-capture data-default-hint="@Model.Hint">
+    <p class="muted">@Model.HelpText</p>
+    <div class="serial-capture-actions">
+        <button type="button" class="serial-capture-button" data-camera-open>Quét bằng camera</button>
+        <label class="serial-capture-button serial-capture-upload">Tải ảnh tem<input type="file" accept="image/jpeg,image/png,image/webp" data-image-upload hidden /></label>
+        <button type="button" class="serial-capture-button" data-capture-retry>Xóa / quét lại</button>
+    </div>
+    <small class="muted">JPEG, PNG, WebP · tối đa 10 MB. Máy quét USB/Bluetooth dạng bàn phím dùng trực tiếp ô Serial.</small>
+    <div class="serial-capture-camera" data-camera-box hidden>
+        <video data-camera-video playsinline autoplay muted></video><span aria-hidden="true"></span>
+        <button type="button" class="serial-capture-button" data-camera-close>Đóng camera</button>
+    </div>
+    <p class="serial-capture-message" data-capture-message aria-live="polite"></p>
+    <div data-candidates></div>
+    <label for="@Model.InputId">Serial</label>
+    <input id="@Model.InputId" name="@Model.SerialName" value="@Model.Value" maxlength="100" required autocomplete="off" data-serial-input />
+    <small class="muted" data-capture-source>@Model.Hint</small>
+    <input type="hidden" name="@Model.MethodName" value="@Model.Method" data-capture-method />
+</div>

@@ -51,169 +51,12 @@
         container.append(toast);
         bootstrap.Toast.getOrCreateInstance(toast, { autohide: true, delay: 3000 }).show();
     }
+    const capture = window.EwmsSerialCapture.get(form.querySelector('[data-serial-capture]'));
     const serial = form.querySelector('[data-serial-input]');
-    const method = form.querySelector('[data-capture-method]');
-    const source = form.querySelector('[data-capture-source]');
     const message = form.querySelector('[data-capture-message]');
-    const candidateBox = form.querySelector('[data-candidates]');
-    const cameraBox = form.querySelector('[data-camera-box]');
-    const video = form.querySelector('[data-camera-video]');
-    const open = form.querySelector('[data-camera-open]');
-    const close = form.querySelector('[data-camera-close]');
-    const retry = form.querySelector('[data-capture-retry]');
-    const upload = form.querySelector('[data-image-upload]');
     const month = form.querySelector('[name="NewSerial.Month"]');
     const year = form.querySelector('[name="NewSerial.Year"]');
     const keep = form.querySelector('[data-keep-production]');
-    let stream = null, timer = null, zxingControls = null, scanning = false, lastRead = '', stableReads = 0;
-
-    function setCapture(value, captureMethod) {
-        serial.value = value;
-        method.value = captureMethod;
-        source.textContent = `Nguồn: ${captureMethod === 'CAMERA' ? 'Camera' : captureMethod === 'IMAGE_UPLOAD' ? 'Ảnh tem' : 'Nhập tay'} · Kiểm tra trước khi lưu.`;
-        serial.focus();
-    }
-    function showChoices(values, captureMethod, explanation) {
-        candidateBox.replaceChildren();
-        const unique = [...new Set(values.map(value => value?.trim()).filter(value => value && value.length <= 100 && !/[\x00-\x1f\x7f]/.test(value)))];
-        message.textContent = explanation;
-        if (!unique.length) return;
-        const list = document.createElement('div');
-        list.className = 'inbound-candidate-list';
-        unique.slice(0, 12).forEach(value => {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.textContent = value;
-            button.addEventListener('click', () => { setCapture(value, captureMethod); candidateBox.replaceChildren(); message.textContent = 'Đã chọn kết quả. Đối chiếu với tem trước khi lưu.'; });
-            list.append(button);
-        });
-        candidateBox.append(list);
-    }
-    function stopCamera() {
-        clearInterval(timer); timer = null;
-        zxingControls?.stop(); zxingControls = null;
-        stream?.getTracks().forEach(track => track.stop());
-        stream = null;
-        video.srcObject = null;
-        cameraBox.hidden = true;
-        open.disabled = false;
-        lastRead = ''; stableReads = 0; scanning = false;
-    }
-    close.addEventListener('click', stopCamera);
-    window.addEventListener('pagehide', stopCamera);
-    document.addEventListener('visibilitychange', () => { if (document.hidden) stopCamera(); });
-    retry.addEventListener('click', () => { stopCamera(); serial.value = ''; method.value = 'MANUAL'; source.textContent = 'Nguồn: Nhập tay · Enter để thêm nhanh.'; candidateBox.replaceChildren(); message.textContent = ''; message.classList.remove('is-error', 'is-success'); upload.value = ''; serial.focus(); });
-    serial.addEventListener('input', event => { if (event.isTrusted && !serial.value.trim()) { method.value = 'MANUAL'; source.textContent = 'Nguồn: Nhập tay · Enter để thêm nhanh.'; } });
-
-    async function detector() {
-        if (!window.BarcodeDetector) return null;
-        const supported = await BarcodeDetector.getSupportedFormats?.() ?? [];
-        const preferred = ['code_128', 'code_39', 'ean_13', 'ean_8', 'data_matrix', 'qr_code'];
-        const formats = preferred.filter(format => supported.includes(format));
-        return formats.length ? new BarcodeDetector({ formats }) : new BarcodeDetector();
-    }
-    open.addEventListener('click', async () => {
-        if (!navigator.mediaDevices?.getUserMedia || (!window.BarcodeDetector && !window.ZXingBrowser)) {
-            message.textContent = 'Trình duyệt không hỗ trợ quét mã hoặc camera không khả dụng. Bạn có thể nhập Serial thủ công.';
-            return;
-        }
-        try {
-            if (window.ZXingBrowser) {
-                cameraBox.hidden = false;
-                open.disabled = true;
-                message.textContent = 'Đưa mã vạch vào giữa khung và giữ yên.';
-                const reader = new ZXingBrowser.BrowserMultiFormatOneDReader();
-                zxingControls = await reader.decodeFromConstraints({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } }, video, result => {
-                    const value = result?.getText()?.trim();
-                    if (!value) return;
-                    stableReads = value === lastRead ? stableReads + 1 : 1;
-                    lastRead = value;
-                    if (stableReads >= 2) { stopCamera(); setCapture(value, 'CAMERA'); message.textContent = 'Đã đọc mã vạch. Kiểm tra Serial trên tem trước khi lưu.'; }
-                });
-                return;
-            }
-            const reader = await detector();
-            stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } });
-            video.srcObject = stream;
-            cameraBox.hidden = false;
-            open.disabled = true;
-            await video.play();
-            message.textContent = 'Đưa mã vào giữa khung, giữ yên vài giây.';
-            timer = setInterval(async () => {
-                if (scanning || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
-                scanning = true;
-                try {
-                    const codes = await reader.detect(video);
-                    const values = [...new Set(codes.map(code => code.rawValue?.trim()).filter(Boolean))];
-                    if (values.length !== 1) {
-                        lastRead = ''; stableReads = 0;
-                        if (values.length > 1) { stopCamera(); showChoices(values, 'CAMERA', 'Camera đọc được nhiều mã. Chọn đúng Serial trên tem.'); }
-                        return;
-                    }
-                    stableReads = values[0] === lastRead ? stableReads + 1 : 1;
-                    lastRead = values[0];
-                    if (stableReads >= 3) { stopCamera(); setCapture(values[0], 'CAMERA'); message.textContent = 'Đã quét ổn định. Kiểm tra Serial với tem trước khi lưu.'; }
-                } catch { /* A frame may be unreadable while the camera focuses. */ }
-                finally { scanning = false; }
-            }, 450);
-        } catch { stopCamera(); message.textContent = 'Không mở được camera. Kiểm tra quyền truy cập và dùng HTTPS hoặc localhost.'; }
-    });
-
-    upload.addEventListener('change', async () => {
-        const file = upload.files?.[0];
-        if (!file) return;
-        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024) {
-            message.textContent = 'Chỉ chọn JPEG, PNG hoặc WebP tối đa 10 MB.'; upload.value = ''; return;
-        }
-        stopCamera();
-        candidateBox.replaceChildren();
-        message.textContent = 'Đang đọc ảnh tem…';
-        let barcodeValues = [], ocrValues = [];
-        try {
-            const reader = await detector();
-            if (reader) {
-                const bitmap = await createImageBitmap(file);
-                try { barcodeValues = (await reader.detect(bitmap)).map(result => result.rawValue?.trim()).filter(Boolean); }
-                finally { bitmap.close(); }
-            }
-        } catch { /* OCR may still recover the printed serial. */ }
-        if (!barcodeValues.length && window.ZXingBrowser) {
-            const objectUrl = URL.createObjectURL(file);
-            try {
-                const result = await new ZXingBrowser.BrowserMultiFormatOneDReader().decodeFromImageUrl(objectUrl);
-                if (result?.getText()) barcodeValues = [result.getText().trim()];
-            } catch { /* OCR may still recover the printed serial. */ }
-            finally { URL.revokeObjectURL(objectUrl); }
-        }
-        try {
-            if (window.Tesseract) {
-                const worker = await Tesseract.createWorker('eng');
-                try {
-                    const bitmap = await createImageBitmap(file);
-                    const crop = document.createElement('canvas');
-                    crop.width = bitmap.width;
-                    crop.height = Math.round(bitmap.height * .72);
-                    crop.getContext('2d').drawImage(bitmap, 0, 0);
-                    bitmap.close();
-                    const text = (await worker.recognize(crop)).data.text || '';
-                    const labelled = [...text.matchAll(/(?:S\s*\/?\s*N|SERIA[L1I](?:\s*(?:NO\.?|NUMBER|#))?)\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{7,99})/gi)];
-                    ocrValues = labelled.map(match => match[1]);
-                    if (!ocrValues.length) {
-                        ocrValues = text.split(/[^A-Z0-9-]+/i).filter(value => value.length >= 10 && value.length <= 40 && /[A-Z]/i.test(value) && /\d/.test(value));
-                    }
-                } finally { await worker.terminate(); }
-            }
-        } catch { /* Manual entry stays available. */ }
-        const values = [...new Set([...barcodeValues, ...ocrValues])];
-        if (values.length === 1) {
-            setCapture(values[0], 'IMAGE_UPLOAD');
-            message.textContent = 'Đã đọc một mã từ ảnh. Đối chiếu với Serial trên tem trước khi lưu.';
-        } else if (values.length > 1) {
-            showChoices(values, 'IMAGE_UPLOAD', 'Mã vạch và chữ trên ảnh cho nhiều kết quả. Chọn đúng Serial trên tem.');
-        } else {
-            message.textContent = 'Không đọc được Serial rõ ràng từ ảnh. Vui lòng nhập thủ công.';
-        }
-    });
 
     async function refreshDetail(anchor) {
         const anchorTop = anchor.getBoundingClientRect().top;
@@ -273,26 +116,24 @@
         if (!form.reportValidity()) return;
         const button = form.querySelector('button[type="submit"]');
         const originalLabel = button.textContent;
+        const payload = new FormData(form);
+        capture.setDisabled(true);
         button.disabled = true;
         button.textContent = 'Đang lưu Serial…';
         message.classList.remove('is-error', 'is-success');
         message.textContent = '';
         try {
             const response = await fetch(form.action, {
-                method: 'POST', body: new FormData(form), credentials: 'same-origin',
+                method: 'POST', body: payload, credentials: 'same-origin',
                 headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
             });
             if (!response.headers.get('content-type')?.includes('application/json'))
                 throw new Error('Phiên đăng nhập đã hết hạn hoặc yêu cầu bị từ chối. Vui lòng đăng nhập lại.');
             const result = await response.json();
             if (!response.ok || !result.ok) throw new Error(result.message || 'Không thể lưu Serial. Vui lòng thử lại.');
-            serial.value = '';
+            capture.reset();
             form.querySelector('[name="NewSerial.Condition"]').value = 'GOOD';
             form.querySelector('[name="NewSerial.ConditionNote"]').value = '';
-            method.value = 'MANUAL';
-            source.textContent = 'Nguồn: Nhập tay · Enter để thêm nhanh.';
-            candidateBox.replaceChildren();
-            upload.value = '';
             if (!keep.checked) { month.value = ''; year.value = ''; }
             try {
                 await refreshDetail(form);
@@ -309,8 +150,10 @@
             message.textContent = error.message || 'Không lưu được Serial. Vui lòng thử lại.';
             message.classList.add('is-error');
         } finally {
+            capture.setDisabled(false);
             button.disabled = false;
             button.textContent = originalLabel;
+            serial.focus({ preventScroll: true });
         }
     });
     form.addEventListener('submit', event => {

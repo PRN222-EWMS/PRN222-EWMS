@@ -1,0 +1,46 @@
+@model PRN222_EWMS_Web.ViewModels.Putaway.PutawayQueueViewModel
+<div data-queue-state data-source="@Model.Filter.Source" data-receipt-id="@Model.Filter.ReceiptId" data-page="@Model.Filter.Page">
+    <section class="workspace-card putaway-filters">
+        <h2>Nguồn hàng</h2>
+        <form asp-controller="Putaway" asp-action="Index" method="get" data-putaway-filter>
+            <input type="hidden" name="Source" value="@Model.Filter.Source" /><input type="hidden" name="Page" value="1" />
+            <div class="putaway-source-tabs" role="group" aria-label="Chọn nguồn hàng">
+                <button type="button" data-source="PURCHASE" class="@(Model.Filter.Source == "PURCHASE" ? "is-selected" : "")" aria-pressed="@(Model.Filter.Source == "PURCHASE" ? "true" : "false")">Hàng mua</button>
+                <button type="button" data-source="RETURN" class="@(Model.Filter.Source == "RETURN" ? "is-selected" : "")" aria-pressed="@(Model.Filter.Source == "RETURN" ? "true" : "false")">Hàng khách trả</button>
+            </div>
+            <label for="putaway-receipt">@(Model.Filter.Source == "RETURN" ? "Phiếu nhận hàng trả đã DONE" : "Phiếu nhập mua đã DONE")</label>
+            <select id="putaway-receipt" name="ReceiptId"><option value="">Tất cả phiếu thuộc nguồn này</option>@foreach (var receipt in Model.Receipts) { <option value="@receipt.Id" selected="@(Model.Filter.ReceiptId == receipt.Id)">@receipt.Code · @receipt.PendingCount Serial chờ</option> }</select>
+            <label for="putaway-search">Tìm trong danh sách chờ</label>
+            <input id="putaway-search" type="search" name="Search" value="@Model.Filter.Search" maxlength="100" placeholder="Serial, mã/tên sản phẩm, mã phiếu" />
+            <label for="putaway-condition">Tình trạng hàng</label>
+            <select id="putaway-condition" name="Condition"><option value="">Tất cả</option><option value="GOOD" selected="@(Model.Filter.Condition == "GOOD")">Hàng tốt</option><option value="DAMAGED" selected="@(Model.Filter.Condition == "DAMAGED")">Hàng hỏng</option></select>
+            <button type="submit" class="putaway-secondary">Tìm hàng chờ</button>
+        </form>
+    </section>
+    <div class="putaway-list-heading"><h2>Danh sách chờ</h2><span class="role-badge">@Model.TotalCount Serial</span></div>
+    @if (Model.Items.Count == 0)
+    {
+        <div class="workspace-card putaway-empty"><p>Không có Serial chờ phù hợp với nguồn, phiếu hoặc bộ lọc hiện tại.</p><p class="muted">Hàng chỉ xuất hiện sau khi phiếu nhận được hoàn tất.</p></div>
+    }
+    else
+    {
+        <div class="putaway-pending-list">
+            @foreach (var item in Model.Items)
+            {
+                <article class="workspace-card putaway-pending-item" data-pending-serial="@item.Serial">
+                    <h3>@item.Serial</h3><p>@item.ProductCode — @item.ProductName</p>
+                    <p class="muted">@item.Category · @item.Brand</p>
+                    <span class="putaway-condition @(item.Condition == "DAMAGED" ? "is-damaged" : "")">@(item.Condition == "DAMAGED" ? "Hàng hỏng" : "Hàng tốt")</span>
+                    @if (item.Quarantined) { <span class="putaway-quarantined">Đang cách ly</span> }
+                    <p class="putaway-receipt-link"><a asp-controller="@(Model.Filter.Source == "RETURN" ? "ReturnReceive" : "Inbound")" asp-action="Details" asp-route-id="@item.ReceiptId">@item.ReceiptCode</a><small class="muted">Nhận: @item.ReceivedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small></p>
+                    <button type="button" class="putaway-secondary" data-select-serial="@item.Serial">Chọn Serial →</button>
+                </article>
+            }
+        </div>
+    }
+    <nav class="putaway-pagination" aria-label="Phân trang hàng chờ">
+        @if (Model.Filter.Page > 1) { <a asp-controller="Putaway" asp-action="Index" asp-route-source="@Model.Filter.Source" asp-route-receiptId="@Model.Filter.ReceiptId" asp-route-search="@Model.Filter.Search" asp-route-condition="@Model.Filter.Condition" asp-route-page="@(Model.Filter.Page - 1)" data-putaway-page>← Trước</a> }
+        <span>Trang @Model.Filter.Page / @Model.TotalPages</span>
+        @if (Model.Filter.Page < Model.TotalPages) { <a asp-controller="Putaway" asp-action="Index" asp-route-source="@Model.Filter.Source" asp-route-receiptId="@Model.Filter.ReceiptId" asp-route-search="@Model.Filter.Search" asp-route-condition="@Model.Filter.Condition" asp-route-page="@(Model.Filter.Page + 1)" data-putaway-page>Sau →</a> }
+    </nav>
+</div>

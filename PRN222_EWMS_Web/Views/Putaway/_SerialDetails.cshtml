@@ -1,0 +1,53 @@
+@using System.Globalization
+@model PRN222_EWMS_Web.ViewModels.Putaway.PutawaySerialViewModel
+@{
+    var culture = CultureInfo.GetCultureInfo("vi-VN");
+    string N(decimal? value) => value?.ToString("0.###", culture) ?? "—";
+}
+<div data-putaway-serial data-id="@Model.Id" data-serial="@Model.Serial" data-source="@Model.Source" data-receipt-id="@Model.ReceiptId" data-version="@Model.RowVersion" data-product="@Model.ProductCode — @Model.ProductName" data-condition="@Model.Condition" data-quarantined="@(Model.Quarantined ? "true" : "false")">
+    <section class="workspace-card putaway-profile">
+        <p class="eyebrow">SERIAL ĐÃ CHỌN · @(Model.Source == "RETURN" ? "HÀNG KHÁCH TRẢ" : "HÀNG MUA")</p>
+        <h2>@Model.Serial</h2><h3>@Model.ProductCode — @Model.ProductName</h3>
+        <dl class="putaway-info-grid"><div><dt>Kho</dt><dd>@Model.WarehouseName</dd></div><div><dt>Loại / Hãng</dt><dd>@Model.Category / @Model.Brand</dd></div><div><dt>Kích thước kiện</dt><dd>@N(Model.LengthCm) × @N(Model.WidthCm) × @N(Model.HeightCm) cm</dd></div><div><dt>Khối lượng</dt><dd>@N(Model.WeightKg) kg</dd></div><div><dt>Tình trạng</dt><dd>@(Model.Condition == "DAMAGED" ? "Hàng hỏng" : "Hàng tốt")</dd></div><div><dt>Phiếu nhận hiện tại</dt><dd>@if (Model.ReceiptId.HasValue) { <a asp-controller="@(Model.Source == "RETURN" ? "ReturnReceive" : "Inbound")" asp-action="Details" asp-route-id="@Model.ReceiptId">@Model.ReceiptCode</a> } else { @Model.ReceiptCode }</dd></div></dl>
+        @if (Model.Quarantined) { <p class="putaway-note">Hàng đang cách ly. Xếp kho giữ nguyên tình trạng và cờ cách ly.</p> }
+        @if (Model.CurrentLocationPath is not null) { <p class="putaway-note">Đã xếp tại <strong>@Model.CurrentLocationPath</strong>.</p> }
+        @if (Model.UnavailableReason is not null) { <p class="putaway-error" role="alert">@Model.UnavailableReason</p> }
+        <button type="button" class="putaway-secondary" data-refresh-locations>Tải lại trạng thái và gợi ý</button>
+    </section>
+    @if (Model.UnavailableReason is null)
+    {
+        <section class="putaway-locations" aria-label="Chọn vị trí lưu trữ">
+            <h2>Vị trí phù hợp</h2>
+            @if (Model.Locations.Count == 0) { <p class="putaway-note" role="status">@Model.EmptyReason</p> }
+            else
+            {
+                <section class="workspace-card putaway-location-filters">
+                    <label for="putaway-location-search">Tìm vị trí</label><input id="putaway-location-search" type="search" maxlength="120" data-location-query placeholder="Ví dụ: zone C, dãy 2, kệ 03, tầng 1" />
+                    <div class="putaway-location-selects"><label>Zone<select data-location-filter="zone"><option value="">Tất cả</option></select></label><label>Dãy<select data-location-filter="row"><option value="">Tất cả</option></select></label><label>Kệ<select data-location-filter="rack"><option value="">Tất cả</option></select></label><label>Tầng / Ô sàn<select data-location-filter="leaf"><option value="">Tất cả</option></select></label></div>
+                    <div class="putaway-actions"><small class="muted" data-location-count>@Model.Locations.Count vị trí hợp lệ</small><button type="button" class="putaway-secondary" data-clear-location-filter>Xóa bộ lọc</button></div>
+                </section>
+                @foreach (var reserve in new[] { false, true })
+                {
+                    var group = Model.Locations.Where(l => l.IsReserve == reserve).ToList();
+                    if (group.Count == 0) { continue; }
+                    <fieldset class="putaway-location-group" data-location-group>
+                        <legend>@(reserve ? "Khu dự trữ" : "Ưu tiên khu tiêu chuẩn")</legend>
+                        <div class="putaway-location-list">
+                            @foreach (var location in group)
+                            {
+                                <label class="workspace-card putaway-location-option" data-location-option data-id="@location.Id" data-path="@location.Path" data-zone-id="@location.ZoneId" data-zone="@location.Zone" data-row-id="@location.RowId" data-row="@location.Row" data-rack-id="@location.RackId" data-rack="@location.Rack" data-leaf="@location.Name">
+                                    <div class="putaway-location-title"><input type="radio" name="SelectedLocationId" value="@location.Id" /><strong>@location.Path</strong></div>
+                                    <small class="muted">@(location.IsFloor ? "Ô sàn" : "Tầng kệ") · @N(location.LengthCm) × @N(location.WidthCm) × @N(location.HeightCm) cm · @location.OccupantCount Serial đang đặt</small>
+                                    <dl class="putaway-info-grid"><div><dt>@(location.IsFloor ? "Diện tích đã dùng / Tổng" : "Thể tích đã dùng / Tổng")</dt><dd>@N(location.UsedCapacity) / @N(location.TotalCapacity) @location.CapacityUnit</dd></div><div><dt>Còn lại</dt><dd>@N(location.RemainingCapacity) @location.CapacityUnit</dd></div><div><dt>Tải trọng đã dùng / Tối đa</dt><dd>@N(location.UsedWeightKg) / @(location.MaxWeightKg.HasValue ? N(location.MaxWeightKg) + " kg" : "Chưa đặt giới hạn")</dd></div><div><dt>Tải trọng còn lại</dt><dd>@(location.RemainingWeightKg.HasValue ? N(location.RemainingWeightKg) + " kg" : "Chưa đặt giới hạn")</dd></div></dl>
+                                </label>
+                            }
+                        </div>
+                    </fieldset>
+                }
+                <p class="putaway-note" data-no-location-match hidden>Không có vị trí khớp bộ lọc. Thử đổi Zone/Dãy/Kệ hoặc xóa bộ lọc.</p>
+                <p class="muted putaway-packing-note">Ô sàn xếp cạnh nhau, không chồng hoặc tự xoay kiện. Sắp xếp thực tế theo kích thước sử dụng trước khi xác nhận. Sức chứa sẽ được kiểm tra lại lúc lưu.</p>
+                <div class="workspace-card putaway-selection"><div><small class="muted">VỊ TRÍ ĐÃ CHỌN</small><p data-selected-location>Chưa chọn vị trí</p></div><button type="button" class="workspace-button" data-open-putaway-confirm disabled>Xác nhận vị trí →</button></div>
+            }
+        </section>
+    }
+</div>

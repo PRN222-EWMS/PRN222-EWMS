@@ -101,7 +101,7 @@
                 <div class="wh-card-value">@Model.AwaitingPutawayCount</div>
                 <div class="wh-card-hint">Thiết bị serial chờ xếp lên kệ</div>
             </div>
-            <a href="javascript:void(0)" onclick="alert('Chức năng Xếp kệ hàng (Putaway) thuộc phân hệ quản lý vị trí kho.')" class="wh-card-action">
+            <a asp-controller="Putaway" asp-action="Index" class="wh-card-action">
                 Xếp hàng lên kệ <i class="bi bi-arrow-right"></i>
             </a>
         </div>
