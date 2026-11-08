@@ -1,0 +1,41 @@
+@model PRN222_EWMS_Web.ViewModels.CustomerReturnOrder.ReturnOrderFormModel
+@{
+    ViewData["Title"] = $"Chỉnh sửa bản nháp {Model.ReturnCode}";
+}
+
+<div class="sales-page">
+    <div class="workspace-heading mb-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+            <p class="eyebrow text-uppercase text-muted small mb-1">BÁN HÀNG / TRẢ HÀNG / CHỈNH SỬA</p>
+            <h1 class="h3 fw-bold text-dark mb-1">
+                Chỉnh sửa bản nháp: <span class="text-primary">@Model.ReturnCode</span>
+            </h1>
+            <p class="text-muted mb-0">Cập nhật thông tin kho tiếp nhận, lý do và danh sách mặt hàng hoàn trả của bản nháp.</p>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+            <span class="badge bg-warning text-dark px-3 py-2 fs-6">
+                <i class="bi bi-file-earmark-text me-1"></i> BẢN NHÁP (DRAFT)
+            </span>
+            <a class="workspace-link" href="javascript:history.back()">
+                <i class="bi bi-arrow-left" aria-hidden="true"></i> Quay lại
+            </a>
+        </div>
+    </div>
+
+    <form method="post" asp-action="Edit" asp-route-id="@Model.ReturnOrderId" id="returnOrderEditForm">
+        @Html.AntiForgeryToken()
+        <section class="workspace-card p-4 bg-white rounded border mb-4">
+            <partial name="_ReturnOrderForm" model="Model" />
+        </section>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <partial name="_ReturnOrderScripts" />
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            ReturnOrderEngine.initEdit(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AvailableLines ?? new())));
+        });
+    </script>
+}

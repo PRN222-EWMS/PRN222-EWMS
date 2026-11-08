@@ -1,0 +1,37 @@
+@model PRN222_EWMS_Web.ViewModels.CustomerReturnOrder.ReturnOrderFormModel
+@{
+    ViewData["Title"] = "Tạo mới đơn trả hàng";
+}
+
+<div class="sales-page">
+    <div class="workspace-heading mb-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+            <p class="eyebrow text-uppercase text-muted small mb-1">BÁN HÀNG / TRẢ HÀNG</p>
+            <h1 class="h3 fw-bold text-dark mb-1">Tạo mới đơn trả hàng</h1>
+            <p class="text-muted mb-0">Tạo phiếu yêu cầu khách hàng hoàn trả sản phẩm theo đơn bán hàng đã hoàn tất xuất kho.</p>
+        </div>
+        <a class="workspace-link" href="javascript:history.back()">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i> Quay lại
+        </a>
+    </div>
+
+    <form method="post" asp-action="Create" id="returnOrderForm">
+        @Html.AntiForgeryToken()
+        <section class="workspace-card p-4 bg-white rounded border mb-4">
+            <partial name="_ReturnOrderForm" model="Model" />
+        </section>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <partial name="_ReturnOrderScripts" />
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            ReturnOrderEngine.initCreate(
+                '@Url.Action("GetEligibleLines", "CustomerReturnOrder")',
+                @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AvailableLines ?? new()))
+            );
+        });
+    </script>
+}

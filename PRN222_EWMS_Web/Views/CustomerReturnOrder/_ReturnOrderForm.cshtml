@@ -1,0 +1,206 @@
+@model PRN222_EWMS_Web.ViewModels.CustomerReturnOrder.ReturnOrderFormModel
+@{
+    bool isEdit = Model.ReturnOrderId.HasValue && Model.ReturnOrderId.Value > 0;
+}
+
+<div asp-validation-summary="All" class="alert alert-danger" role="alert" style="@(ViewData.ModelState.IsValid ? "display:none;" : "")"></div>
+
+@if (isEdit)
+{
+    <input type="hidden" asp-for="ReturnOrderId" />
+    <input type="hidden" asp-for="ReturnCode" />
+    <input type="hidden" asp-for="SalesOrderId" />
+    <input type="hidden" asp-for="Status" />
+    <input type="hidden" name="RowVersion" value="@(Model.RowVersion != null ? Convert.ToBase64String(Model.RowVersion) : "")" />
+}
+
+<div class="row g-4">
+    <!-- CỘT TRÁI: ĐƠN BÁN HÀNG & KHÁCH HÀNG -->
+    <div class="col-lg-6">
+        <div class="mb-3">
+            <label class="form-label fw-semibold">
+                Đơn bán hàng tham chiếu (Sales Order) <span class="text-danger">*</span>
+            </label>
+            @if (isEdit)
+            {
+                <div class="input-group">
+                    <span class="input-group-text bg-light"><i class="bi bi-lock-fill text-muted"></i></span>
+                    <input type="text" class="form-control bg-light" value="@Model.SalesOrderCode" readonly />
+                </div>
+                <div class="form-text text-muted">Đơn bán hàng gốc không thể thay đổi sau khi tạo bản nháp.</div>
+            }
+            else
+            {
+                <select asp-for="SalesOrderId" class="form-select" id="salesOrderSelect" required>
+                    <option value="">-- Chọn đơn bán hàng đủ điều kiện trả --</option>
+                    @foreach (var so in Model.EligibleSalesOrders)
+                    {
+                        <option value="@so.SalesOrderId" 
+                                data-customer="@so.CustomerName" 
+                                data-default-warehouse="@so.DefaultWarehouseId"
+                                selected="@(Model.SalesOrderId == so.SalesOrderId)">
+                            @so.OrderCode — @so.CustomerName (@so.OrderDate.ToString("dd/MM/yyyy")) [@so.EligibleLinesCount dòng đủ điều kiện]
+                        </option>
+                    }
+                </select>
+            }
+            <span asp-validation-for="SalesOrderId" class="text-danger small"></span>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Khách hàng</label>
+            <input type="text" class="form-control bg-light" id="customerNameDisplay" value="@(Model.CustomerName ?? "Chưa chọn đơn bán hàng")" readonly />
+        </div>
+    </div>
+
+    <!-- CỘT PHẢI: KHO TIẾP NHẬN & LÝ DO -->
+    <div class="col-lg-6">
+        <div class="mb-3">
+            <label asp-for="WarehouseId" class="form-label fw-semibold">
+                Kho tiếp nhận hàng trả <span class="text-danger">*</span>
+            </label>
+            <select asp-for="WarehouseId" class="form-select" id="warehouseSelect" required>
+                <option value="">-- Chọn kho tiếp nhận --</option>
+                @foreach (var w in Model.ActiveWarehouses)
+                {
+                    <option value="@w.WarehouseId" selected="@(Model.WarehouseId == w.WarehouseId)">
+                        @w.WarehouseName
+                    </option>
+                }
+            </select>
+            <span asp-validation-for="WarehouseId" class="text-danger small"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Reason" class="form-label fw-semibold">Lý do trả hàng</label>
+            <textarea asp-for="Reason" class="form-control" rows="2" maxlength="1000" placeholder="Lý do khách hàng hoàn trả sản phẩm..."></textarea>
+            <span asp-validation-for="Reason" class="text-danger small"></span>
+        </div>
+    </div>
+</div>
+
+<hr class="my-4" />
+
+<!-- DANH SÁCH MẶT HÀNG HOÀN TRẢ -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h4 class="h5 mb-0 fw-bold text-dark">
+            <i class="bi bi-box-seam me-1"></i> Danh sách mặt hàng hoàn trả <span class="text-danger">*</span>
+        </h4>
+    </div>
+    <button type="button" class="btn btn-sm btn-primary rounded-pill px-3" id="btnAddLine" style="@(isEdit || Model.SalesOrderId > 0 ? "" : "display:none;")">
+        <i class="bi bi-plus-circle me-1"></i> Thêm mặt hàng
+    </button>
+</div>
+
+<div class="table-responsive mb-4">
+    <table class="table table-bordered align-middle mb-0 sales-lines-table" id="returnLinesTable">
+        <thead class="table-light">
+            <tr>
+                <th style="min-width: 250px;">Mặt hàng / Sản phẩm <span class="text-danger">*</span></th>
+                <th style="width: 100px;" class="text-center">Đơn vị</th>
+                <th style="width: 130px;" class="text-center">Đã thực xuất</th>
+                <th style="width: 140px;" class="text-center">Khả dụng trả</th>
+                <th style="width: 170px;" class="text-center">SL Yêu cầu trả <span class="text-danger">*</span></th>
+                <th style="width: 70px;" class="text-center">Xóa</th>
+            </tr>
+        </thead>
+        <tbody id="returnLinesBody">
+            @if (Model.Lines != null && Model.Lines.Count > 0)
+            {
+                for (int i = 0; i < Model.Lines.Count; i++)
+                {
+                    var line = Model.Lines[i];
+                    <tr data-row-index="@i">
+                        <td>
+                            @if (isEdit)
+                            {
+                                <input type="hidden" name="Lines[@i].ReturnLineId" value="@line.ReturnLineId" />
+                                <input type="hidden" name="Lines[@i].SolineId" class="soline-id-input" value="@line.SolineId" />
+                                <input type="hidden" name="Lines[@i].ProductId" value="@line.ProductId" />
+                                <span><strong>@line.ProductCode</strong> - @line.ProductName</span>
+                            }
+                            else
+                            {
+                                <select name="Lines[@i].SolineId" class="form-select form-select-sm soline-select" required>
+                                    <option value="">-- Chọn mặt hàng --</option>
+                                    @foreach (var opt in Model.AvailableLines)
+                                    {
+                                        <option value="@opt.SolineId" 
+                                                data-product-id="@opt.ProductId"
+                                                data-product-code="@opt.ProductCode"
+                                                data-product-name="@opt.ProductName"
+                                                data-unit="@opt.Unit"
+                                                data-shipped="@opt.ShippedQuantity"
+                                                data-eligible="@opt.EligibleQuantity"
+                                                selected="@(line.SolineId == opt.SolineId)">
+                                            @opt.ProductCode — @opt.ProductName (Khả dụng: @opt.EligibleQuantity)
+                                        </option>
+                                    }
+                                </select>
+                                <input type="hidden" name="Lines[@i].ProductId" class="product-id-input" value="@line.ProductId" />
+                            }
+                        </td>
+                        <td class="text-center unit-cell">@(line.Unit ?? "Cái")</td>
+                        <td class="text-center shipped-cell">@line.ShippedQuantity</td>
+                        <td class="text-center fw-semibold text-success eligible-cell">@line.EligibleQuantity</td>
+                        <td>
+                            <input type="number" 
+                                   name="Lines[@i].RequestedQuantity" 
+                                   class="form-control form-control-sm text-center requested-qty-input" 
+                                   value="@line.RequestedQuantity" 
+                                   min="1" 
+                                   max="@(line.EligibleQuantity > 0 ? line.EligibleQuantity : 999999)" 
+                                   required />
+                        </td>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm text-danger p-0 border-0 btn-remove-line" title="Xóa dòng này">
+                                <i class="bi bi-trash fs-6"></i>
+                            </button>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+    <div id="noLinesAlert" class="alert alert-light text-center border mt-2 py-3 text-muted small" style="@(Model.Lines != null && Model.Lines.Count > 0 ? "display:none;" : "")">
+        <i class="bi bi-inbox fs-4 d-block mb-1"></i>
+        Chưa có mặt hàng nào được chọn. Vui lòng chọn Đơn bán hàng và bấm "Thêm mặt hàng".
+    </div>
+</div>
+
+<!-- NÚT THAO TÁC -->
+<div class="d-flex justify-content-end align-items-center flex-wrap gap-2 pt-3 border-top">
+    <a href="javascript:history.back()" class="workspace-button sales-button-secondary">
+        <i class="bi bi-x-circle me-1"></i> Thoát
+    </a>
+    <button type="submit" name="Action" value="SaveDraft" class="workspace-button sales-button-secondary">
+        <i class="bi bi-file-earmark me-1"></i> Lưu bản nháp
+    </button>
+    <button type="button" class="workspace-button bg-success text-white" id="btnOpenConfirmModal">
+        <i class="bi bi-check-circle me-1"></i> Lưu & Xác nhận đơn
+    </button>
+</div>
+
+<!-- MODAL XÁC NHẬN ĐƠN TRẢ HÀNG -->
+<div class="modal fade" id="confirmReturnModal" tabindex="-1" aria-labelledby="confirmReturnModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="confirmReturnModalLabel">
+                    <i class="bi bi-question-circle-fill text-warning me-2"></i> Xác nhận đơn trả hàng
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+            </div>
+            <div class="modal-body">
+                Bạn có chắc chắn muốn xác nhận đơn trả hàng này không? Sau khi xác nhận, đơn sẽ chuyển sang trạng thái <strong>Sẵn sàng nhận hàng (OPEN)</strong> và khóa hạn mức, không thể chỉnh sửa được nữa.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy</button>
+                <button type="button" class="workspace-button bg-success text-white" id="btnSubmitConfirmOrder">
+                    <i class="bi bi-check-circle me-1"></i> Đồng ý xác nhận
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
