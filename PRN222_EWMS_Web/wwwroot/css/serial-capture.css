@@ -1,0 +1,20 @@
+.serial-capture { display:grid; gap:10px; min-width:0; }
+.serial-capture > p { margin:0; font-size:14px; }
+.serial-capture > small { font-size:12px; }
+.serial-capture label { font-size:14px; }
+.serial-capture > input:not([type=hidden]) { width:100%; min-height:44px; padding:9px 12px; border:1px solid #d9d9d9; border-radius:7px; background:#fff; font:inherit; }
+.serial-capture-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.serial-capture-button { display:inline-flex; align-items:center; justify-content:center; border:1px solid #d9d9d9; border-radius:7px; min-height:40px; padding:8px 13px; background:#fff; color:#353330; font:inherit; font-size:13px; cursor:pointer; }
+.serial-capture-button:hover { background:#f6f5f4; }
+.serial-capture-button:disabled,.serial-capture-upload.is-disabled { opacity:.6; cursor:default; }
+.serial-capture-upload { margin:0; }
+.serial-capture-camera { position:relative; display:grid; gap:9px; max-width:650px; }
+.serial-capture-camera video { width:100%; max-height:320px; border-radius:8px; background:#111; }
+.serial-capture-camera > span { position:absolute; left:16%; right:16%; top:25%; height:35%; border:2px solid #57d0fa; border-radius:9px; pointer-events:none; }
+.serial-capture-camera > button { justify-self:start; }
+.serial-capture-message { font-size:13px!important; color:#615d59; overflow-wrap:anywhere; }
+.serial-capture-message.is-error { color:#a33131; }
+.serial-capture-choices { display:flex; flex-wrap:wrap; gap:7px; }
+.serial-capture-choices button { border:1px solid #bed5e9; background:#f2f8fd; color:#095da9; padding:6px 10px; border-radius:6px; cursor:pointer; overflow-wrap:anywhere; }
+.serial-capture [hidden] { display:none!important; }
+@media(max-width:600px) { .serial-capture > input:not([type=hidden]) { font-size:16px; } }

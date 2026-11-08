@@ -63,6 +63,8 @@ public class PoListItemDto
                              && Status != "RECEIVED" && Status != "CLOSED" && Status != "CANCELLED";
 
     public bool CanEdit { get; set; }
+    public bool CanCancel { get; set; }
+    public string? CannotCancelReason { get; set; }
 }
 
 // ==========================================
@@ -121,6 +123,7 @@ public class PoDetailsViewModel
     public bool CanConfirm { get; set; }
     public bool CanCloseRemainder { get; set; }
     public bool CanCancelDraft { get; set; }
+    public bool CanCancel { get; set; }
 }
 
 public class PoLineDetailDto
@@ -144,8 +147,10 @@ public class PoLineDetailDto
     public long RemainingQuantity { get; set; }
     public int ClosedQuantity { get; set; }
 
-    public string LineStatus => RemainingQuantity == 0 ? "Đã nhận đủ"
-        : ReceivedQuantity > 0 ? "Đang nhận một phần"
+    public string LineStatus =>
+        (ClosedQuantity >= OrderedQuantity && ReceivedQuantity == 0) ? "Đã hủy"
+        : (RemainingQuantity == 0 && ReceivedQuantity > 0) ? "Đã nhận đủ"
+        : (ReceivedQuantity > 0 && RemainingQuantity > 0) ? "Đang nhận một phần"
         : ClosedQuantity > 0 ? "Đã đóng"
         : "Chờ nhận hàng";
 }
@@ -200,6 +205,7 @@ public class PoFormViewModel
     // Cờ trạng thái form
     public bool IsEditMode => PurchaseOrderId.HasValue && PurchaseOrderId > 0;
     public bool IsConfirmedOrder => Status == "CONFIRMED";
+    public bool CanCancel { get; set; }
 }
 
 public class PoFormLineDto

@@ -418,3 +418,18 @@ button.workspace-button:disabled:hover {
         grid-template-columns: 1fr;
     }
 }
+
+/* Không hiển thị viền đỏ và icon lỗi bên trong ô nhập Mã đơn mua, chỉ hiển thị thông báo bên dưới */
+#PoCodeInput.is-invalid,
+#PoCodeInput.input-validation-error,
+#PoCodeInput:invalid {
+    border-color: #d4d3d1 !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    padding-right: 12px !important;
+}
+#PoCodeInput:focus {
+    border-color: var(--workspace-blue, #0075de) !important;
+    box-shadow: 0 0 0 3px rgba(0, 117, 222, 0.15) !important;
+    outline: none !important;
+}

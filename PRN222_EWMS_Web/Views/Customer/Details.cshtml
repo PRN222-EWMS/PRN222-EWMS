@@ -9,7 +9,7 @@
         <div class="table-wrap"><table class="workspace-table"><thead><tr><th scope="col">Mã đơn</th><th scope="col">Ngày đơn</th><th scope="col">Kho xuất</th><th scope="col">Người tạo</th><th scope="col">Trạng thái đơn</th></tr></thead><tbody>
         @foreach (var order in Model.Orders)
         {
-            <tr><td><a class="workspace-button sales-button-small" asp-controller="SalesOrder" asp-action="Details" asp-route-id="@order.Id">@order.Code</a></td><td>@order.OrderDate.ToString("dd/MM/yyyy")</td><td>@order.WarehouseName</td><td>@order.CreatedByName</td><td><span class="sales-status">@SalesDisplay.Status(order.Status)</span>@if (order.HasShortage) { <div class="sales-muted-small">Thiếu nguồn</div> }</td></tr>
+            <tr><td><a class="sales-code-badge" asp-controller="SalesOrder" asp-action="Details" asp-route-id="@order.Id">@order.Code</a></td><td>@order.OrderDate.ToString("dd/MM/yyyy")</td><td>@order.WarehouseName</td><td>@order.CreatedByName</td><td><span class="sales-status">@SalesDisplay.Status(order.Status)</span>@if (order.HasShortage) { <div class="sales-muted-small">Thiếu nguồn</div> }</td></tr>
         }
         </tbody></table></div>
         @if (Model.Orders.Count == 0) { <p class="sales-empty">Khách hàng chưa có đơn bán hàng.</p> }

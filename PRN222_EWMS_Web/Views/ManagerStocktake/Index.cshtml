@@ -1,0 +1,70 @@
+@using PRN222_EWMS_Web.ViewModels.Manager
+@model ManagerStocktakeListViewModel
+@{
+    ViewData["Title"] = "Kế hoạch kiểm kê";
+    var filter = Model.Filter;
+    var firstPage = Math.Max(1, Math.Min(filter.Page - 2, Model.TotalPages - 4));
+    var lastPage = Math.Min(Model.TotalPages, firstPage + 4);
+}
+
+<div class="warehouse-list">
+    <header class="workspace-heading">
+        <div><p class="eyebrow">VẬN HÀNH KHO</p><h1>Kế hoạch kiểm kê</h1><p class="muted mb-0">Theo dõi phạm vi, phân công và tiến độ kiểm kê tại các kho.</p></div>
+        <a asp-action="Create" class="workspace-button"><i class="bi bi-plus-lg me-2" aria-hidden="true"></i>Tạo đợt kiểm kê</a>
+    </header>
+
+    <section class="workspace-card">
+        <form asp-action="Index" method="get" class="workspace-form" aria-label="Lọc kế hoạch kiểm kê">
+            <div class="row g-3">
+                <div class="col-md-4"><label for="manager-stocktake-search">Mã đợt</label><input id="manager-stocktake-search" name="Search" value="@filter.Search" maxlength="100" placeholder="Tìm mã đợt kiểm kê..." /></div>
+                <div class="col-md-4"><label for="manager-stocktake-warehouse">Kho</label><select id="manager-stocktake-warehouse" name="WarehouseId"><option value="">Tất cả kho</option>@foreach (var warehouse in Model.Warehouses) { <option value="@warehouse.Id" selected="@(filter.WarehouseId == warehouse.Id)">@warehouse.Name</option> }</select></div>
+                <div class="col-md-4"><label for="manager-stocktake-status">Trạng thái</label><select id="manager-stocktake-status" name="Status"><option value="">Tất cả trạng thái</option>@foreach (var status in ManagerStocktakeLabels.Statuses) { <option value="@status" selected="@(filter.Status == status)">@ManagerStocktakeLabels.Status(status)</option> }</select></div>
+                <div class="col-md-4"><label for="manager-stocktake-from">Ngày dự kiến từ</label><input type="date" id="manager-stocktake-from" name="FromDate" value="@filter.FromDate?.ToString("yyyy-MM-dd")" /></div>
+                <div class="col-md-4"><label for="manager-stocktake-to">Đến ngày</label><input type="date" id="manager-stocktake-to" name="ToDate" value="@filter.ToDate?.ToString("yyyy-MM-dd")" /></div>
+                <div class="col-md-4 d-flex align-items-end gap-2"><button type="submit" class="workspace-button">Lọc</button><a asp-action="Index" class="workspace-link">Đặt lại</a></div>
+            </div>
+            <div asp-validation-summary="All" class="text-danger" role="alert"></div>
+        </form>
+    </section>
+
+    <section class="workspace-card" aria-label="Danh sách đợt kiểm kê">
+        <p class="muted" role="status">Tìm thấy @Model.TotalCount đợt kiểm kê.</p>
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Bảng kế hoạch kiểm kê, có thể cuộn ngang">
+            <table class="workspace-table">
+                <thead><tr><th>Mã đợt / Kho</th><th>Phạm vi</th><th>Ngày dự kiến</th><th>Phân công</th><th>Trạng thái / Tiến độ</th><th>Thao tác</th></tr></thead>
+                <tbody>
+                    @foreach (var item in Model.Items)
+                    {
+                        <tr>
+                            <td><a asp-action="Details" asp-route-id="@item.Id" class="warehouse-detail-link">@item.Code</a><div class="muted mt-1">@item.WarehouseName</div></td>
+                            <td><div>@(item.ScopeType == "WHOLE_WAREHOUSE" ? "Toàn kho" : $"{item.ScopeCount} nhánh vị trí")</div><small class="muted">@(item.IncludeAwaitingPutaway ? "Bao gồm hàng chờ xếp" : "Không gồm hàng chờ xếp")</small></td>
+                            <td>@(item.PlannedAt.HasValue ? ManagerStocktakeLabels.Local(item.PlannedAt.Value).ToString("dd/MM/yyyy HH:mm") : "Chưa đặt lịch")</td>
+                            <td><div>@item.StaffCount nhân viên</div><small class="muted">@item.CompletedAssignmentCount / @item.AssignmentCount phân công hoàn thành</small></td>
+                            <td><span class="role-badge">@ManagerStocktakeLabels.Status(item.Status)</span>
+                                @if (!item.StartedAt.HasValue && !item.LatestRoundNumber.HasValue) { <div class="muted mt-2">Chưa bắt đầu</div> }
+                                else { <div class="muted mt-2">Vòng @(item.LatestRoundNumber?.ToString() ?? "—") · @item.ScannedCount serial đã quét</div><small class="muted">@item.ExpectedCount serial kỳ vọng trong vòng</small> }
+                            </td>
+                            <td><div class="d-flex flex-wrap gap-2"><a asp-action="Details" asp-route-id="@item.Id">Chi tiết</a>@if (item.CanEdit) { <a asp-action="Edit" asp-route-id="@item.Id">Sửa</a><a asp-action="Delete" asp-route-id="@item.Id" class="text-danger">Xóa</a> }</div></td>
+                        </tr>
+                    }
+                    @if (Model.Items.Count == 0) { <tr><td colspan="6" class="warehouse-empty">Chưa có đợt kiểm kê phù hợp với bộ lọc.</td></tr> }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="warehouse-pagination" aria-label="Phân trang kế hoạch kiểm kê">
+                <span>Trang @filter.Page / @Model.TotalPages</span>
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    @if (filter.Page > 1) { <a asp-action="Index" asp-route-Search="@filter.Search" asp-route-Status="@filter.Status" asp-route-WarehouseId="@filter.WarehouseId" asp-route-FromDate="@filter.FromDate?.ToString("yyyy-MM-dd")" asp-route-ToDate="@filter.ToDate?.ToString("yyyy-MM-dd")" asp-route-Page="@(filter.Page - 1)">Trước</a> }
+                    @for (var pageNumber = firstPage; pageNumber <= lastPage; pageNumber++)
+                    {
+                        if (pageNumber == filter.Page) { <span class="role-badge" aria-current="page">@pageNumber</span> }
+                        else { <a asp-action="Index" asp-route-Search="@filter.Search" asp-route-Status="@filter.Status" asp-route-WarehouseId="@filter.WarehouseId" asp-route-FromDate="@filter.FromDate?.ToString("yyyy-MM-dd")" asp-route-ToDate="@filter.ToDate?.ToString("yyyy-MM-dd")" asp-route-Page="@pageNumber">@pageNumber</a> }
+                    }
+                    @if (filter.Page < Model.TotalPages) { <a asp-action="Index" asp-route-Search="@filter.Search" asp-route-Status="@filter.Status" asp-route-WarehouseId="@filter.WarehouseId" asp-route-FromDate="@filter.FromDate?.ToString("yyyy-MM-dd")" asp-route-ToDate="@filter.ToDate?.ToString("yyyy-MM-dd")" asp-route-Page="@(filter.Page + 1)">Sau</a> }
+                </div>
+            </nav>
+        }
+    </section>
+</div>

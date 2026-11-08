@@ -13,6 +13,8 @@ public partial class StocktakeAssignment
 
     public int? LocationId { get; set; }
 
+    public string ScopeKind { get; set; } = null!;
+
     public string Status { get; set; } = null!;
 
     public DateTime AssignedAt { get; set; }

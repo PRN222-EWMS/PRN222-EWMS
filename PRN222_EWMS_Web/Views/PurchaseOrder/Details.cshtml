@@ -71,6 +71,12 @@
                     <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Đóng số lượng còn lại
                 </button>
             }
+            @if (Model.CanCancel)
+            {
+                <button type="button" class="workspace-button sales-button-secondary text-danger" style="border-color: #fca5a5;" onclick="openCancelModal()">
+                    <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Hủy đơn mua
+                </button>
+            }
         </div>
     </div>
 
@@ -86,17 +92,6 @@
         <div class="po-alert po-alert-danger" role="alert">
             <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
             <span>@TempData["ErrorMessage"]</span>
-        </div>
-    }
-
-    @if (!Model.CanEdit && (Model.Status == "CONFIRMED" || Model.Status == "PARTIALLY_RECEIVED"))
-    {
-        <div class="po-alert po-alert-warning" role="status">
-            <i class="bi bi-lock-fill" aria-hidden="true"></i>
-            <div>
-                <strong>Quy tắc khóa đơn mua hàng (Inbound Lock):</strong>
-                <span>Đơn mua hàng đã có đợt nhận hàng (Inbound) được lưu trong hệ thống. Để bảo toàn tính toàn vẹn của chuỗi cung ứng và lịch sử đối chiếu kho, đơn mua hàng này đã bị khóa sửa.</span>
-            </div>
         </div>
     }
 
@@ -162,7 +157,7 @@
                 @if (Model.ClosedAt.HasValue)
                 {
                     <div>
-                        <dt>Thời điểm đóng đơn</dt>
+                        <dt>@(Model.Status == "CANCELLED" ? "Thời điểm hủy đơn" : "Thời điểm đóng đơn")</dt>
                         <dd>@Model.ClosedAt.Value.ToString("dd/MM/yyyy HH:mm")</dd>
                     </div>
                 }
@@ -180,9 +175,11 @@
 
     @if (!string.IsNullOrWhiteSpace(Model.CloseReason))
     {
-        <section class="workspace-card" style="border-left: 4px solid #736f69;">
-            <h3 class="h6 mb-2 text-muted text-uppercase" style="font-size: 12px; letter-spacing: 0.5px;">Lý do đóng đơn</h3>
-            <p class="mb-0 text-muted" style="white-space: pre-wrap;">@Model.CloseReason</p>
+        <section class="workspace-card" style="border-left: 4px solid @(Model.Status == "CANCELLED" ? "#dc2626" : "#736f69");">
+            <h3 class="h6 mb-2 @(Model.Status == "CANCELLED" ? "text-danger" : "text-muted") text-uppercase" style="font-size: 12px; letter-spacing: 0.5px;">
+                @(Model.Status == "CANCELLED" ? "Lý do hủy đơn" : "Lý do đóng đơn")
+            </h3>
+            <p class="mb-0 @(Model.Status == "CANCELLED" ? "text-danger" : "text-muted")" style="white-space: pre-wrap;">@Model.CloseReason</p>
         </section>
     }
 
@@ -344,6 +341,40 @@
         }
         function closeCloseModal() {
             document.getElementById('closeRemainderModal').classList.remove('show');
+        }
+    </script>
+}
+
+<!-- MODAL HỦY ĐƠN MUA HÀNG -->
+@if (Model.CanCancel)
+{
+    <div id="cancelOrderModal" class="po-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="cancelModalTitle">
+        <div class="po-modal">
+            <div class="po-modal-header">
+                <h3 id="cancelModalTitle">Xác nhận hủy đơn mua hàng</h3>
+                <button type="button" class="btn-close" onclick="closeCancelModal()" aria-label="Đóng"></button>
+            </div>
+            <form method="post" asp-action="Cancel" asp-route-id="@Model.PurchaseOrderId">
+                @Html.AntiForgeryToken()
+                <p class="mb-0">
+                    Bạn có chắc chắn muốn hủy đơn mua hàng <strong>@Model.Pocode</strong>?
+                </p>
+                <div class="d-flex justify-content-end gap-2 mt-4">
+                    <button type="button" class="workspace-button sales-button-secondary" onclick="closeCancelModal()">Bỏ qua</button>
+                    <button type="submit" class="workspace-button" style="background: #c92a2a; border-color: #c92a2a;">
+                        <i class="bi bi-x-circle me-1"></i> Xác nhận hủy đơn
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openCancelModal() {
+            document.getElementById('cancelOrderModal').classList.add('show');
+        }
+        function closeCancelModal() {
+            document.getElementById('cancelOrderModal').classList.remove('show');
         }
     </script>
 }

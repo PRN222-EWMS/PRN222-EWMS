@@ -11,20 +11,17 @@
             <p class="muted">Cập nhật thông tin chi tiết hoặc sản phẩm khi đơn chưa phát sinh phiếu nhập hàng.</p>
         </div>
         <div class="po-toolbar">
-            <a class="workspace-button sales-button-secondary" asp-action="Details" asp-route-id="@Model.PurchaseOrderId">
-                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Hủy & Quay lại
+            <a class="workspace-button sales-button-secondary" asp-action="Index">
+                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Thoát
             </a>
         </div>
     </div>
 
-    @if (Model.IsConfirmedOrder)
+    @if (TempData["ErrorMessage"] != null)
     {
-        <div class="po-alert po-alert-info" role="status">
-            <i class="bi bi-shield-check" aria-hidden="true"></i>
-            <div>
-                <strong>Đơn hàng đang ở trạng thái ĐÃ XÁC NHẬN (CONFIRMED):</strong>
-                <span>Do chưa phát sinh đợt nhận hàng (Inbound) nào, bạn được phép cập nhật ngày dự kiến giao hàng, bổ sung ghi chú hoặc điều chỉnh số lượng dòng sản phẩm. Nhà cung cấp không thể thay đổi sau khi đơn đã xác nhận.</span>
-            </div>
+        <div class="po-alert po-alert-danger mb-3" role="alert">
+            <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+            <span>@TempData["ErrorMessage"]</span>
         </div>
     }
 
@@ -36,17 +33,62 @@
         </section>
 
         <section class="workspace-card">
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
-                <div class="small text-muted">
-                    Hệ thống tự động kiểm tra xung đột dữ liệu (Concurrency Check) để đảm bảo không bị ghi đè khi nhiều nhân viên cùng xử lý.
-                </div>
-                <div class="d-flex gap-2">
-                    <a class="workspace-button sales-button-secondary" asp-action="Details" asp-route-id="@Model.PurchaseOrderId">Hủy bỏ</a>
+            <div class="d-flex justify-content-end align-items-center gap-2">
+                @if (Model.CanCancel)
+                {
+                    <button type="button" class="workspace-button sales-button-secondary" onclick="openCancelModal()">
+                        <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Hủy đơn mua
+                    </button>
+                }
+                @if (!Model.IsConfirmedOrder)
+                {
+                    <button type="submit" name="action" value="draft" class="workspace-button sales-button-secondary">
+                        <i class="bi bi-file-earmark me-1" aria-hidden="true"></i> Lưu bản nháp
+                    </button>
+                    <button type="submit" name="action" value="confirm" class="workspace-button" style="background: #0e733b;">
+                        <i class="bi bi-check-circle me-1" aria-hidden="true"></i> Lưu & Xác nhận đơn
+                    </button>
+                }
+                else
+                {
                     <button type="submit" class="workspace-button">
                         <i class="bi bi-save me-1" aria-hidden="true"></i> Lưu thay đổi
                     </button>
-                </div>
+                }
             </div>
         </section>
     </form>
+
+    @if (Model.CanCancel)
+    {
+        <div id="cancelOrderModal" class="po-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="cancelModalTitle">
+            <div class="po-modal">
+                <div class="po-modal-header">
+                    <h3 id="cancelModalTitle">Xác nhận hủy đơn mua hàng</h3>
+                    <button type="button" class="btn-close" onclick="closeCancelModal()" aria-label="Đóng"></button>
+                </div>
+                <form method="post" asp-action="Cancel" asp-route-id="@Model.PurchaseOrderId">
+                    @Html.AntiForgeryToken()
+                    <p class="mb-0">
+                        Bạn có chắc chắn muốn hủy đơn mua hàng <strong>@Model.Pocode</strong>?
+                    </p>
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <button type="button" class="workspace-button sales-button-secondary" onclick="closeCancelModal()">Bỏ qua</button>
+                        <button type="submit" class="workspace-button" style="background: #c92a2a; border-color: #c92a2a;">
+                            <i class="bi bi-x-circle me-1"></i> Xác nhận hủy đơn
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script>
+            function openCancelModal() {
+                document.getElementById('cancelOrderModal').classList.add('show');
+            }
+            function closeCancelModal() {
+                document.getElementById('cancelOrderModal').classList.remove('show');
+            }
+        </script>
+    }
 </div>

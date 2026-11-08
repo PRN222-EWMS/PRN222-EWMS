@@ -120,25 +120,48 @@ public class PurchaseOrderService(
             .Distinct()
             .ToListAsync();
 
-        filter.Items = pagedData.Select(x => new PoListItemDto
+        filter.Items = pagedData.Select(x =>
         {
-            PurchaseOrderId = x.PurchaseOrderId,
-            Pocode = x.Pocode,
-            SupplierName = x.SupplierName,
-            WarehouseName = x.WarehouseName,
-            CreatedByName = x.CreatedByName,
-            CreatedByUserId = x.CreatedByUserId,
-            OrderDate = x.OrderDate,
-            ExpectedArrivalDate = x.ExpectedArrivalDate,
-            Status = x.Status,
-            ConfirmedAt = x.ConfirmedAt,
-            TotalOrderedQuantity = x.TotalOrdered,
-            TotalClosedQuantity = x.TotalClosed,
-            TotalReceivedQuantity = x.TotalReceived,
-            TotalRemainingQuantity = x.TotalRemaining,
-            CanEdit = (role == "MANAGER" || x.CreatedByUserId == currentUserId)
-                      && (x.Status == "DRAFT" || x.Status == "CONFIRMED")
-                      && !lockedPoIds.Contains(x.PurchaseOrderId)
+            bool hasInbound = lockedPoIds.Contains(x.PurchaseOrderId);
+            bool hasPermission = (role == "MANAGER" || x.CreatedByUserId == currentUserId);
+            bool isValidStatus = (x.Status == "DRAFT" || x.Status == "CONFIRMED");
+            bool canCancel = hasPermission && isValidStatus && !hasInbound;
+
+            string? cannotCancelReason = null;
+            if (!canCancel)
+            {
+                if (!hasPermission)
+                    cannotCancelReason = "Bạn không có quyền hủy đơn hàng này.";
+                else if (x.Status == "CANCELLED")
+                    cannotCancelReason = "Đơn mua hàng đã bị hủy.";
+                else if (x.Status == "CLOSED")
+                    cannotCancelReason = "Đơn mua hàng đã đóng.";
+                else if (hasInbound || x.Status == "PARTIALLY_RECEIVED" || x.Status == "RECEIVED")
+                    cannotCancelReason = "Đơn đã phát sinh phiếu nhận hàng (Inbound), không thể hủy.";
+                else
+                    cannotCancelReason = $"Đơn hàng ở trạng thái {x.Status} không thể hủy.";
+            }
+
+            return new PoListItemDto
+            {
+                PurchaseOrderId = x.PurchaseOrderId,
+                Pocode = x.Pocode,
+                SupplierName = x.SupplierName,
+                WarehouseName = x.WarehouseName,
+                CreatedByName = x.CreatedByName,
+                CreatedByUserId = x.CreatedByUserId,
+                OrderDate = x.OrderDate,
+                ExpectedArrivalDate = x.ExpectedArrivalDate,
+                Status = x.Status,
+                ConfirmedAt = x.ConfirmedAt,
+                TotalOrderedQuantity = x.TotalOrdered,
+                TotalClosedQuantity = x.TotalClosed,
+                TotalReceivedQuantity = x.TotalReceived,
+                TotalRemainingQuantity = x.TotalRemaining,
+                CanEdit = hasPermission && isValidStatus && !hasInbound,
+                CanCancel = canCancel,
+                CannotCancelReason = cannotCancelReason
+            };
         }).ToList();
 
         // Nạp dropdown
@@ -253,7 +276,11 @@ public class PurchaseOrderService(
                                 && po.PurchaseOrderLines.Any(l => (l.OrderedQuantity - l.ClosedQuantity) > 0),
 
             CanCancelDraft = (role == "PURCHASING_STAFF" && po.CreatedByUserId == currentUserId)
-                             && po.Status == "DRAFT" && !hasInbound
+                             && po.Status == "DRAFT" && !hasInbound,
+
+            CanCancel = (role == "MANAGER" || po.CreatedByUserId == currentUserId)
+                        && (po.Status == "DRAFT" || po.Status == "CONFIRMED")
+                        && !hasInbound
         };
 
         return model;
@@ -322,11 +349,31 @@ public class PurchaseOrderService(
                 return (false, capacityError ?? "Sức chứa kho tiếp nhận không đủ để xác nhận đơn mua hàng.", 0);
         }
 
+        // Kiểm tra mã đơn mua (POCode) nếu người dùng nhập
+        string poCode;
+        if (!string.IsNullOrWhiteSpace(model.Pocode))
+        {
+            poCode = model.Pocode.Trim();
+            if (poCode.Length > 40)
+                return (false, "Mã đơn mua không được vượt quá 40 ký tự.", 0);
+
+            // Kiểm tra trùng mã đơn mua: Nếu trùng phải thông báo lỗi, tuyệt đối không tự tạo mới mã đơn!
+            var isDuplicate = await repo.Orders.AnyAsync(p => p.Pocode == poCode);
+            if (isDuplicate)
+                return (false, $"Mã đơn mua '{poCode}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.", 0);
+        }
+        else
+        {
+            poCode = await repo.GenerateNextPoCodeAsync();
+            var isDuplicateGenerated = await repo.Orders.AnyAsync(p => p.Pocode == poCode);
+            if (isDuplicateGenerated)
+                return (false, $"Mã đơn mua tự sinh '{poCode}' đã tồn tại. Vui lòng thử lại.", 0);
+        }
+
         // Bắt đầu Transaction
         using var transaction = await repo.BeginTransactionAsync();
         try
         {
-            var poCode = await repo.GenerateNextPoCodeAsync();
             var now = DateTime.UtcNow;
 
             var po = new PurchaseOrder
@@ -385,6 +432,10 @@ public class PurchaseOrderService(
         catch (Exception ex)
         {
             await transaction.RollbackAsync();
+            if (ex.InnerException?.Message.Contains("UX_PurchaseOrder_01") == true || ex.Message.Contains("UX_PurchaseOrder_01"))
+            {
+                return (false, $"Mã đơn mua '{poCode}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.", 0);
+            }
             return (false, $"Lỗi lưu đơn mua hàng: {ex.Message}", 0);
         }
     }
@@ -437,7 +488,9 @@ public class PurchaseOrderService(
                 .Select(w => new LookupItemDto { Id = w.WarehouseId, Name = w.WarehouseName }).ToListAsync(),
             Suppliers = await repo.Suppliers.Where(s => s.Status == "ACTIVE")
                 .Select(s => new LookupItemDto { Id = s.SupplierId, Name = s.SupplierName }).ToListAsync(),
-            AvailableProducts = productList
+            AvailableProducts = productList,
+            CanCancel = (role == "MANAGER" || po.CreatedByUserId == currentUserId)
+                        && (po.Status == "DRAFT" || po.Status == "CONFIRMED")
         };
 
         return model;
@@ -712,6 +765,84 @@ public class PurchaseOrderService(
     }
 
     // =========================================================================
+    // 6.1. HỦY ĐƠN MUA HÀNG (CANCEL PO)
+    // =========================================================================
+    public async Task<(bool Success, string Message)> CancelOrderAsync(long id, int actorId, string role, string? reason = null)
+    {
+        var po = await db.PurchaseOrders
+            .Include(p => p.PurchaseOrderLines)
+            .FirstOrDefaultAsync(p => p.PurchaseOrderId == id);
+
+        if (po == null) return (false, "Không tìm thấy đơn mua hàng.");
+
+        // Quyền: Quản lý (MANAGER) hoặc chính người tạo đơn
+        if (role != "MANAGER" && po.CreatedByUserId != actorId)
+            return (false, "Bạn không có quyền hủy đơn mua hàng này.");
+
+        // Chỉ được hủy khi đơn ở trạng thái DRAFT hoặc CONFIRMED
+        if (po.Status != "DRAFT" && po.Status != "CONFIRMED")
+            return (false, "Chỉ được phép hủy đơn hàng ở trạng thái Bản nháp (DRAFT) hoặc Đã xác nhận (CONFIRMED).");
+
+        // Không cho phép hủy nếu đơn đã từng phát sinh Inbound
+        if (await repo.HasAnyInboundAsync(id))
+            return (false, "Đơn mua hàng đã phát sinh phiếu nhận hàng (Inbound), không thể hủy đơn.");
+
+        using var transaction = await repo.BeginTransactionAsync();
+        try
+        {
+            var now = DateTime.UtcNow;
+            string oldStatus = po.Status;
+
+            po.Status = "CANCELLED";
+            po.ClosedAt = now;
+            po.CloseReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+
+            // Đóng toàn bộ các dòng sản phẩm
+            foreach (var line in po.PurchaseOrderLines)
+            {
+                line.ClosedQuantity = line.OrderedQuantity;
+            }
+
+            // Nếu đơn đã CONFIRMED, đã có SupplySource PO_INCOMING -> cần thu hồi nguồn cung và cảnh báo thiếu hàng cho các Sales Order liên kết
+            if (oldStatus == "CONFIRMED")
+            {
+                foreach (var line in po.PurchaseOrderLines)
+                {
+                    var source = await db.SupplySources.FirstOrDefaultAsync(s => s.PolineId == line.PolineId);
+                    if (source != null)
+                    {
+                        source.RemainingQuantity = 0;
+                        source.EligibleQuantity = 0;
+
+                        // Tìm các Active Reservation của các Sales Order đang dựa vào nguồn PO_INCOMING này
+                        var affectedReservations = await db.Reservations
+                            .Include(r => r.SalesOrder)
+                            .Where(r => r.SupplySourceId == source.SupplySourceId && r.Status == "ACTIVE")
+                            .ToListAsync();
+
+                        foreach (var res in affectedReservations)
+                        {
+                            if (res.SalesOrder != null)
+                            {
+                                res.SalesOrder.HasShortage = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            await repo.SaveChangesWithActorAsync(actorId);
+            await transaction.CommitAsync();
+            return (true, "Đã hủy đơn mua hàng thành công.");
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            return (false, $"Lỗi khi hủy đơn mua hàng: {ex.Message}");
+        }
+    }
+
+    // =========================================================================
     // 7. LẤY SẢN PHẨM THEO NHÀ CUNG CẤP (AJAX HELPER)
     // =========================================================================
     public async Task<List<ProductLookupDto>> GetProductsBySupplierAsync(int supplierId)
@@ -728,5 +859,12 @@ public class PurchaseOrderService(
                           Unit = p.Unit,
                           SupplierId = sp.SupplierId
                       }).ToListAsync();
+    }
+
+    public async Task<bool> IsPoCodeDuplicateAsync(string poCode)
+    {
+        if (string.IsNullOrWhiteSpace(poCode)) return false;
+        var trimmed = poCode.Trim();
+        return await repo.Orders.AnyAsync(p => p.Pocode == trimmed);
     }
 }
