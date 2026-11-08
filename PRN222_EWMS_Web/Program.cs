@@ -23,7 +23,9 @@ builder.Services.AddControllersWithViews(options => options.Filters.Add(new Micr
 builder.Services.AddDbContext<EwmsDbContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("DBDefault") ?? builder.Configuration.GetConnectionString("MyCnn")));
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Sales.ISalesRepository, PRN222_EWMS_Web.Repositories.Sales.SalesRepository>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Sales.ICustomerReturnOrderRepository, PRN222_EWMS_Web.Repositories.Sales.CustomerReturnOrderRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Sales.ISalesService, PRN222_EWMS_Web.Services.Sales.SalesService>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.Sales.ICustomerReturnOrderService, PRN222_EWMS_Web.Services.Sales.CustomerReturnOrderService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Purchasing.IPurchaseOrderRepository, PRN222_EWMS_Web.Repositories.Purchasing.PurchaseOrderRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Purchasing.IWarehouseCapacityEngine, PRN222_EWMS_Web.Services.Purchasing.WarehouseCapacityEngine>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Purchasing.IPurchaseOrderService, PRN222_EWMS_Web.Services.Purchasing.PurchaseOrderService>();
