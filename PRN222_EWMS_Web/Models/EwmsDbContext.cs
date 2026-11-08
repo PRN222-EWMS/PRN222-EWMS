@@ -1770,6 +1770,9 @@ public partial class EwmsDbContext : DbContext
                 .HasPrecision(3)
                 .HasDefaultValueSql("(sysutcdatetime())");
             entity.Property(e => e.LocationId).HasColumnName("LocationID");
+            entity.Property(e => e.ScopeKind)
+                .HasMaxLength(16)
+                .IsUnicode(false);
             entity.Property(e => e.Status)
                 .HasMaxLength(32)
                 .IsUnicode(false)

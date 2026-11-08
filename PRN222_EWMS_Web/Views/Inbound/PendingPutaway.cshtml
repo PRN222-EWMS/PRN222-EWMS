@@ -1,4 +1,49 @@
-@model PRN222_EWMS_Web.ViewModels.Inbound.InboundPendingPutawayViewModel
+@model PRN222_EWMS_Web.ViewModels.Putaway.PutawayIndexViewModel
 @{ ViewData["Title"] = "Chờ xếp kho"; }
-<div class="workspace-heading"><div><p class="eyebrow">VẬN HÀNH KHO</p><h1>Chờ Putaway</h1><p class="muted">Thiết bị đã nhận nhưng chưa có vị trí lưu kho.</p></div><a class="workspace-link" asp-action="Index">Phiếu nhập</a></div>
-<section class="workspace-card">@if (Model.Items.Count == 0) { <p class="muted">Không có Serial chờ xếp kho.</p> } else { <div class="table-wrap"><table class="workspace-table"><thead><tr><th>Serial</th><th>Sản phẩm</th><th>Tình trạng</th><th>Kho</th><th>Phiếu nhập</th><th>Thời gian nhận</th><th>Vị trí</th></tr></thead><tbody>@foreach (var item in Model.Items) { <tr><td>@item.Serial</td><td>@item.ProductCode — @item.ProductName</td><td>@item.Condition</td><td>@item.Warehouse</td><td><a asp-action="Details" asp-route-id="@item.InboundId">@item.InboundCode</a></td><td>@item.ReceivedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td><td>Chưa xếp kho</td></tr> }</tbody></table></div> }</section>
+<div class="putaway-page" data-putaway data-pending-url="@Url.Action("Pending", "Putaway")" data-lookup-url="@Url.Action("Lookup", "Putaway")">
+    <div class="workspace-heading">
+        <div><p class="eyebrow">VẬN HÀNH KHO · PUTAWAY</p><h1>Chờ xếp kho</h1><p class="muted">@Model.WarehouseName · Chọn hàng đã nhận, tìm vị trí phù hợp rồi xác nhận.</p></div>
+        <a asp-controller="Inbound" asp-action="Index" class="workspace-link">← Phiếu nhập kho</a>
+    </div>
+    @if (Model.LoadError is not null)
+    {
+        <div class="putaway-error" role="alert">@Model.LoadError</div>
+        <a asp-controller="Putaway" asp-action="Index" class="workspace-link">Mở lại Chờ xếp kho</a>
+    }
+    else
+    {
+        <p class="putaway-success" data-putaway-success role="status" hidden></p>
+        <p class="putaway-error" data-putaway-error role="alert" hidden></p>
+        <section class="workspace-card putaway-capture-panel" aria-labelledby="putaway-scan-title">
+            <h2 id="putaway-scan-title">Tra cứu Serial</h2>
+            <form asp-controller="Putaway" asp-action="Lookup" method="get" data-putaway-lookup>
+                <partial name="_SerialCapture" model="@(new PRN222_EWMS_Web.ViewModels.Shared.SerialCaptureViewModel {
+                    SerialName = "serial", HelpText = "Chọn từ danh sách chờ hoặc quét/nhập Serial đã nhận chính thức. Kết quả nhận diện chỉ điền mã, chưa lưu vị trí." })" />
+                <button type="submit" class="workspace-button">Tra cứu Serial</button>
+            </form>
+        </section>
+        <div class="putaway-workspace">
+            <section class="putaway-queue" data-putaway-queue aria-label="Danh sách hàng chờ xếp">
+                <partial name="~/Views/Putaway/_Queue.cshtml" model="Model.Queue" />
+            </section>
+            <section class="putaway-detail" data-putaway-detail aria-label="Chi tiết Serial và vị trí phù hợp">
+                <div class="workspace-card putaway-placeholder"><i class="bi bi-boxes" aria-hidden="true"></i><h2>Chọn một Serial để xếp kho</h2><p class="muted">Chọn nguồn hàng và phiếu bên trái, hoặc tra cứu Serial ở phía trên.</p></div>
+            </section>
+        </div>
+        <dialog class="putaway-confirm" data-putaway-confirm aria-labelledby="putaway-confirm-title">
+            <h2 id="putaway-confirm-title">Xác nhận xếp kho</h2>
+            <p><strong data-confirm-serial></strong></p><p data-confirm-product></p>
+            <dl><dt>Vị trí đích</dt><dd data-confirm-path></dd><dt>Tình trạng</dt><dd data-confirm-condition></dd></dl>
+            <p class="putaway-note" data-confirm-quarantine hidden>Hàng vẫn được cách ly sau khi xếp kho.</p>
+            <p class="putaway-error" data-confirm-error role="alert" hidden></p>
+            <form asp-controller="Putaway" asp-action="Confirm" method="post" data-confirm-form>
+                <input type="hidden" name="SerialItemId" /><input type="hidden" name="TargetLocationId" /><input type="hidden" name="RowVersion" />
+                <div class="putaway-actions"><button type="button" class="putaway-secondary" data-confirm-cancel>Quay lại</button><button type="button" class="putaway-secondary" data-confirm-refresh hidden>Tải lại gợi ý</button><button type="submit" class="workspace-button" data-confirm-submit>Xác nhận Putaway</button></div>
+            </form>
+        </dialog>
+    }
+</div>
+@section Scripts {
+    <partial name="_SerialCaptureScripts" />
+    <script src="~/js/putaway.js" asp-append-version="true" defer></script>
+}

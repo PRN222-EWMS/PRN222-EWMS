@@ -175,7 +175,7 @@ public class InboundController(IWarehouseStaffService warehouseService, IInbound
 
     [HttpGet]
     [Authorize(Roles = "WAREHOUSE_STAFF")]
-    public async Task<IActionResult> PendingPutaway() => View(await inbounds.GetPendingPutawayAsync(CurrentUserId));
+    public IActionResult PendingPutaway() => RedirectToAction("Index", "Putaway");
 
     private async Task<IActionResult> DetailErrorAsync(long id, string message, ReceiveSerialInput input)
     {

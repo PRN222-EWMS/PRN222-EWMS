@@ -1,0 +1,74 @@
+.putaway-page { max-width:1320px; margin:0 auto; }
+.putaway-page h2 { font-size:20px; margin:0 0 16px; }
+.putaway-page h3 { font-size:16px; margin:0 0 10px; overflow-wrap:anywhere; }
+.putaway-page p { overflow-wrap:anywhere; }
+.putaway-capture-panel { padding:24px; margin-bottom:24px; }
+.putaway-capture-panel form { display:grid; gap:14px; }
+.putaway-capture-panel .workspace-button { justify-self:start; }
+.putaway-workspace { display:grid; grid-template-columns:minmax(290px,.85fr) minmax(0,1.5fr); gap:24px; align-items:start; }
+.putaway-queue,.putaway-detail { min-width:0; }
+.putaway-detail { scroll-margin-top:20px; }
+.putaway-page .workspace-card { max-width:none; }
+.putaway-filters,.putaway-profile,.putaway-location-filters { padding:22px; margin-bottom:20px; }
+.putaway-filters form { display:grid; gap:9px; }
+.putaway-page input:not([type=radio]):not([type=hidden]):not([type=file]),.putaway-page select { width:100%; min-height:44px; padding:9px 12px; border:1px solid #d9d9d9; border-radius:7px; background:#fff; color:#31302e; font:inherit; font-size:14px; }
+.putaway-page label { font-size:13px; }
+.putaway-secondary { display:inline-flex; justify-content:center; align-items:center; min-height:40px; border:1px solid #d9d9d9; background:#fff; color:#31302e; border-radius:7px; padding:8px 13px; font:inherit; font-size:13px; cursor:pointer; }
+.putaway-secondary:hover { background:#f6f5f4; }
+.putaway-page button:disabled { opacity:.55; cursor:default; }
+.putaway-source-tabs { display:flex; gap:8px; margin-bottom:8px; }
+.putaway-source-tabs button { flex:1; min-height:42px; border:1px solid #ddd; background:#fff; border-radius:7px; font:inherit; font-size:13px; cursor:pointer; }
+.putaway-source-tabs button.is-selected { color:#0866b6; background:#edf5fd; border-color:#86bce9; font-weight:600; }
+.putaway-list-heading { display:flex; align-items:center; justify-content:space-between; margin:20px 0 14px; }
+.putaway-list-heading h2 { margin:0; }
+.putaway-pending-list { display:grid; gap:12px; }
+.putaway-pending-item { padding:18px; }
+.putaway-pending-item.is-selected { border-color:#78abe0; box-shadow:0 0 0 1px #78abe0; }
+.putaway-pending-item p { font-size:14px; margin:8px 0; }
+.putaway-pending-item h3 { font-size:16px; }
+.putaway-receipt-link small { display:block; margin-top:4px; font-size:12px; }
+.putaway-condition,.putaway-quarantined { display:inline-block; font-size:11px; padding:4px 7px; border-radius:5px; background:#edf5ef; color:#24654e; }
+.putaway-condition.is-damaged,.putaway-quarantined { background:#fff0e7; color:#8a4528; }
+.putaway-quarantined { margin-left:4px; }
+.putaway-placeholder,.putaway-empty { padding:40px 24px; text-align:center; }
+.putaway-placeholder > i { display:block; font-size:36px; color:#888; margin-bottom:18px; }
+.putaway-profile h2 { overflow-wrap:anywhere; font-size:23px; }
+.putaway-profile h3 { font-weight:500; }
+.putaway-info-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin:18px 0; }
+.putaway-info-grid dt { color:#615d59; font-size:12px; font-weight:400; }
+.putaway-info-grid dd { font-size:14px; margin:5px 0 0; overflow-wrap:anywhere; }
+.putaway-note,.putaway-error,.putaway-success { padding:12px 15px; border-radius:7px; font-size:14px; line-height:1.65; }
+.putaway-note { background:#f5f4f2; border-left:3px solid #c1b59f; }
+.putaway-error { background:#fdf0ee; color:#9b3026; border:1px solid #efd2ce; }
+.putaway-success { background:#edf7f0; color:#225c3d; border:1px solid #cee5d5; }
+.putaway-location-filters > input { margin:8px 0 14px; }
+.putaway-location-selects { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.putaway-location-selects label { display:grid; gap:6px; min-width:0; }
+.putaway-actions { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:14px; }
+.putaway-location-group { border:0; padding:0; margin:22px 0; min-width:0; }
+.putaway-location-group legend { font-size:15px; font-weight:600; float:none; width:auto; margin-bottom:12px; }
+.putaway-location-list { display:grid; gap:10px; max-height:530px; overflow-y:auto; padding:2px; }
+.putaway-location-option { display:block; cursor:pointer; padding:18px; margin:0; }
+.putaway-location-option.is-selected { border-color:#78abe0; box-shadow:0 0 0 1px #78abe0; }
+.putaway-location-group:disabled .putaway-location-option { opacity:.65; cursor:default; }
+.putaway-location-title { display:flex; align-items:start; gap:10px; line-height:1.6; margin-bottom:9px; }
+.putaway-location-title input { margin-top:4px; flex-shrink:0; accent-color:#0075de; }
+.putaway-location-title strong { font-size:13px; overflow-wrap:anywhere; }
+.putaway-location-option > small { font-size:12px; }
+.putaway-location-option .putaway-info-grid { margin-bottom:0; gap:10px; }
+.putaway-location-option .putaway-info-grid dd { font-size:13px; }
+.putaway-packing-note { font-size:12px; line-height:1.7; }
+.putaway-selection { display:flex; justify-content:space-between; align-items:center; gap:15px; padding:20px; margin:18px 0; }
+.putaway-selection p { margin:5px 0 0; font-size:13px; }
+.putaway-selection button { flex-shrink:0; }
+.putaway-pagination { display:flex; gap:12px; justify-content:center; margin:20px 0; font-size:13px; }
+.putaway-confirm { width:min(550px,calc(100vw - 32px)); max-width:none; border:1px solid #ddd; border-radius:13px; padding:25px; color:#31302e; box-shadow:0 20px 60px #0003; }
+.putaway-confirm::backdrop { background:#0007; }
+.putaway-confirm h2 { font-size:23px; margin:0 0 16px; }
+.putaway-confirm p,.putaway-confirm dd { overflow-wrap:anywhere; }
+.putaway-confirm dt { font-size:12px; color:#615d59; }
+.putaway-confirm dd { margin:5px 0 15px; font-size:14px; }
+.putaway-confirm .putaway-actions { justify-content:flex-end; flex-wrap:wrap; }
+.putaway-page [hidden] { display:none!important; }
+@media(max-width:1000px) { .putaway-workspace { grid-template-columns:1fr; } .putaway-pending-list { grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); } }
+@media(max-width:600px) { .putaway-capture-panel,.putaway-profile,.putaway-filters,.putaway-location-filters { padding:18px 15px; } .putaway-location-selects { grid-template-columns:repeat(2,minmax(0,1fr)); } .putaway-selection { align-items:stretch; flex-direction:column; } .putaway-page input:not([type=radio]):not([type=hidden]):not([type=file]),.putaway-page select { font-size:16px; } }
