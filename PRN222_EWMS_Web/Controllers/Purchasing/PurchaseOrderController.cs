@@ -86,7 +86,14 @@ public class PurchaseOrderController(
 
         if (!success)
         {
-            ModelState.AddModelError(string.Empty, message);
+            if (message.Contains("Mã đơn mua") || message.Contains("mã đơn mua"))
+            {
+                ModelState.AddModelError(nameof(model.Pocode), message);
+            }
+            else
+            {
+                ModelState.AddModelError(string.Empty, message);
+            }
             var reloadModel = await poService.GetCreateFormAsync(CurrentUserId);
             model.Warehouses = reloadModel.Warehouses;
             model.Suppliers = reloadModel.Suppliers;
@@ -119,8 +126,10 @@ public class PurchaseOrderController(
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit([FromRoute] long id, PoFormViewModel model)
+    public async Task<IActionResult> Edit([FromRoute] long id, PoFormViewModel model, string action = "draft")
     {
+        bool confirmNow = string.Equals(action, "confirm", StringComparison.OrdinalIgnoreCase);
+
         if (!ModelState.IsValid)
         {
             var reload = await poService.GetEditFormAsync(id, CurrentUserId, CurrentUserRole);
@@ -150,6 +159,18 @@ public class PurchaseOrderController(
                 model.Status = reload.Status;
             }
             return View(model);
+        }
+
+        if (confirmNow)
+        {
+            var (confirmSuccess, confirmMessage) = await poService.ConfirmOrderAsync(id, CurrentUserId, CurrentUserRole);
+            if (!confirmSuccess)
+            {
+                TempData["ErrorMessage"] = "Đã lưu thay đổi nhưng chưa thể xác nhận đơn: " + confirmMessage;
+                return RedirectToAction(nameof(Details), new { id });
+            }
+            TempData["SuccessMessage"] = "Đơn mua hàng đã được lưu và xác nhận thành công.";
+            return RedirectToAction(nameof(Details), new { id });
         }
 
         TempData["SuccessMessage"] = message;
@@ -198,6 +219,31 @@ public class PurchaseOrderController(
     }
 
     // =========================================================================
+    // 6.1. HỦY ĐƠN MUA HÀNG (CANCEL PO)
+    // =========================================================================
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Cancel(long id, string? returnUrl = null)
+    {
+        var (success, message) = await poService.CancelOrderAsync(id, CurrentUserId, CurrentUserRole);
+
+        if (success)
+            TempData["SuccessMessage"] = message;
+        else
+            TempData["ErrorMessage"] = message;
+
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+        {
+            return Redirect(returnUrl);
+        }
+
+        if (success)
+            return RedirectToAction(nameof(Details), new { id });
+        else
+            return RedirectToAction(nameof(Edit), new { id });
+    }
+
+    // =========================================================================
     // 7. API AJAX LẤY SẢN PHẨM THEO NHÀ CUNG CẤP
     // =========================================================================
     [HttpGet]
@@ -220,5 +266,24 @@ public class PurchaseOrderController(
 
         var result = await capacityEngine.CalculateCapacityAsync(warehouseId, productId, quantity, excludePoId);
         return Json(result);
+    }
+
+    // =========================================================================
+    // 9. API AJAX KIỂM TRA TRÙNG MÃ ĐƠN MUA (PO CODE DUPLICATE CHECK)
+    // =========================================================================
+    [HttpGet]
+    public async Task<IActionResult> CheckPoCode(string poCode)
+    {
+        if (string.IsNullOrWhiteSpace(poCode))
+            return Json(new { isValid = true, isDuplicate = false });
+
+        var trimmed = poCode.Trim();
+        var exists = await poService.IsPoCodeDuplicateAsync(trimmed);
+        return Json(new
+        {
+            isValid = !exists,
+            isDuplicate = exists,
+            message = exists ? $"Mã đơn mua '{trimmed}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác." : null
+        });
     }
 }
