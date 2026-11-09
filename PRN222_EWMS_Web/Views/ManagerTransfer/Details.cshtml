@@ -1,0 +1,130 @@
+@model PRN222_EWMS_Web.ViewModels.Manager.ManagerTransferDetail
+
+@{
+    ViewData["Title"] = $"Lệnh chuyển {Model.TransferCode}";
+}
+
+<a asp-action="Index">← Danh sách chuyển kho</a>
+<h1 class="mt-3">Lệnh chuyển @Model.TransferCode</h1>
+
+<dl>
+    <dt>Kho nguồn → Kho đích</dt>
+    <dd>@Model.FromWarehouse → @Model.ToWarehouse</dd>
+    <dt>Trạng thái lệnh</dt>
+    <dd>@Model.Status</dd>
+    <dt>Tình trạng hàng yêu cầu</dt>
+    <dd>@Model.ItemCondition</dd>
+    <dt>Người phụ trách lệnh</dt>
+    <dd>@(Model.AssignedTo ?? "Chưa phân công")</dd>
+    <dt>Ngày dự kiến</dt>
+    <dd>@(Model.ExpectedDate?.ToString("dd/MM/yyyy") ?? "Chưa có")</dd>
+    @if (!string.IsNullOrWhiteSpace(Model.Note))
+    {
+        <dt>Ghi chú</dt>
+        <dd>@Model.Note</dd>
+    }
+</dl>
+
+<h2>Sản phẩm yêu cầu</h2>
+@if (Model.Lines.Count == 0)
+{
+    <p>Lệnh chưa có dòng sản phẩm.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>Mã sản phẩm</th>
+                    <th>Tên sản phẩm</th>
+                    <th class="text-end">Yêu cầu</th>
+                    <th class="text-end">Đã hủy</th>
+                    <th class="text-end">Đã xuất</th>
+                    <th class="text-end">Đã nhận</th>
+                    <th class="text-end">Đang vận chuyển</th>
+                    <th class="text-end">Còn phải xuất</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var line in Model.Lines)
+                {
+                    <tr>
+                        <td>@line.ProductCode</td>
+                        <td>@line.ProductName</td>
+                        <td class="text-end">@line.Requested</td>
+                        <td class="text-end">@line.Cancelled</td>
+                        <td class="text-end">@line.Dispatched</td>
+                        <td class="text-end">@line.Received</td>
+                        <td class="text-end">@line.InTransit</td>
+                        <td class="text-end">@line.Outstanding</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<h2>Phiếu xuất chuyển kho</h2>
+@if (Model.Dispatches.Count == 0)
+{
+    <p>Chưa có phiếu xuất.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Mã phiếu</th>
+                    <th>Ngày xuất</th>
+                    <th>Trạng thái</th>
+                    <th>Người phụ trách xuất</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var document in Model.Dispatches)
+                {
+                    <tr>
+                        <td>@document.Code</td>
+                        <td>@document.Date.ToString("dd/MM/yyyy")</td>
+                        <td>@document.Status</td>
+                        <td>@(document.StaffName ?? "Chưa phân công")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<h2>Phiếu nhận chuyển kho</h2>
+@if (Model.Receipts.Count == 0)
+{
+    <p>Chưa có phiếu nhận.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Mã phiếu</th>
+                    <th>Ngày nhận</th>
+                    <th>Trạng thái</th>
+                    <th>Người thực hiện nhận</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var document in Model.Receipts)
+                {
+                    <tr>
+                        <td>@document.Code</td>
+                        <td>@document.Date.ToString("dd/MM/yyyy")</td>
+                        <td>@document.Status</td>
+                        <td>@(document.StaffName ?? "Chưa ghi nhận")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
