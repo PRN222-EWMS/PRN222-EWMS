@@ -56,4 +56,14 @@ public interface ICustomerReturnOrderRepository
         byte[]? originalRowVersion,
         int actorId,
         CancellationToken cancellationToken = default);
+
+    Task<(List<ReturnOrderListRowDto> Items, int TotalCount)> GetReturnOrdersPagedAsync(
+        ReturnOrderFilterDto filter,
+        CancellationToken cancellationToken = default);
+
+    Task<List<WarehouseOptionDto>> GetAllWarehousesForFilterAsync(CancellationToken cancellationToken = default);
+
+    Task<(int? WarehouseId, string? WarehouseName, string? RoleName)> GetUserRoleAndWarehouseAsync(
+        int userId,
+        CancellationToken cancellationToken = default);
 }

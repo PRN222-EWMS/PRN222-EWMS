@@ -25,5 +25,10 @@ public interface ICustomerReturnOrderService
         CancellationToken cancellationToken = default);
 
     Task PopulateFormOptionsAsync(ReturnOrderFormModel model, CancellationToken cancellationToken = default);
+
+    Task<ReturnOrderListViewModel> GetReturnOrderListAsync(
+        ReturnOrderListFilterViewModel filter,
+        int userId,
+        CancellationToken cancellationToken = default);
 }
 

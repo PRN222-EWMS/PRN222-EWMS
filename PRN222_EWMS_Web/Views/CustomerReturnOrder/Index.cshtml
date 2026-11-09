@@ -1,0 +1,313 @@
+@model PRN222_EWMS_Web.ViewModels.CustomerReturnOrder.ReturnOrderListViewModel
+@{
+    ViewData["Title"] = "Danh sách đơn trả hàng";
+}
+
+@functions {
+    private static readonly TimeZoneInfo VietnamTime = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
+
+    public static string FormatVietnamTime(DateTime utc)
+    {
+        var local = utc.Kind == DateTimeKind.Utc 
+            ? TimeZoneInfo.ConvertTimeFromUtc(utc, VietnamTime) 
+            : TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), VietnamTime);
+        return local.ToString("dd/MM/yyyy HH:mm");
+    }
+
+    public static (string Text, string Class) GetStatusBadge(string status) => status switch
+    {
+        "DRAFT" => ("Bản nháp", "badge bg-secondary"),
+        "OPEN" => ("Đã xác nhận", "badge bg-primary"),
+        "PARTIALLY_RECEIVED" => ("Nhận một phần", "badge bg-warning text-dark"),
+        "RECEIVED" => ("Đã nhận đủ", "badge bg-success"),
+        "CLOSED" => ("Đã đóng", "badge bg-dark"),
+        "CANCELLED" => ("Đã hủy", "badge bg-danger"),
+        _ => (status, "badge bg-secondary")
+    };
+}
+
+<style>
+    .return-action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 6px;
+        background: none;
+        border: 1px solid transparent;
+        padding: 0;
+        font-size: 16px;
+        line-height: 1;
+        text-decoration: none;
+        vertical-align: middle;
+        box-sizing: border-box;
+        transition: all 0.15s ease-in-out;
+    }
+    .return-action-active {
+        color: #0075de !important;
+        cursor: pointer;
+    }
+    .return-action-active:hover {
+        background-color: #eff6ff;
+        border-color: #bfdbfe;
+        color: #005bab !important;
+    }
+    .return-action-disabled,
+    .return-action-disabled:disabled {
+        color: #94a3b8 !important;
+        cursor: not-allowed !important;
+        opacity: 0.6;
+        pointer-events: auto !important;
+    }
+    .filter-action-btn {
+        width: 130px;
+        min-height: 42px;
+        height: 42px;
+        padding: 0 16px;
+        font-size: 14px;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        white-space: nowrap;
+    }
+</style>
+
+<div class="workspace-heading">
+    <div>
+        <p class="eyebrow">BÁN HÀNG / TRẢ HÀNG</p>
+        <h1>Danh sách đơn trả hàng</h1>
+        <p class="muted">@(Model.IsWarehouseStaff ? "Theo dõi các đơn trả hàng tiếp nhận tại kho được phân công." : Model.CanFilterMine ? "Tra cứu tất cả đơn trả hàng hoặc theo dõi những đơn do bạn tạo." : "Theo dõi đơn trả hàng của tất cả kho.")</p>
+    </div>
+    @if (Model.CanCreate && User.IsInRole("SALES_STAFF"))
+    {
+        <a class="workspace-button" asp-action="Create">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i> Tạo đơn trả hàng
+        </a>
+    }
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success" role="status">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="sales-warning" role="alert">@TempData["Error"]</div>
+}
+
+<section class="workspace-card" aria-label="Danh sách đơn trả hàng">
+    @if (!string.IsNullOrEmpty(Model.ScopeMessage))
+    {
+        <div class="sales-warning mb-3" role="status">@Model.ScopeMessage</div>
+    }
+
+    <div asp-validation-summary="All" class="validation-message mb-3" role="alert"></div>
+
+    <form asp-action="Index" method="get" class="workspace-form mt-0">
+        <div class="row g-3 align-items-end">
+            <!-- HÀNG 1: 3 Ô Ở TRÊN -->
+            <div class="col-12 col-md-4">
+                <label for="Search">Tìm kiếm đơn trả hàng</label>
+                <input id="Search" name="Search" type="search" value="@Model.Search" placeholder="Mã đơn trả, mã đơn bán, tên KH..." autocomplete="off" />
+            </div>
+
+            <div class="col-12 col-md-4">
+                <label for="Status">Trạng thái</label>
+                <select id="Status" name="Status" class="form-select">
+                    <option value="">Tất cả trạng thái</option>
+                    @foreach (var s in new[] { ("DRAFT", "Bản nháp"), ("OPEN", "Đã xác nhận"), ("PARTIALLY_RECEIVED", "Nhận một phần"), ("RECEIVED", "Đã nhận đủ"), ("CLOSED", "Đã đóng"), ("CANCELLED", "Đã hủy") }.Where(x => !Model.IsWarehouseStaff || x.Item1 != "DRAFT"))
+                    {
+                        <option value="@s.Item1" selected="@(Model.Status == s.Item1)">@s.Item2</option>
+                    }
+                </select>
+            </div>
+
+            @if (Model.IsWarehouseStaff)
+            {
+                <div class="col-12 col-md-4">
+                    <label for="AssignedWarehouse">Kho tiếp nhận</label>
+                    <input id="AssignedWarehouse" value="@(Model.AssignedWarehouseName ?? "Chưa được phân công kho")" readonly class="form-control bg-light" />
+                </div>
+            }
+            else
+            {
+                <div class="col-12 col-md-4">
+                    <label for="WarehouseId">Kho tiếp nhận</label>
+                    <select id="WarehouseId" name="WarehouseId" class="form-select">
+                        <option value="">Tất cả kho</option>
+                        @foreach (var w in Model.Warehouses)
+                        {
+                            <option value="@w.WarehouseId" selected="@(Model.WarehouseId == w.WarehouseId)">@w.WarehouseName</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            <!-- HÀNG 2: 3 Ô Ở DƯỚI -->
+            <div class="@(Model.CanFilterMine ? "col-12 col-md-4" : "col-12 col-md-6")">
+                <label for="FromDate">Từ ngày</label>
+                <input type="date" id="FromDate" name="FromDate" value="@Model.FromDate?.ToString("yyyy-MM-dd")" />
+            </div>
+
+            <div class="@(Model.CanFilterMine ? "col-12 col-md-4" : "col-12 col-md-6")">
+                <label for="ToDate">Đến ngày</label>
+                <input type="date" id="ToDate" name="ToDate" value="@Model.ToDate?.ToString("yyyy-MM-dd")" />
+            </div>
+
+            @if (Model.CanFilterMine)
+            {
+                <div class="col-12 col-md-4">
+                    <label for="Mine">Phạm vi</label>
+                    <select id="Mine" name="Mine" class="form-select">
+                        <option value="false" selected="@(!Model.Mine)">Tất cả đơn</option>
+                        <option value="true" selected="@Model.Mine">Đơn của tôi</option>
+                    </select>
+                </div>
+            }
+
+            <!-- HÀNG 3: 2 NÚT TÌM KIẾM, ĐẶT LẠI Ở BÊN PHẢI CÙNG KÍCH THƯỚC -->
+            <div class="col-12 d-flex justify-content-end align-items-center gap-2 mt-1">
+                <a class="workspace-button workspace-button-secondary filter-action-btn" asp-action="Index">
+                    <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i> Đặt lại
+                </a>
+                <button class="workspace-button filter-action-btn" type="submit">
+                    <i class="bi bi-search me-1" aria-hidden="true"></i> Tìm kiếm
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <div class="d-flex justify-content-between align-items-center py-3 text-secondary small" aria-live="polite">
+        @if (Model.TotalCount > 0)
+        {
+            <span>Đang hiển thị <strong>@((Model.Page - 1) * Model.PageSize + 1)–@(Math.Min(Model.Page * Model.PageSize, Model.TotalCount))</strong> trên <strong>@Model.TotalCount</strong> đơn trả hàng</span>
+        }
+        else
+        {
+            <span>0 đơn trả hàng</span>
+        }
+    </div>
+
+    @if (Model.TotalCount == 0)
+    {
+        <div class="text-center py-5">
+            <p class="fs-5 text-secondary mb-3">Không có đơn trả hàng nào phù hợp với bộ lọc</p>
+            @if (Model.CanCreate && User.IsInRole("SALES_STAFF"))
+            {
+                <a class="workspace-button" asp-action="Create">
+                    <i class="bi bi-plus-lg" aria-hidden="true"></i> Tạo đơn trả hàng
+                </a>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="workspace-table">
+                <thead>
+                    <tr>
+                        <th scope="col" style="white-space: nowrap; width: 140px;">Mã đơn trả</th>
+                        <th scope="col" style="white-space: nowrap; width: 130px;">Đơn bán hàng</th>
+                        <th scope="col">Khách hàng</th>
+                        <th scope="col">Kho tiếp nhận</th>
+                        <th scope="col" style="white-space: nowrap; width: 140px;">Ngày tạo</th>
+                        <th scope="col">Người tạo</th>
+                        <th scope="col" style="white-space: nowrap;">Mặt hàng / Số lượng</th>
+                        <th scope="col" class="text-center" style="white-space: nowrap; width: 130px;">Trạng thái</th>
+                        <th scope="col" class="text-end" style="white-space: nowrap; width: 100px;">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in Model.Items)
+                    {
+                        var statusInfo = GetStatusBadge(order.Status);
+                        <tr>
+                            <td style="white-space: nowrap; font-weight: 600;">
+                                @order.ReturnCode
+                            </td>
+                            <td style="white-space: nowrap;">
+                                <a asp-controller="SalesOrder" asp-action="Details" asp-route-id="@order.SalesOrderId">
+                                    @order.SalesOrderCode
+                                </a>
+                            </td>
+                            <td>@order.CustomerName</td>
+                            <td>@order.WarehouseName</td>
+                            <td style="white-space: nowrap;">@FormatVietnamTime(order.CreatedAt)</td>
+                            <td>@order.CreatedByName</td>
+                            <td style="white-space: nowrap;">
+                                <span class="fw-semibold">@order.LinesCount</span> mặt hàng | Yêu cầu: <span class="fw-semibold">@order.TotalRequestedQuantity</span> | Đã nhận: <span class="fw-semibold text-success">@order.CompletedReceivedQuantity</span>
+                            </td>
+                            <td class="text-center" style="white-space: nowrap;">
+                                <span class="@statusInfo.Class">@statusInfo.Text</span>
+                            </td>
+                            <td class="text-end text-nowrap">
+                                <div class="d-inline-flex align-items-center justify-content-end gap-1">
+                                    <button type="button" class="return-action-btn return-action-disabled" disabled aria-label="Xem chi tiết">
+                                        <i class="bi bi-eye" aria-hidden="true"></i>
+                                    </button>
+                                    @if (order.CanEdit && User.IsInRole("SALES_STAFF"))
+                                    {
+                                        <a class="return-action-btn return-action-active" asp-action="Edit" asp-route-id="@order.Id" aria-label="Chỉnh sửa">
+                                            <i class="bi bi-pencil" aria-hidden="true"></i>
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="return-action-btn return-action-disabled" disabled aria-label="Chỉnh sửa">
+                                            <i class="bi bi-pencil" aria-hidden="true"></i>
+                                        </button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="d-flex justify-content-between align-items-center pt-4" aria-label="Phân trang đơn trả hàng">
+                <span class="text-secondary small">Trang @Model.Page / @Model.TotalPages</span>
+                <ul class="pagination pagination-sm mb-0">
+                    <li class="page-item @(!Model.HasPreviousPage ? "disabled" : "")">
+                        <a class="page-link" asp-action="Index"
+                           asp-route-search="@Model.Search"
+                           asp-route-status="@Model.Status"
+                           asp-route-warehouseId="@Model.WarehouseId"
+                           asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")"
+                           asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")"
+                           asp-route-mine="@Model.Mine"
+                           asp-route-page="@(Model.Page - 1)">Trước</a>
+                    </li>
+                    @for (int p = 1; p <= Model.TotalPages; p++)
+                    {
+                        <li class="page-item @(p == Model.Page ? "active" : "")">
+                            <a class="page-link" asp-action="Index"
+                               asp-route-search="@Model.Search"
+                               asp-route-status="@Model.Status"
+                               asp-route-warehouseId="@Model.WarehouseId"
+                               asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")"
+                               asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")"
+                               asp-route-mine="@Model.Mine"
+                               asp-route-page="@p">@p</a>
+                        </li>
+                    }
+                    <li class="page-item @(!Model.HasNextPage ? "disabled" : "")">
+                        <a class="page-link" asp-action="Index"
+                           asp-route-search="@Model.Search"
+                           asp-route-status="@Model.Status"
+                           asp-route-warehouseId="@Model.WarehouseId"
+                           asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")"
+                           asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")"
+                           asp-route-mine="@Model.Mine"
+                           asp-route-page="@(Model.Page + 1)">Sau</a>
+                    </li>
+                </ul>
+            </nav>
+        }
+    }
+</section>
