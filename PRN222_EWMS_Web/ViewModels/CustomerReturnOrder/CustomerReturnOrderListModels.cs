@@ -60,6 +60,7 @@ public class ReturnOrderListRowViewModel
     public string? Reason { get; set; }
     public bool CanEdit { get; set; }
     public bool CanCancel { get; set; }
+    public bool CanReceive { get; set; }
 }
 
 public record ReturnOrderFilterDto(

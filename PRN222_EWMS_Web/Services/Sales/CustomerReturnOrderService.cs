@@ -23,6 +23,10 @@ public class CustomerReturnOrderService(
         CancellationToken cancellationToken = default)
     {
         var (userWarehouseId, userWarehouseName, roleName) = await repo.GetUserRoleAndWarehouseAsync(userId, cancellationToken);
+        if (roleName != "SALES_STAFF" && roleName != "WAREHOUSE_STAFF")
+        {
+            throw new UnauthorizedAccessException("Người dùng không có quyền truy cập danh sách đơn trả hàng.");
+        }
         bool isWarehouseStaff = roleName == "WAREHOUSE_STAFF";
         bool isSalesStaff = roleName == "SALES_STAFF";
 
@@ -50,7 +54,7 @@ public class CustomerReturnOrderService(
         {
             result.CanFilterMine = false;
             result.CanCreate = false;
-            result.ScopeMessage = "Tài khoản của bạn chưa được phân công kho làm việc cố định. Vui lòng liên hệ Quản lý để được phân công kho.";
+            result.ScopeMessage = "Bạn chưa được phân công kho làm việc. Vui lòng liên hệ quản lý để được phân công kho.";
             return result;
         }
 
@@ -101,7 +105,8 @@ public class CustomerReturnOrderService(
             CompletedReceivedQuantity = dto.CompletedReceivedQuantity,
             Reason = dto.Reason,
             CanEdit = isSalesStaff && dto.Status == "DRAFT",
-            CanCancel = isSalesStaff && (dto.Status == "DRAFT" || dto.Status == "OPEN") && !dto.HasReturnReceipts
+            CanCancel = isSalesStaff && (dto.Status == "DRAFT" || dto.Status == "OPEN") && !dto.HasReturnReceipts,
+            CanReceive = isWarehouseStaff && (dto.Status is "OPEN" or "PARTIALLY_RECEIVED") && dto.CompletedReceivedQuantity < dto.TotalRequestedQuantity
         }).ToList();
 
         return result;
