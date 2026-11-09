@@ -156,7 +156,40 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
     {
         Validate(model);
         return repository.AddCustomerAsync(new Customer
-        { CustomerName = model.CustomerName.Trim(), Address = Clean(model.Address), Phone = Clean(model.Phone) }, actorId);
+        { CustomerName = model.CustomerName.Trim(), Nickname = Clean(model.Nickname), Address = Clean(model.Address), Phone = Clean(model.Phone) }, actorId);
+    }
+
+    public async Task<(bool Success, Customer? Customer, string? ErrorMessage)> QuickCreateCustomerAsync(CustomerFormViewModel model, int actorId)
+    {
+        var name = Clean(model.CustomerName);
+        if (string.IsNullOrWhiteSpace(name))
+            return (false, null, "Vui lòng nhập tên khách hàng.");
+
+        var phone = Clean(model.Phone);
+        if (string.IsNullOrWhiteSpace(phone) || !System.Text.RegularExpressions.Regex.IsMatch(phone, @"^0[0-9]{9}$"))
+            return (false, null, "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0.");
+
+        var address = Clean(model.Address);
+        if (string.IsNullOrWhiteSpace(address))
+            return (false, null, "Vui lòng nhập địa chỉ khách hàng.");
+
+        // Check trùng số điện thoại
+        var isPhoneDuplicate = await repository.Customers
+            .AnyAsync(c => c.Phone != null && c.Phone.Trim() == phone);
+        if (isPhoneDuplicate)
+            return (false, null, $"Số điện thoại {phone} đã được sử dụng bởi một khách hàng khác. Vui lòng kiểm tra lại.");
+
+        var customer = new Customer
+        {
+            CustomerName = name,
+            Nickname = Clean(model.Nickname),
+            Phone = phone,
+            Address = address
+        };
+
+        var id = await repository.AddCustomerAsync(customer, actorId);
+        customer.CustomerId = id;
+        return (true, customer, null);
     }
 
     public async Task<bool> UpdateCustomerAsync(int id, CustomerFormViewModel model, int actorId)
@@ -422,7 +455,6 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
                 var reserved = heldBySource.TryGetValue(s.SupplySourceId, out var b) ? b : 0;
                 return new
                 {
-                    Entity = s,
                     s.SupplySourceId,
                     s.ProductId,
                     s.WarehouseId,
@@ -466,8 +498,6 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
                 {
                     var reservation = new Reservation
                     {
-                        SupplySource = src.Entity,
-                        SupplySourceNavigation = src.Entity,
                         SupplySourceId = src.SupplySourceId,
                         Soline = line,
                         SalesOrder = order,

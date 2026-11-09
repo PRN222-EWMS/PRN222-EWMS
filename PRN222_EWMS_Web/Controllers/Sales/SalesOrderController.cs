@@ -53,9 +53,17 @@ public class SalesOrderController(ISalesService sales) : Controller
                 : "Đơn bán hàng đã được lưu nháp thành công!";
             return RedirectToAction(nameof(Details), new { id = orderId });
         }
+        catch (DbUpdateException ex)
+        {
+            var msg = ex.InnerException?.Message ?? ex.Message;
+            ModelState.AddModelError(string.Empty, msg);
+            await PopulateFormDataAsync(model);
+            return View(model);
+        }
         catch (Exception ex)
         {
-            ModelState.AddModelError(string.Empty, ex.Message);
+            var msg = ex.InnerException?.Message ?? ex.Message;
+            ModelState.AddModelError(string.Empty, msg);
             await PopulateFormDataAsync(model);
             return View(model);
         }
@@ -103,11 +111,59 @@ public class SalesOrderController(ISalesService sales) : Controller
             await PopulateFormDataAsync(model);
             return View(model);
         }
-        catch (Exception ex)
+        catch (DbUpdateException ex)
         {
-            ModelState.AddModelError(string.Empty, ex.Message);
+            var msg = ex.InnerException?.Message ?? ex.Message;
+            ModelState.AddModelError(string.Empty, msg);
             await PopulateFormDataAsync(model);
             return View(model);
+        }
+        catch (Exception ex)
+        {
+            var msg = ex.InnerException?.Message ?? ex.Message;
+            ModelState.AddModelError(string.Empty, msg);
+            await PopulateFormDataAsync(model);
+            return View(model);
+        }
+    }
+
+    [Authorize(Roles = "SALES_STAFF")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> QuickCreateCustomer([FromForm] CustomerFormViewModel model)
+    {
+        try
+        {
+            if (!ModelState.IsValid)
+            {
+                var firstError = ModelState.Values
+                    .SelectMany(v => v.Errors)
+                    .Select(e => e.ErrorMessage)
+                    .FirstOrDefault() ?? "Dữ liệu nhập không hợp lệ.";
+                return Json(new { success = false, message = firstError });
+            }
+
+            var (success, customer, errorMessage) = await sales.QuickCreateCustomerAsync(model, CurrentUserId);
+            if (!success || customer == null)
+            {
+                return Json(new { success = false, message = errorMessage ?? "Không thể tạo khách hàng." });
+            }
+
+            var displayText = customer.CustomerName + (string.IsNullOrEmpty(customer.Phone) ? "" : $" ({customer.Phone})");
+            return Json(new
+            {
+                success = true,
+                customerId = customer.CustomerId,
+                customerName = customer.CustomerName,
+                phone = customer.Phone,
+                address = customer.Address,
+                displayText = displayText
+            });
+        }
+        catch (Exception ex)
+        {
+            var msg = ex.InnerException?.Message ?? ex.Message;
+            return Json(new { success = false, message = msg });
         }
     }
 
@@ -124,6 +180,10 @@ public class SalesOrderController(ISalesService sales) : Controller
         var fresh = await sales.GetCreateFormAsync(CurrentUserId);
         model.Customers = fresh.Customers;
         model.Warehouses = fresh.Warehouses;
+        if (string.IsNullOrEmpty(model.Code))
+        {
+            model.Code = fresh.Code;
+        }
         if (model.WarehouseId.HasValue && model.WarehouseId.Value > 0)
         {
             model.AvailableProducts = await sales.GetAvailableProductsAsync(model.WarehouseId.Value);
