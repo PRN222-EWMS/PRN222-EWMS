@@ -1,0 +1,80 @@
+@using PRN222_EWMS_Web.ViewModels.Manager
+@model ManagerStocktakeDetailViewModel
+@{
+    ViewData["Title"] = "Chi tiết kiểm kê " + Model.Code;
+    var selectedRound = Model.Rounds.FirstOrDefault(r => r.Number == Model.Filter.RoundNumber);
+    var firstPage = Math.Max(1, Math.Min(Model.Filter.Page - 2, Model.TotalPages - 4));
+    var lastPage = Math.Min(Model.TotalPages, firstPage + 4);
+    string Condition(string? value) => value switch { "GOOD" => "Tốt", "DAMAGED" => "Hỏng", _ => "—" };
+    string Review(string value) => value switch { "PENDING" => "Chờ rà soát", "RECOUNT_REQUIRED" => "Cần đếm lại", "REVIEWED" => "Đã rà soát", "RESOLVED" => "Đã xử lý", _ => value };
+}
+
+<div class="warehouse-list">
+    <header class="workspace-heading">
+        <div><p class="eyebrow">CHI TIẾT ĐỢT KIỂM KÊ</p><h1>@Model.Code</h1><p class="muted mb-0">@Model.WarehouseName · <span class="role-badge">@ManagerStocktakeLabels.Status(Model.Status)</span></p></div>
+        <div class="warehouse-heading-actions"><a asp-action="Index" class="workspace-link">Danh sách</a>@if (Model.CanEdit) { <a asp-action="Edit" asp-route-id="@Model.Id" class="workspace-button">Sửa kế hoạch</a> }@if (Model.CanDelete) { <a asp-action="Delete" asp-route-id="@Model.Id" class="btn btn-outline-danger">Xóa đợt</a> }</div>
+    </header>
+    @foreach (var warning in Model.Warnings) { <div class="alert alert-warning mb-0" role="alert">@warning</div> }
+    <section class="workspace-card">
+        <h2>Thông tin kế hoạch</h2>
+        <dl class="warehouse-info-grid">
+            <div><dt>Ngày dự kiến (giờ Việt Nam)</dt><dd>@(Model.PlannedAt.HasValue ? ManagerStocktakeLabels.Local(Model.PlannedAt.Value).ToString("dd/MM/yyyy HH:mm") : "Chưa đặt lịch")</dd></div>
+            <div><dt>Người lập</dt><dd>@Model.Creator</dd></div>
+            <div><dt>Ngày tạo</dt><dd>@ManagerStocktakeLabels.Local(Model.CreatedAt).ToString("dd/MM/yyyy HH:mm")</dd></div>
+            <div><dt>Bắt đầu kiểm kê</dt><dd>@(Model.StartedAt.HasValue ? ManagerStocktakeLabels.Local(Model.StartedAt.Value).ToString("dd/MM/yyyy HH:mm") : "Chưa bắt đầu")</dd></div>
+            <div><dt>Đóng đợt</dt><dd>@(Model.ClosedAt.HasValue ? ManagerStocktakeLabels.Local(Model.ClosedAt.Value).ToString("dd/MM/yyyy HH:mm") : "Chưa đóng")</dd></div>
+            <div><dt>Hàng chờ xếp</dt><dd>@(Model.IncludeAwaitingPutaway ? "Trong phạm vi kiểm kê" : "Ngoài phạm vi kiểm kê")</dd></div>
+            <div class="warehouse-info-wide"><dt>Ghi chú</dt><dd class="text-break">@(string.IsNullOrWhiteSpace(Model.Note) ? "Không có ghi chú." : Model.Note)</dd></div>
+        </dl>
+    </section>
+    <section class="workspace-card">
+        <h2>Phạm vi và phân công</h2>
+        @if (Model.ScopeType == "WHOLE_WAREHOUSE") { <p class="muted">Toàn bộ vị trí trong kho và hàng chờ xếp.</p> }
+        else if (Model.ScopePaths.Count == 0) { <p class="muted">Chưa chọn nhánh vị trí.</p> }
+        else { <ul>@foreach (var path in Model.ScopePaths) { <li class="my-2 text-break">@path <small class="muted">(bao gồm vị trí con)</small></li> }</ul> }
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Bảng phân công kiểm kê">
+            <table class="workspace-table"><thead><tr><th>Nhân viên</th><th>Phần được giao</th><th>Trạng thái</th><th>Ngày giao</th></tr></thead><tbody>
+                @foreach (var assignment in Model.Assignments) { <tr><td>@assignment.Name</td><td class="text-break">@assignment.Scope</td><td><span class="role-badge">@ManagerStocktakeLabels.Status(assignment.Status)</span></td><td>@ManagerStocktakeLabels.Local(assignment.AssignedAt).ToString("dd/MM/yyyy HH:mm")</td></tr> }
+                @if (Model.Assignments.Count == 0) { <tr><td colspan="4" class="warehouse-empty">Chưa phân công nhân viên.</td></tr> }
+            </tbody></table>
+        </div>
+    </section>
+
+    @if (Model.Rounds.Count > 0)
+    {
+        <section class="workspace-card">
+            <h2>Các vòng đếm</h2><p class="muted">Dữ liệu kỳ vọng là snapshot đã lưu khi bắt đầu; việc xem trang này không thay đổi tồn kho.</p>
+            @if (Model.OriginalCapturedAt.HasValue) { <p class="muted">Mốc snapshot gốc: @ManagerStocktakeLabels.Local(Model.OriginalCapturedAt.Value).ToString("dd/MM/yyyy HH:mm:ss").</p> }
+            <div class="table-wrap"><table class="workspace-table"><thead><tr><th>Vòng</th><th>Trạng thái</th><th>Bắt đầu</th><th>Kết thúc</th><th>Người bắt đầu / Lý do</th></tr></thead><tbody>
+                @foreach (var round in Model.Rounds) { <tr><td><a asp-action="Details" asp-route-id="@Model.Id" asp-route-RoundNumber="@round.Number">Vòng @round.Number</a>@if (round.Number == 1) { <small class="d-block muted">Snapshot gốc</small> }</td><td>@ManagerStocktakeLabels.Status(round.Status)</td><td>@ManagerStocktakeLabels.Local(round.StartedAt).ToString("dd/MM/yyyy HH:mm")</td><td>@(round.ClosedAt.HasValue ? ManagerStocktakeLabels.Local(round.ClosedAt.Value).ToString("dd/MM/yyyy HH:mm") : "Chưa kết thúc")</td><td>@round.StartedBy@if (!string.IsNullOrWhiteSpace(round.RecountReason)) { <small class="d-block muted text-break">@round.RecountReason</small> }</td></tr> }
+            </tbody></table></div>
+        </section>
+        <section class="workspace-card">
+            <h2>Đối chiếu snapshot và thực tế</h2>
+            <dl class="warehouse-capacity-totals"><div><dt>Serial kỳ vọng</dt><dd>@Model.ExpectedCount</dd></div><div><dt>Serial đã quét</dt><dd>@Model.ScannedCount</dd></div><div><dt>Serial có chênh lệch</dt><dd>@Model.DiscrepancyCount</dd></div></dl>
+            @if (selectedRound?.Status == "OPEN") { <div class="alert alert-info" role="status">Vòng đếm đang mở. Serial chưa quét được hiển thị là Chờ đếm; chưa kết luận là hàng thiếu.</div> }
+            <form asp-action="Details" asp-route-id="@Model.Id" method="get" class="workspace-form mb-4" aria-label="Lọc kết quả kiểm kê">
+                <div class="row g-3"><div class="col-md-3"><label for="round-number">Vòng đếm</label><select id="round-number" name="RoundNumber">@foreach (var round in Model.Rounds) { <option value="@round.Number" selected="@(round.Number == Model.Filter.RoundNumber)">Vòng @round.Number (@ManagerStocktakeLabels.Status(round.Status))</option> }</select></div><div class="col-md-4"><label for="observation-search">Serial / Sản phẩm</label><input id="observation-search" name="Search" value="@Model.Filter.Search" maxlength="100" /></div><div class="col-md-3"><label for="difference-type">Kết quả đối chiếu</label><select id="difference-type" name="DifferenceType"><option value="">Tất cả</option>@foreach (var difference in ManagerStocktakeLabels.Differences) { <option value="@difference" selected="@(Model.Filter.DifferenceType == difference)">@ManagerStocktakeLabels.Difference(difference)</option> }</select></div><div class="col-md-2 d-flex align-items-end"><button type="submit" class="workspace-button">Lọc</button></div></div>
+                <div asp-validation-summary="All" class="text-danger" role="alert"></div>
+            </form>
+            <p class="muted" role="status">@Model.ObservationCount bản ghi phù hợp.</p>
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Bảng snapshot và quan sát thực tế">
+                <table class="workspace-table"><thead><tr><th>Serial / Sản phẩm</th><th>Kỳ vọng từ snapshot</th><th>Quan sát thực tế</th><th>Đối chiếu / Rà soát</th><th>Người quét / Ghi chú</th></tr></thead><tbody>
+                    @foreach (var observation in Model.Observations)
+                    {
+                        <tr><td><strong>@observation.Serial</strong><small class="d-block muted">@(observation.Product ?? "Chưa xác định sản phẩm")</small></td><td><div>Số lượng: @observation.ExpectedQuantity</div><div>@(observation.ExpectedQuantity == 0 ? "—" : Condition(observation.ExpectedCondition))</div><small class="muted text-break">@(observation.ExpectedQuantity == 0 ? "Ngoài snapshot" : observation.ExpectedLocation)</small></td><td><div>Số lượng: @observation.ActualQuantity</div><div>@(observation.ActualQuantity == 0 ? "—" : Condition(observation.ActualCondition))</div><small class="muted text-break">@(observation.ActualQuantity == 0 ? "Chưa ghi nhận" : observation.ActualLocation)</small></td><td><span class="role-badge">@ManagerStocktakeLabels.Difference(observation.DifferenceType)</span><small class="d-block muted mt-2">@Review(observation.ReviewStatus)</small></td><td>@(observation.ScannedBy ?? "Chưa quét")@if (observation.ScannedAt.HasValue) { <small class="d-block muted">@ManagerStocktakeLabels.Local(observation.ScannedAt.Value).ToString("dd/MM/yyyy HH:mm")</small> }@if (!string.IsNullOrWhiteSpace(observation.Note)) { <small class="d-block text-break">@observation.Note</small> }</td></tr>
+                    }
+                    @if (Model.Observations.Count == 0) { <tr><td colspan="5" class="warehouse-empty">Không có bản ghi phù hợp trong vòng đếm này.</td></tr> }
+                </tbody></table>
+            </div>
+            @if (Model.TotalPages > 1)
+            {
+                <nav class="warehouse-pagination" aria-label="Phân trang kết quả kiểm kê"><span>Trang @Model.Filter.Page / @Model.TotalPages</span><div class="d-flex flex-wrap align-items-center gap-2">
+                    @if (Model.Filter.Page > 1) { <a asp-action="Details" asp-route-id="@Model.Id" asp-route-RoundNumber="@Model.Filter.RoundNumber" asp-route-Search="@Model.Filter.Search" asp-route-DifferenceType="@Model.Filter.DifferenceType" asp-route-Page="@(Model.Filter.Page - 1)">Trước</a> }
+                    @for (var pageNumber = firstPage; pageNumber <= lastPage; pageNumber++) { if (pageNumber == Model.Filter.Page) { <span class="role-badge" aria-current="page">@pageNumber</span> } else { <a asp-action="Details" asp-route-id="@Model.Id" asp-route-RoundNumber="@Model.Filter.RoundNumber" asp-route-Search="@Model.Filter.Search" asp-route-DifferenceType="@Model.Filter.DifferenceType" asp-route-Page="@pageNumber">@pageNumber</a> } }
+                    @if (Model.Filter.Page < Model.TotalPages) { <a asp-action="Details" asp-route-id="@Model.Id" asp-route-RoundNumber="@Model.Filter.RoundNumber" asp-route-Search="@Model.Filter.Search" asp-route-DifferenceType="@Model.Filter.DifferenceType" asp-route-Page="@(Model.Filter.Page + 1)">Sau</a> }
+                </div></nav>
+            }
+        </section>
+    }
+</div>

@@ -30,7 +30,13 @@
             <aside class="inbound-form-card inbound-receive-panel"><h2>Tiếp nhận Serial</h2><form asp-action="AddItem" asp-route-id="@Model.Id" method="post" class="inbound-serial-form" data-submit-once><input type="hidden" asp-for="NewSerial.Version" value="@Model.Version" />
                 <fieldset><legend>1. Thông tin sản phẩm</legend><label asp-for="NewSerial.LineId">Sản phẩm</label><select asp-for="NewSerial.LineId" required><option value="">Chọn sản phẩm</option>@foreach (var line in Model.Lines.Where(x => x.Available > 0)) { <option value="@line.Id">@line.ProductCode · @line.ProductName · còn @line.Available</option> }</select></fieldset>
                 <fieldset><legend>2. Thông tin sản xuất</legend><div class="inbound-two"><label asp-for="NewSerial.Month">Tháng sản xuất<select asp-for="NewSerial.Month" required><option value="">Tháng</option>@for (var month = 1; month <= 12; month++) { <option value="@month">@month</option> }</select></label><label asp-for="NewSerial.Year">Năm sản xuất<input asp-for="NewSerial.Year" type="number" min="1900" required /></label></div><label class="inbound-check"><input type="checkbox" data-keep-production checked /> Giữ tháng/năm cho Serial tiếp theo</label></fieldset>
-                <fieldset><legend>3. Nhận diện Serial</legend><p>Quét hoặc đọc ảnh chỉ điền Serial. Kiểm tra kết quả rồi bấm thêm để lưu.</p><div class="inbound-capture-actions"><button type="button" class="inbound-secondary" data-camera-open>Quét bằng camera</button><label class="inbound-secondary inbound-upload">Tải ảnh tem<input type="file" accept="image/jpeg,image/png,image/webp" data-image-upload hidden /></label><button type="button" class="inbound-secondary" data-capture-retry title="Chỉ xóa ô Serial để bạn quét hoặc nhập lại">Xóa Serial</button></div><small>JPEG, PNG, WebP · tối đa 10 MB · chọn ảnh hoặc chụp ảnh từ điện thoại.</small><div class="inbound-camera" data-camera-box hidden><video data-camera-video playsinline autoplay muted></video><span aria-hidden="true"></span><button type="button" class="inbound-secondary" data-camera-close>Đóng camera</button></div><p data-capture-message class="inbound-capture-message" aria-live="polite"></p><div data-candidates></div><label asp-for="NewSerial.Serial">Serial</label><input asp-for="NewSerial.Serial" maxlength="100" required autocomplete="off" data-serial-input /><small data-capture-source>Nguồn: Nhập tay · Enter để thêm nhanh.</small><input type="hidden" asp-for="NewSerial.CaptureMethod" value="MANUAL" data-capture-method /></fieldset>
+                <fieldset><legend>3. Nhận diện Serial</legend>
+                    <partial name="_SerialCapture" model="@(new PRN222_EWMS_Web.ViewModels.Shared.SerialCaptureViewModel {
+                        SerialName = "NewSerial.Serial", MethodName = "NewSerial.CaptureMethod",
+                        Value = Model.NewSerial.Serial, Method = Model.NewSerial.CaptureMethod,
+                        HelpText = "Quét hoặc đọc ảnh chỉ điền Serial. Kiểm tra kết quả rồi bấm thêm để lưu.",
+                        Hint = "Nguồn: Nhập tay · Enter để thêm nhanh." })" />
+                </fieldset>
                 <fieldset><legend>4. Tình trạng hàng</legend><label asp-for="NewSerial.Condition">Tình trạng</label><select asp-for="NewSerial.Condition"><option value="GOOD">GOOD — Hàng tốt</option><option value="DAMAGED">DAMAGED — Hàng hỏng</option></select><label asp-for="NewSerial.ConditionNote">Ghi chú tình trạng</label><textarea asp-for="NewSerial.ConditionNote" maxlength="1000" rows="2"></textarea><small>Hàng hỏng cần ghi chú và sẽ được cách ly.</small></fieldset>
                 <button class="inbound-primary" type="submit">Xác nhận thêm Serial</button>
             </form></aside>
@@ -45,6 +51,5 @@
         </dialog>
     }
 </div>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
-<script src="https://unpkg.com/@@zxing/browser@0.2.1" defer></script>
+<partial name="_SerialCaptureScripts" />
 <script src="~/js/inbound.js" asp-append-version="true" defer></script>

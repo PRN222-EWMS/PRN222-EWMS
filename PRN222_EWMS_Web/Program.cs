@@ -23,7 +23,9 @@ builder.Services.AddControllersWithViews(options => options.Filters.Add(new Micr
 builder.Services.AddDbContext<EwmsDbContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("DBDefault") ?? builder.Configuration.GetConnectionString("MyCnn")));
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Sales.ISalesRepository, PRN222_EWMS_Web.Repositories.Sales.SalesRepository>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Sales.ICustomerReturnOrderRepository, PRN222_EWMS_Web.Repositories.Sales.CustomerReturnOrderRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Sales.ISalesService, PRN222_EWMS_Web.Services.Sales.SalesService>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.Sales.ICustomerReturnOrderService, PRN222_EWMS_Web.Services.Sales.CustomerReturnOrderService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Purchasing.IPurchaseOrderRepository, PRN222_EWMS_Web.Repositories.Purchasing.PurchaseOrderRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Purchasing.IWarehouseCapacityEngine, PRN222_EWMS_Web.Services.Purchasing.WarehouseCapacityEngine>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Purchasing.IPurchaseOrderService, PRN222_EWMS_Web.Services.Purchasing.PurchaseOrderService>();
@@ -34,6 +36,8 @@ builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.WarehouseStaff.IInboundR
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.WarehouseStaff.IInboundService, PRN222_EWMS_Web.Services.WarehouseStaff.InboundService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.WarehouseStaff.IReturnReceiveRepository, PRN222_EWMS_Web.Repositories.WarehouseStaff.ReturnReceiveRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.WarehouseStaff.IReturnReceiveService, PRN222_EWMS_Web.Services.WarehouseStaff.ReturnReceiveService>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.WarehouseStaff.IPutawayRepository, PRN222_EWMS_Web.Repositories.WarehouseStaff.PutawayRepository>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.WarehouseStaff.IPutawayService, PRN222_EWMS_Web.Services.WarehouseStaff.PutawayService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAdminDashboardRepository, AdminDashboardRepository>();
 builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();
@@ -50,6 +54,8 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     PRN222_EWMS_Web.Services.Manager.IManagerTransferService,
     PRN222_EWMS_Web.Services.Manager.ManagerTransferService>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Manager.IManagerStocktakeRepository, PRN222_EWMS_Web.Repositories.Manager.ManagerStocktakeRepository>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.Manager.IManagerStocktakeService, PRN222_EWMS_Web.Services.Manager.ManagerStocktakeService>();
 builder.Services.AddScoped<IWarehouseRepository, WarehouseRepository>();
 builder.Services.AddScoped<IWarehouseService, WarehouseService>();
 builder.Services.AddScoped<IAccountService, AccountService>();

@@ -1,3 +1,4 @@
+using PRN222_EWMS_Web.Models;
 using PRN222_EWMS_Web.ViewModels.Sales;
 
 namespace PRN222_EWMS_Web.Services.Sales;
@@ -11,6 +12,7 @@ public interface ISalesService
     Task<CustomerDetailsViewModel?> GetCustomerAsync(int id, int userId);
     Task<CustomerFormViewModel?> GetCustomerFormAsync(int id);
     Task<int> CreateCustomerAsync(CustomerFormViewModel model, int actorId);
+    Task<(bool Success, Customer? Customer, string? ErrorMessage)> QuickCreateCustomerAsync(CustomerFormViewModel model, int actorId);
     Task<bool> UpdateCustomerAsync(int id, CustomerFormViewModel model, int actorId);
 
     Task<SalesOrderFormViewModel> GetCreateFormAsync(int userId);

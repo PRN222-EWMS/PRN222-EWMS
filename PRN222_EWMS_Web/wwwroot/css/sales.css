@@ -34,6 +34,20 @@
     color: #005bab !important;
     border-color: #3b82f6 !important;
 }
+.sales-page .sales-button-danger,
+.sales-page a.workspace-button.sales-button-danger,
+.sales-page button.workspace-button.sales-button-danger {
+    background: #ffffff !important;
+    color: #dc3545 !important;
+    border: 1px solid #dc3545 !important;
+    font-weight: 500 !important;
+}
+.sales-page a.workspace-button.sales-button-danger:hover,
+.sales-page button.workspace-button.sales-button-danger:hover {
+    background: #fdf2f2 !important;
+    color: #b02a37 !important;
+    border-color: #b02a37 !important;
+}
 .sales-pagination a.workspace-button { background: var(--workspace-blue); color: #fff; border: 0; border-radius: 9999px; }
 .sales-pagination a.workspace-button:hover { background: #005bab; }
 
