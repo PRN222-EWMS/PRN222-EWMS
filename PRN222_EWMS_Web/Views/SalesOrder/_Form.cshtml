@@ -14,14 +14,22 @@
     <div class="workspace-card">
         <h2 class="h5 mb-3">1. Thông tin giao dịch</h2>
         <div class="mb-3">
-            <label asp-for="CustomerId" class="form-label fw-semibold">
-                Khách hàng <span class="text-danger">*</span>
-            </label>
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <label asp-for="CustomerId" class="form-label fw-semibold mb-0">
+                    Khách hàng <span class="text-danger">*</span>
+                </label>
+                @if (!Model.IsEditMode || Model.Status == "DRAFT")
+                {
+                    <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" id="btnOpenQuickCustomer" style="font-size: 0.82rem;" data-bs-toggle="modal" data-bs-target="#quickCreateCustomerModal">
+                        <i class="bi bi-person-plus-fill me-1"></i> Tạo nhanh khách hàng
+                    </button>
+                }
+            </div>
             <select asp-for="CustomerId" asp-items="Model.Customers" class="form-select" id="CustomerSelect" required>
                 <option value="">-- Chọn khách hàng --</option>
             </select>
             <span asp-validation-for="CustomerId" class="text-danger small"></span>
-            <div class="sales-muted-small mt-1">Thông tin tên, SĐT và địa chỉ khách hàng sẽ được chụp ảnh lưu cố định theo đơn.</div>
+            <div id="quickCustomerSuccessAlert" class="text-success small fw-semibold mt-1 d-none"></div>
         </div>
 
         <div class="mb-3">
@@ -32,7 +40,6 @@
             {
                 <select asp-for="WarehouseId" asp-items="Model.Warehouses" class="form-select" id="WarehouseSelect" required>
                 </select>
-                <div class="sales-muted-small mt-1 text-warning">Đổi kho xuất sẽ điều chuyển lại nguồn giữ chỗ hàng tồn kho.</div>
             }
             else
             {
@@ -41,7 +48,6 @@
                 </select>
             }
             <span asp-validation-for="WarehouseId" class="text-danger small"></span>
-            <div class="sales-muted-small mt-1">Tồn kho khả dụng bên dưới sẽ tự động cập nhật theo kho được chọn.</div>
         </div>
     </div>
 
@@ -49,7 +55,8 @@
     <div class="workspace-card">
         <h2 class="h5 mb-3">2. Mốc thời gian & ghi chú</h2>
         <div class="mb-3">
-            <label class="form-label fw-semibold">Mã đơn bán (SO Code)</label>
+            <label class="form-label fw-semibold">Mã đơn bán</label>
+            <input type="hidden" asp-for="Code" />
             <input type="text" class="form-control" value="@Model.Code" readonly style="background:#f6f5f4;" />
         </div>
 
@@ -69,7 +76,7 @@
 
         <div class="mb-3">
             <label asp-for="Note" class="form-label fw-semibold">Ghi chú đơn hàng</label>
-            <textarea asp-for="Note" class="form-control" rows="2" maxlength="500" placeholder="Ghi chú giao nhận hoặc yêu cầu đóng gói..."></textarea>
+            <textarea asp-for="Note" class="form-control" rows="2" maxlength="500"></textarea>
             <span asp-validation-for="Note" class="text-danger small"></span>
         </div>
     </div>
@@ -80,7 +87,6 @@
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
             <h2 class="h5 mb-0">3. Danh sách sản phẩm yêu cầu <span class="text-danger">*</span></h2>
-            <p class="sales-muted-small mb-0">Hệ thống WMS thuần túy (Zero Pricing) - Không quản lý giá cả và thanh toán trên đơn.</p>
         </div>
         <button type="button" class="workspace-button sales-button-small" id="btnAddLine">
             <i class="bi bi-plus-circle me-1"></i> Thêm sản phẩm
@@ -159,26 +165,27 @@
 </section>
 
 <!-- NÚT THAO TÁC CUỐI TRANG -->
-<div class="sales-form-actions mt-4">
+<div class="sales-form-actions mt-4 justify-content-end">
     @if (!Model.IsEditMode)
     {
+        <a asp-action="Index" class="workspace-button sales-button-secondary">Hủy bỏ</a>
         <button type="submit" name="action" value="draft" class="workspace-button sales-button-secondary">
-            <i class="bi bi-file-earmark me-1"></i> Lưu nháp (DRAFT)
+            <i class="bi bi-file-earmark me-1"></i> Lưu nháp
         </button>
         <button type="submit" name="action" value="submit" class="workspace-button">
-            <i class="bi bi-send-check me-1"></i> Gửi đơn hàng (SUBMIT)
+            <i class="bi bi-send-check me-1"></i> Gửi đơn hàng
         </button>
-        <a asp-action="Index" class="workspace-button sales-button-secondary">Hủy bỏ</a>
     }
     else
     {
+        <a asp-action="Details" asp-route-id="@Model.Id" class="workspace-button sales-button-secondary">Hủy bỏ</a>
         @if (Model.Status == "DRAFT")
         {
             <button type="submit" name="action" value="draft" class="workspace-button sales-button-secondary">
                 <i class="bi bi-file-earmark me-1"></i> Lưu nháp
             </button>
             <button type="submit" name="action" value="submit" class="workspace-button">
-                <i class="bi bi-send-check me-1"></i> Gửi đơn hàng (SUBMIT)
+                <i class="bi bi-send-check me-1"></i> Gửi đơn hàng
             </button>
         }
         else
@@ -187,7 +194,6 @@
                 <i class="bi bi-check2-circle me-1"></i> Lưu thay đổi
             </button>
         }
-        <a asp-action="Details" asp-route-id="@Model.Id" class="workspace-button sales-button-secondary">Hủy bỏ</a>
     }
 </div>
 
@@ -410,6 +416,140 @@
         });
         recalcTotal();
 
+        // Xử lý tạo nhanh khách hàng
+        const quickModalEl = document.getElementById('quickCreateCustomerModal');
+        const customerSelect = document.getElementById('CustomerSelect');
+        const btnSaveQuickCustomer = document.getElementById('btnSaveQuickCustomer');
+        const qcAlert = document.getElementById('quickCustomerAlert');
+        const qcNameInput = document.getElementById('qcCustomerName');
+        const qcNicknameInput = document.getElementById('qcNickname');
+        const qcPhoneInput = document.getElementById('qcPhone');
+        const qcAddressInput = document.getElementById('qcAddress');
+        const qcNameError = document.getElementById('qcNameError');
+        const qcPhoneError = document.getElementById('qcPhoneError');
+        const qcAddressError = document.getElementById('qcAddressError');
+        const qcSpinner = document.getElementById('qcSpinner');
+        const qcIcon = document.getElementById('qcIcon');
+        const quickCustomerSuccessAlert = document.getElementById('quickCustomerSuccessAlert');
+
+        let quickModalInstance = null;
+        if (quickModalEl) {
+            quickModalInstance = new bootstrap.Modal(quickModalEl);
+
+            quickModalEl.addEventListener('show.bs.modal', function () {
+                qcAlert.classList.add('d-none');
+                qcAlert.textContent = '';
+                qcNameError.classList.add('d-none');
+                qcPhoneError.classList.add('d-none');
+                qcAddressError.classList.add('d-none');
+                qcNameInput.classList.remove('is-invalid');
+                qcPhoneInput.classList.remove('is-invalid');
+                qcAddressInput.classList.remove('is-invalid');
+            });
+        }
+
+        if (btnSaveQuickCustomer) {
+            btnSaveQuickCustomer.addEventListener('click', async function () {
+                let hasError = false;
+                qcAlert.classList.add('d-none');
+                qcAlert.textContent = '';
+
+                const name = qcNameInput.value.trim();
+                const nickname = qcNicknameInput ? qcNicknameInput.value.trim() : '';
+                const phone = qcPhoneInput.value.trim();
+                const address = qcAddressInput.value.trim();
+
+                if (!name) {
+                    qcNameError.classList.remove('d-none');
+                    qcNameInput.classList.add('is-invalid');
+                    hasError = true;
+                } else {
+                    qcNameError.classList.add('d-none');
+                    qcNameInput.classList.remove('is-invalid');
+                }
+
+                const phonePattern = /^0[0-9]{9}$/;
+                if (!phone || !phonePattern.test(phone)) {
+                    qcPhoneError.textContent = 'Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0.';
+                    qcPhoneError.classList.remove('d-none');
+                    qcPhoneInput.classList.add('is-invalid');
+                    hasError = true;
+                } else {
+                    qcPhoneError.classList.add('d-none');
+                    qcPhoneInput.classList.remove('is-invalid');
+                }
+
+                if (!address) {
+                    qcAddressError.classList.remove('d-none');
+                    qcAddressInput.classList.add('is-invalid');
+                    hasError = true;
+                } else {
+                    qcAddressError.classList.add('d-none');
+                    qcAddressInput.classList.remove('is-invalid');
+                }
+
+                if (hasError) return;
+
+                btnSaveQuickCustomer.disabled = true;
+                qcSpinner.classList.remove('d-none');
+                qcIcon.classList.add('d-none');
+
+                try {
+                    const tokenEl = document.querySelector('input[name="__RequestVerificationToken"]');
+                    const formData = new FormData();
+                    formData.append('CustomerName', name);
+                    formData.append('Nickname', nickname);
+                    formData.append('Phone', phone);
+                    formData.append('Address', address);
+                    if (tokenEl) {
+                        formData.append('__RequestVerificationToken', tokenEl.value);
+                    }
+
+                    const response = await fetch('/SalesOrder/QuickCreateCustomer', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const res = await response.json();
+                    if (res.success) {
+                        const newOpt = new Option(res.displayText, res.customerId, true, true);
+                        customerSelect.appendChild(newOpt);
+                        customerSelect.value = res.customerId;
+
+                        quickModalInstance.hide();
+
+                        qcNameInput.value = '';
+                        if (qcNicknameInput) qcNicknameInput.value = '';
+                        qcPhoneInput.value = '';
+                        qcAddressInput.value = '';
+
+                        if (quickCustomerSuccessAlert) {
+                            quickCustomerSuccessAlert.textContent = `✓ Đã tạo và chọn khách hàng: ${res.displayText}`;
+                            quickCustomerSuccessAlert.classList.remove('d-none');
+                            setTimeout(() => {
+                                quickCustomerSuccessAlert.classList.add('d-none');
+                            }, 5000);
+                        }
+                    } else {
+                        qcAlert.textContent = res.message || 'Không thể tạo khách hàng.';
+                        qcAlert.classList.remove('d-none');
+                        if (res.message && res.message.toLowerCase().includes('điện thoại')) {
+                            qcPhoneInput.classList.add('is-invalid');
+                            qcPhoneError.textContent = res.message;
+                            qcPhoneError.classList.remove('d-none');
+                        }
+                    }
+                } catch (err) {
+                    qcAlert.textContent = 'Có lỗi xảy ra trong quá trình lưu. Vui lòng thử lại.';
+                    qcAlert.classList.remove('d-none');
+                } finally {
+                    btnSaveQuickCustomer.disabled = false;
+                    qcSpinner.classList.add('d-none');
+                    qcIcon.classList.remove('d-none');
+                }
+            });
+        }
+
         // Kiểm tra trước khi submit form
         const form = document.getElementById('salesOrderForm');
         if (form) {
@@ -436,3 +576,50 @@
         }
     });
 </script>
+
+<!-- MODAL TẠO NHANH KHÁCH HÀNG -->
+<div class="modal fade" id="quickCreateCustomerModal" tabindex="-1" aria-labelledby="quickCreateCustomerLabel" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="quickCreateCustomerLabel">
+                    <i class="bi bi-person-plus-fill text-primary me-2"></i>Tạo nhanh khách hàng
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+            </div>
+            <div class="modal-body">
+                <div id="quickCustomerAlert" class="alert alert-danger d-none" role="alert"></div>
+
+                <div class="mb-3">
+                    <label for="qcCustomerName" class="form-label fw-semibold">Tên khách hàng <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="qcCustomerName" maxlength="200" />
+                    <div class="text-danger small mt-1 d-none" id="qcNameError">Vui lòng nhập tên khách hàng.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="qcNickname" class="form-label fw-semibold">Tên gợi nhớ</label>
+                    <input type="text" class="form-control" id="qcNickname" maxlength="50" />
+                </div>
+
+                <div class="mb-3">
+                    <label for="qcPhone" class="form-label fw-semibold">Số điện thoại <span class="text-danger">*</span></label>
+                    <input type="tel" class="form-control" id="qcPhone" maxlength="10" />
+                    <div class="text-danger small mt-1 d-none" id="qcPhoneError">Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="qcAddress" class="form-label fw-semibold">Địa chỉ <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="qcAddress" rows="2" maxlength="500"></textarea>
+                    <div class="text-danger small mt-1 d-none" id="qcAddressError">Vui lòng nhập địa chỉ khách hàng.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy</button>
+                <button type="button" class="btn btn-primary" id="btnSaveQuickCustomer">
+                    <span class="spinner-border spinner-border-sm d-none me-1" id="qcSpinner" role="status" aria-hidden="true"></span>
+                    <i class="bi bi-check2-circle me-1" id="qcIcon"></i>Lưu khách hàng
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

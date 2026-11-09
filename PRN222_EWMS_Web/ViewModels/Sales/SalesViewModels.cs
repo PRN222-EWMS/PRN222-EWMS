@@ -108,8 +108,15 @@ public class CustomerFormViewModel
     [Required(ErrorMessage = "Vui lòng nhập tên khách hàng."), StringLength(200, ErrorMessage = "Tên khách hàng tối đa 200 ký tự.")]
     [Display(Name = "Tên khách hàng")]
     public string CustomerName { get; set; } = "";
+
+    [StringLength(50, ErrorMessage = "Tên gợi nhớ tối đa 50 ký tự.")]
+    [Display(Name = "Tên gợi nhớ")]
+    public string? Nickname { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng nhập địa chỉ khách hàng.")]
     [StringLength(500, ErrorMessage = "Địa chỉ tối đa 500 ký tự."), Display(Name = "Địa chỉ")]
     public string? Address { get; set; }
+
     [Required(ErrorMessage = "Vui lòng nhập số điện thoại.")]
     [RegularExpression(@"^0[0-9]{9}$",
         ErrorMessage = "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0.")]
