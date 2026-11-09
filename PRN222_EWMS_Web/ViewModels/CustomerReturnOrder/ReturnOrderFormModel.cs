@@ -24,6 +24,7 @@ public class ReturnOrderFormModel
 
     public string? CustomerName { get; set; }
     public string? Status { get; set; }
+    public bool CanCancel { get; set; }
 
     public List<EligibleSalesOrderOptionDto> EligibleSalesOrders { get; set; } = [];
     public List<WarehouseOptionDto> ActiveWarehouses { get; set; } = [];

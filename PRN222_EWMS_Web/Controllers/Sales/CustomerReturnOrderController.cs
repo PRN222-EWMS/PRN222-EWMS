@@ -109,7 +109,23 @@ public class CustomerReturnOrderController(ICustomerReturnOrderService returnOrd
     }
 
     // =========================================================================
-    // 4. AJAX: TẢI DANH SÁCH DÒNG ĐƯỢC PHÉP TRẢ THEO ĐƠN BÁN HÀNG (UC57)
+    // 4. HỦY ĐƠN TRẢ HÀNG (UC57)
+    // =========================================================================
+    [Authorize(Roles = "SALES_STAFF")]
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Cancel(long id, string? cancelReason, string? rowVersion, CancellationToken cancellationToken)
+    {
+        if (CurrentUserId <= 0) return Challenge();
+        if (id <= 0) return NotFound();
+
+        byte[]? parsedRowVersion = !string.IsNullOrEmpty(rowVersion) ? Convert.FromBase64String(rowVersion) : null;
+        var (success, message) = await returnOrderService.CancelReturnOrderAsync(id, cancelReason, parsedRowVersion, CurrentUserId, cancellationToken);
+        TempData[success ? "Success" : "Error"] = message;
+        return RedirectToAction(nameof(Index));
+    }
+
+    // =========================================================================
+    // 5. AJAX: TẢI DANH SÁCH DÒNG ĐƯỢC PHÉP TRẢ THEO ĐƠN BÁN HÀNG (UC57)
     // =========================================================================
     [Authorize(Roles = "SALES_STAFF")]
     [HttpGet]

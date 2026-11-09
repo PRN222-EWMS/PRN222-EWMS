@@ -100,7 +100,8 @@ public class CustomerReturnOrderService(
             TotalRequestedQuantity = dto.TotalRequestedQuantity,
             CompletedReceivedQuantity = dto.CompletedReceivedQuantity,
             Reason = dto.Reason,
-            CanEdit = isSalesStaff && dto.Status == "DRAFT"
+            CanEdit = isSalesStaff && dto.Status == "DRAFT",
+            CanCancel = isSalesStaff && (dto.Status == "DRAFT" || dto.Status == "OPEN") && !dto.HasReturnReceipts
         }).ToList();
 
         return result;
@@ -327,6 +328,43 @@ public class CustomerReturnOrderService(
         }
     }
 
+    public async Task<(bool Success, string Message)> CancelReturnOrderAsync(
+        long returnOrderId,
+        string? cancelReason,
+        byte[]? rowVersion,
+        int actorId,
+        CancellationToken cancellationToken = default)
+    {
+        if (returnOrderId <= 0)
+        {
+            return (false, "Mã đơn trả hàng không hợp lệ.");
+        }
+
+        try
+        {
+            await repo.InTransactionAsync(actorId, async () =>
+            {
+                await repo.CancelOrderAsync(returnOrderId, cancelReason, rowVersion, actorId, cancellationToken);
+                return true;
+            });
+
+            return (true, $"Hủy đơn trả hàng #{returnOrderId} thành công.");
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return (false, "Dữ liệu đơn trả hàng đã được cập nhật bởi một người dùng khác. Vui lòng tải lại trang.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return (false, ex.Message);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Lỗi hệ thống khi hủy đơn trả hàng ID: {ReturnOrderId}", returnOrderId);
+            return (false, "Đã xảy ra lỗi trong quá trình hủy đơn trả hàng. Vui lòng thử lại sau.");
+        }
+    }
+
     private async Task<List<EligibleSalesOrderLineDto>> LockAndRevalidateEligibilityUnderTxAsync(
         long salesOrderId,
         long? currentReturnOrderId,
@@ -379,6 +417,10 @@ public class CustomerReturnOrderService(
                 }
             }
         }
+
+        model.CanCancel = model.ReturnOrderId > 0
+            && model.Status is "DRAFT" or "OPEN"
+            && !await repo.HasReturnReceiptsAsync(model.ReturnOrderId.Value, cancellationToken);
     }
 
     private async Task<(bool IsValid, string ErrorMessage)> ValidateFormModelAsync(

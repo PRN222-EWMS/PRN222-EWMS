@@ -59,6 +59,7 @@ public class ReturnOrderListRowViewModel
     public int CompletedReceivedQuantity { get; set; }
     public string? Reason { get; set; }
     public bool CanEdit { get; set; }
+    public bool CanCancel { get; set; }
 }
 
 public record ReturnOrderFilterDto(
@@ -88,6 +89,7 @@ public record ReturnOrderListRowDto(
     int LinesCount,
     int TotalRequestedQuantity,
     int CompletedReceivedQuantity,
+    bool HasReturnReceipts,
     string? Reason
 );
 
