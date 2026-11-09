@@ -24,6 +24,18 @@ public interface ICustomerReturnOrderService
         int actorId,
         CancellationToken cancellationToken = default);
 
+    Task<(bool Success, string Message)> CancelReturnOrderAsync(
+        long returnOrderId,
+        string? cancelReason,
+        byte[]? rowVersion,
+        int actorId,
+        CancellationToken cancellationToken = default);
+
     Task PopulateFormOptionsAsync(ReturnOrderFormModel model, CancellationToken cancellationToken = default);
+
+    Task<ReturnOrderListViewModel> GetReturnOrderListAsync(
+        ReturnOrderListFilterViewModel filter,
+        int userId,
+        CancellationToken cancellationToken = default);
 }
 

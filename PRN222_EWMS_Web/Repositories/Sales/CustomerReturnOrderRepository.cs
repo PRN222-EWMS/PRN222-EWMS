@@ -420,6 +420,68 @@ public class CustomerReturnOrderRepository(EwmsDbContext db) : ICustomerReturnOr
         }
     }
 
+    public async Task CancelOrderAsync(
+        long returnOrderId,
+        string? cancelReason,
+        byte[]? originalRowVersion,
+        int actorId,
+        CancellationToken cancellationToken = default)
+    {
+        if (db.Database.CurrentTransaction == null)
+            throw new InvalidOperationException("Thao tác hủy đơn trả hàng yêu cầu một giao dịch đang hoạt động (InTransactionAsync).");
+
+        var currentOrder = await db.CustomerReturnOrders
+            .Include(o => o.CustomerReturnOrderLineReturnOrders)
+            .FirstOrDefaultAsync(o => o.ReturnOrderId == returnOrderId, cancellationToken)
+            ?? throw new InvalidOperationException($"Không tìm thấy đơn trả hàng với ID {returnOrderId}.");
+
+        if (currentOrder.Status != "DRAFT" && currentOrder.Status != "OPEN")
+        {
+            throw new InvalidOperationException($"Chỉ đơn trả hàng ở trạng thái Bản nháp (DRAFT) hoặc Đã xác nhận (OPEN) mới được phép hủy. Trạng thái hiện tại: {currentOrder.Status}.");
+        }
+
+        bool hasReceipts = await HasReturnReceiptsAsync(returnOrderId, cancellationToken);
+        if (hasReceipts)
+        {
+            throw new InvalidOperationException("Không thể hủy đơn trả hàng đã phát sinh phiếu nhận hàng (Inbound/ReturnReceipt).");
+        }
+
+        if (originalRowVersion != null && originalRowVersion.Length > 0)
+        {
+            db.Entry(currentOrder).Property(e => e.RowVersion).OriginalValue = originalRowVersion;
+        }
+
+        currentOrder.Status = "CANCELLED";
+        if (!string.IsNullOrWhiteSpace(cancelReason))
+        {
+            var trimmed = cancelReason.Trim();
+            currentOrder.Reason = string.IsNullOrWhiteSpace(currentOrder.Reason)
+                ? $"[Lý do hủy]: {trimmed}"
+                : $"{currentOrder.Reason} | [Lý do hủy]: {trimmed}";
+            if (currentOrder.Reason.Length > 1000)
+            {
+                currentOrder.Reason = currentOrder.Reason[..1000];
+            }
+        }
+
+        db.Entry(currentOrder).Property(x => x.Status).IsModified = true;
+        db.Entry(currentOrder).Property(x => x.Reason).IsModified = true;
+
+        foreach (var line in currentOrder.CustomerReturnOrderLineReturnOrders)
+        {
+            line.CancelledQuantity = line.RequestedQuantity;
+        }
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new DbUpdateConcurrencyException("Dữ liệu đơn trả hàng đã được cập nhật bởi một người dùng khác. Vui lòng tải lại trang.", ex);
+        }
+    }
+
     private async Task SynchronizeReturnLinesAsync(
         long returnOrderId,
         long salesOrderId,
@@ -460,5 +522,100 @@ public class CustomerReturnOrderRepository(EwmsDbContext db) : ICustomerReturnOr
                 CancelledQuantity = 0
             });
         }
+    }
+
+    public async Task<(List<ReturnOrderListRowDto> Items, int TotalCount)> GetReturnOrdersPagedAsync(
+        ReturnOrderFilterDto filter,
+        CancellationToken cancellationToken = default)
+    {
+        var query = db.CustomerReturnOrders.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            var s = filter.Search.Trim();
+            query = query.Where(r => r.ReturnCode.Contains(s)
+                || r.SalesOrder.Socode.Contains(s)
+                || (r.SalesOrder.Customer != null && r.SalesOrder.Customer.CustomerName.Contains(s)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.Status))
+        {
+            query = query.Where(r => r.Status == filter.Status);
+        }
+
+        if (filter.WarehouseId.HasValue)
+        {
+            query = query.Where(r => r.WarehouseId == filter.WarehouseId.Value);
+        }
+
+        if (filter.FromUtc.HasValue)
+        {
+            query = query.Where(r => r.CreatedAt >= filter.FromUtc.Value);
+        }
+
+        if (filter.ToUtc.HasValue)
+        {
+            query = query.Where(r => r.CreatedAt <= filter.ToUtc.Value);
+        }
+
+        if (filter.CreatedByUserId.HasValue)
+        {
+            query = query.Where(r => r.CreatedByUserId == filter.CreatedByUserId.Value);
+        }
+
+        if (filter.ExcludeDraft)
+        {
+            query = query.Where(r => r.Status != "DRAFT");
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.ReturnOrderId)
+            .Skip(filter.Skip).Take(filter.Take)
+            .Select(r => new ReturnOrderListRowDto(
+                r.ReturnOrderId,
+                r.ReturnCode,
+                r.SalesOrderId,
+                r.SalesOrder.Socode,
+                r.SalesOrder.Customer != null ? r.SalesOrder.Customer.CustomerName : "Khách lẻ",
+                r.WarehouseId,
+                r.Warehouse.WarehouseName,
+                r.CreatedAt,
+                r.CreatedByUserId,
+                r.CreatedByUser.FullName,
+                r.Status,
+                r.CustomerReturnOrderLineReturnOrders.Count,
+                r.CustomerReturnOrderLineReturnOrders.Sum(l => l.RequestedQuantity),
+                db.ReturnReceiptItems.Count(rri => rri.IsActive && rri.ReturnReceipt.ReturnOrderId == r.ReturnOrderId && rri.ReturnReceipt.Status == "DONE"),
+                db.ReturnReceipts.Any(rr => rr.ReturnOrderId == r.ReturnOrderId),
+                r.Reason
+            ))
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
+    }
+
+    public Task<bool> HasReturnReceiptsAsync(long returnOrderId, CancellationToken cancellationToken = default) =>
+        db.ReturnReceipts.AnyAsync(rr => rr.ReturnOrderId == returnOrderId, cancellationToken);
+
+    public Task<List<WarehouseOptionDto>> GetAllWarehousesForFilterAsync(CancellationToken cancellationToken = default) =>
+        db.Warehouses.AsNoTracking()
+            .OrderBy(w => w.WarehouseName)
+            .Select(w => new WarehouseOptionDto(
+                w.WarehouseId,
+                w.Status == "ACTIVE" ? w.WarehouseName : w.WarehouseName + " (Ngừng hoạt động)",
+                w.Status
+            ))
+            .ToListAsync(cancellationToken);
+
+    public async Task<(int? WarehouseId, string? WarehouseName, string? RoleName)> GetUserRoleAndWarehouseAsync(
+        int userId, CancellationToken cancellationToken = default)
+    {
+        var user = await db.Users.AsNoTracking()
+            .Where(u => u.UserId == userId && u.Status == "ACTIVE")
+            .Select(u => new { u.WarehouseId, WarehouseName = u.Warehouse != null ? u.Warehouse.WarehouseName : null, RoleName = u.Role != null ? u.Role.RoleName : null })
+            .FirstOrDefaultAsync(cancellationToken);
+        return (user?.WarehouseId, user?.WarehouseName, user?.RoleName);
     }
 }

@@ -15,6 +15,97 @@ public class CustomerReturnOrderService(
     ICustomerReturnOrderRepository repo,
     ILogger<CustomerReturnOrderService> logger) : ICustomerReturnOrderService
 {
+    private static readonly TimeZoneInfo VietnamTime = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
+
+    public async Task<ReturnOrderListViewModel> GetReturnOrderListAsync(
+        ReturnOrderListFilterViewModel filter,
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        var (userWarehouseId, userWarehouseName, roleName) = await repo.GetUserRoleAndWarehouseAsync(userId, cancellationToken);
+        bool isWarehouseStaff = roleName == "WAREHOUSE_STAFF";
+        bool isSalesStaff = roleName == "SALES_STAFF";
+
+        int page = Math.Max(1, filter.Page);
+        int pageSize = Math.Clamp(filter.PageSize < 1 ? 10 : filter.PageSize, 1, 100);
+        int skip = (page - 1) * pageSize;
+
+        var result = new ReturnOrderListViewModel
+        {
+            Search = filter.Search,
+            Status = filter.Status,
+            WarehouseId = isWarehouseStaff ? userWarehouseId : filter.WarehouseId,
+            FromDate = filter.FromDate,
+            ToDate = filter.ToDate,
+            Mine = filter.Mine,
+            Page = page,
+            PageSize = pageSize,
+            CanFilterMine = isSalesStaff,
+            CanCreate = isSalesStaff,
+            IsWarehouseStaff = isWarehouseStaff,
+            AssignedWarehouseName = isWarehouseStaff ? userWarehouseName : null
+        };
+
+        if (isWarehouseStaff && !userWarehouseId.HasValue)
+        {
+            result.CanFilterMine = false;
+            result.CanCreate = false;
+            result.ScopeMessage = "Tài khoản của bạn chưa được phân công kho làm việc cố định. Vui lòng liên hệ Quản lý để được phân công kho.";
+            return result;
+        }
+
+        result.Warehouses = isWarehouseStaff ? [] : await repo.GetAllWarehousesForFilterAsync(cancellationToken);
+
+        if (filter.FromDate.HasValue && filter.ToDate.HasValue && filter.FromDate.Value > filter.ToDate.Value)
+        {
+            return result;
+        }
+
+        var fromUtc = filter.FromDate.HasValue
+            ? TimeZoneInfo.ConvertTimeToUtc(filter.FromDate.Value.ToDateTime(TimeOnly.MinValue), VietnamTime)
+            : (DateTime?)null;
+        var toUtc = filter.ToDate.HasValue
+            ? TimeZoneInfo.ConvertTimeToUtc(filter.ToDate.Value.ToDateTime(TimeOnly.MaxValue), VietnamTime)
+            : (DateTime?)null;
+
+        var filterDto = new ReturnOrderFilterDto(
+            Search: filter.Search,
+            Status: isWarehouseStaff && filter.Status == "DRAFT" ? null : filter.Status,
+            WarehouseId: isWarehouseStaff ? userWarehouseId : filter.WarehouseId,
+            FromUtc: fromUtc,
+            ToUtc: toUtc,
+            CreatedByUserId: isSalesStaff && filter.Mine ? userId : null,
+            ExcludeDraft: isWarehouseStaff,
+            Skip: skip,
+            Take: pageSize
+        );
+
+        var (items, totalCount) = await repo.GetReturnOrdersPagedAsync(filterDto, cancellationToken);
+
+        result.TotalCount = totalCount;
+        result.Items = items.Select(dto => new ReturnOrderListRowViewModel
+        {
+            Id = dto.ReturnOrderId,
+            ReturnCode = dto.ReturnCode,
+            SalesOrderId = dto.SalesOrderId,
+            SalesOrderCode = dto.SalesOrderCode,
+            CustomerName = dto.CustomerName,
+            WarehouseId = dto.WarehouseId,
+            WarehouseName = dto.WarehouseName,
+            CreatedAt = dto.CreatedAt,
+            CreatedByUserId = dto.CreatedByUserId,
+            CreatedByName = dto.CreatedByName,
+            Status = dto.Status,
+            LinesCount = dto.LinesCount,
+            TotalRequestedQuantity = dto.TotalRequestedQuantity,
+            CompletedReceivedQuantity = dto.CompletedReceivedQuantity,
+            Reason = dto.Reason,
+            CanEdit = isSalesStaff && dto.Status == "DRAFT",
+            CanCancel = isSalesStaff && (dto.Status == "DRAFT" || dto.Status == "OPEN") && !dto.HasReturnReceipts
+        }).ToList();
+
+        return result;
+    }
 
     public async Task<ReturnOrderFormModel> GetCreateViewModelAsync(long? selectedSalesOrderId = null, CancellationToken cancellationToken = default)
     {
@@ -237,6 +328,43 @@ public class CustomerReturnOrderService(
         }
     }
 
+    public async Task<(bool Success, string Message)> CancelReturnOrderAsync(
+        long returnOrderId,
+        string? cancelReason,
+        byte[]? rowVersion,
+        int actorId,
+        CancellationToken cancellationToken = default)
+    {
+        if (returnOrderId <= 0)
+        {
+            return (false, "Mã đơn trả hàng không hợp lệ.");
+        }
+
+        try
+        {
+            await repo.InTransactionAsync(actorId, async () =>
+            {
+                await repo.CancelOrderAsync(returnOrderId, cancelReason, rowVersion, actorId, cancellationToken);
+                return true;
+            });
+
+            return (true, $"Hủy đơn trả hàng #{returnOrderId} thành công.");
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return (false, "Dữ liệu đơn trả hàng đã được cập nhật bởi một người dùng khác. Vui lòng tải lại trang.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return (false, ex.Message);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Lỗi hệ thống khi hủy đơn trả hàng ID: {ReturnOrderId}", returnOrderId);
+            return (false, "Đã xảy ra lỗi trong quá trình hủy đơn trả hàng. Vui lòng thử lại sau.");
+        }
+    }
+
     private async Task<List<EligibleSalesOrderLineDto>> LockAndRevalidateEligibilityUnderTxAsync(
         long salesOrderId,
         long? currentReturnOrderId,
@@ -289,6 +417,10 @@ public class CustomerReturnOrderService(
                 }
             }
         }
+
+        model.CanCancel = model.ReturnOrderId > 0
+            && model.Status is "DRAFT" or "OPEN"
+            && !await repo.HasReturnReceiptsAsync(model.ReturnOrderId.Value, cancellationToken);
     }
 
     private async Task<(bool IsValid, string ErrorMessage)> ValidateFormModelAsync(
