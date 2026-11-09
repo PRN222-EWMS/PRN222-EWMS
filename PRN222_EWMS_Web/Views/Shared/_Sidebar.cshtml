@@ -39,7 +39,7 @@
             ("Theo dõi phiếu nhập", "bi-clipboard-data", "ManagerInbound", "Index", new[] { "MANAGER" }),
             ("Chờ xếp kho", "bi-boxes", "Putaway", "Index", new[] { "WAREHOUSE_STAFF" }),
             ("Xuất kho", "bi-box-arrow-up", "Outbound", "Index", new[] { "WAREHOUSE_STAFF", "MANAGER" }),
-            ("Chuyển kho", "bi-arrow-left-right", "Transfer", "Index", new[] { "MANAGER", "WAREHOUSE_STAFF" }),
+            ("Chuyển kho", "bi-arrow-left-right", "ManagerTransfer", "Index", new[] { "MANAGER" }),
             ("Kiểm kê", "bi-clipboard-check", "ManagerStocktake", "Index", new[] { "MANAGER" }),
             ("Duyệt điều chỉnh", "bi-check2-square", "InventoryAdjustment", "Index", new[] { "CEO" })
         })
@@ -99,7 +99,7 @@
                 .Where(i => i.Roles.Length == 0 || i.Roles.Contains(role, StringComparer.OrdinalIgnoreCase))
                 // Keep CEO's scope and include the merged modules available to Manager.
                 .Where(i => !isCeo || (i.Action == "Index" && (i.Controller is "Home" or "Warehouse" or "CeoPurchaseProgress")))
-                .Where(i => !isManager || (i.Action == "Index" && (i.Controller is "Home" or "Warehouse" or "PurchaseOrder" or "SalesOrder" or "ManagerInbound" or "Outbound" or "Transfer" or "ManagerStocktake")))
+                .Where(i => !isManager || (i.Action == "Index" && (i.Controller is "Home" or "Warehouse" or "PurchaseOrder" or "SalesOrder" or "ManagerInbound" or "Outbound" or "ManagerTransfer" or "ManagerStocktake")))
                 .ToArray();
             if (allowedItems.Length == 0) { continue; }
             <div class="ewms-nav-section">
