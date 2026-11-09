@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using System.Text.RegularExpressions;
 using PRN222_EWMS_Web.Models;
 using PRN222_EWMS_Web.ViewModels.Manager;
 
@@ -7,7 +8,7 @@ namespace PRN222_EWMS_Web.Repositories.Manager;
 public class ManagerTransferRepository(EwmsDbContext db)
     : IManagerTransferRepository
 {
-    public Task<List<ManagerTransferSummary>> GetListAsync(string? search, string? status)
+    private IQueryable<TransferOrder> Filter(string? search, string? status)
     {
         var query = db.TransferOrders.AsNoTracking();
 
@@ -24,9 +25,19 @@ public class ManagerTransferRepository(EwmsDbContext db)
             query = query.Where(order => order.Status == status);
         }
 
-        return query
+        return query;
+    }
+
+    public Task<int> CountAsync(string? search, string? status) =>
+        Filter(search, status).CountAsync();
+
+    public Task<List<ManagerTransferSummary>> GetListAsync(string? search, string? status, int skip, int take)
+    {
+        return Filter(search, status)
             .OrderByDescending(order => order.CreatedAt)
             .ThenByDescending(order => order.TransferOrderId)
+            .Skip(skip)
+            .Take(take)
             .Select(order => new ManagerTransferSummary(
                 order.TransferOrderId,
                 order.TransferCode,
@@ -59,13 +70,28 @@ public class ManagerTransferRepository(EwmsDbContext db)
             .ToListAsync();
     }
 
-    public Task<List<string>> GetStatusOptionsAsync()
+    public async Task<List<string>> GetStatusOptionsAsync()
     {
-        return db.TransferOrders.AsNoTracking()
-            .Select(order => order.Status)
+        const string sql = """
+            SELECT definition AS [Value]
+            FROM sys.check_constraints
+            WHERE parent_object_id = OBJECT_ID(N'dbo.TransferOrder')
+              AND name = N'CK_TransferOrder_03'
+            """;
+
+        var definition = await db.Database.SqlQueryRaw<string>(sql).SingleAsync();
+        string[] lifecycleOrder =
+            ["DRAFT", "RELEASED", "IN_PROGRESS", "COMPLETED", "CLOSED", "CANCELLED"];
+
+        return Regex.Matches(definition, @"'([A-Z_]+)'")
+            .Select(match => match.Groups[1].Value)
             .Distinct()
-            .OrderBy(status => status)
-            .ToListAsync();
+            .OrderBy(status =>
+            {
+                var index = Array.IndexOf(lifecycleOrder, status);
+                return index >= 0 ? index : int.MaxValue;
+            })
+            .ToList();
     }
 
     public async Task<ManagerTransferDetail?> GetDetailAsync(long id)

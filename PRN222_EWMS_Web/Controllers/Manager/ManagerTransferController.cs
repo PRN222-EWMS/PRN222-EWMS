@@ -9,9 +9,9 @@ public class ManagerTransferController(IManagerTransferService transfers)
     : Controller
 {
     [HttpGet]
-    public async Task<IActionResult> Index(string? search, string? status)
+    public async Task<IActionResult> Index(string? search, string? status, int page = 1)
     {
-        var model = await transfers.GetListAsync(search, status);
+        var model = await transfers.GetListAsync(search, status, page);
         return View(model);
     }
 

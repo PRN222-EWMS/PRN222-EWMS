@@ -18,6 +18,8 @@ public record ManagerTransferSummary(
 
 public class ManagerTransferListViewModel
 {
+    public int Page { get; set; }
+    public int TotalPages { get; set; }
     public string? Search { get; set; }
     public string? Status { get; set; }
     public List<string> StatusOptions { get; set; } = [];
