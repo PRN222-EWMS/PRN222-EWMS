@@ -609,7 +609,7 @@ public class CustomerReturnOrderRepository(EwmsDbContext db) : ICustomerReturnOr
             ))
             .ToListAsync(cancellationToken);
 
-    public async Task<(int? WarehouseId, string? WarehouseName, string? RoleName)> GetUserRoleAndWarehouseAsync(
+    public virtual async Task<(int? WarehouseId, string? WarehouseName, string? RoleName)> GetUserRoleAndWarehouseAsync(
         int userId, CancellationToken cancellationToken = default)
     {
         var user = await db.Users.AsNoTracking()

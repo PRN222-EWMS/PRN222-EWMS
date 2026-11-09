@@ -81,7 +81,7 @@
         <h1>Danh sách đơn trả hàng</h1>
         <p class="muted">@(Model.IsWarehouseStaff ? "Theo dõi các đơn trả hàng tiếp nhận tại kho được phân công." : Model.CanFilterMine ? "Tra cứu tất cả đơn trả hàng hoặc theo dõi những đơn do bạn tạo." : "Theo dõi đơn trả hàng của tất cả kho.")</p>
     </div>
-    @if (Model.CanCreate && User.IsInRole("SALES_STAFF"))
+    @if (Model.CanCreate)
     {
         <a class="workspace-button" asp-action="Create">
             <i class="bi bi-plus-lg" aria-hidden="true"></i> Tạo đơn trả hàng
@@ -240,47 +240,68 @@
                                     <button type="button" class="return-action-btn return-action-disabled" disabled title="Chi tiết" aria-label="Chi tiết">
                                         <i class="bi bi-eye" aria-hidden="true"></i>
                                     </button>
-                                    @if (order.CanEdit && User.IsInRole("SALES_STAFF"))
+                                    @if (Model.IsWarehouseStaff)
                                     {
-                                        <a class="return-action-btn return-action-active" asp-action="Edit" asp-route-id="@order.Id" title="Chỉnh sửa" aria-label="Chỉnh sửa">
-                                            <i class="bi bi-pencil" aria-hidden="true"></i>
-                                        </a>
-                                    }
-                                    else
-                                    {
-                                        <button type="button" class="return-action-btn return-action-disabled" disabled title="Chỉnh sửa" aria-label="Chỉnh sửa">
-                                            <i class="bi bi-pencil" aria-hidden="true"></i>
-                                        </button>
-                                    }
-                                    @if (order.CanCancel)
-                                    {
-                                        @if (order.Status == "DRAFT")
+                                        @if (order.CanReceive)
                                         {
-                                            <form method="post" asp-action="Cancel" asp-route-id="@order.Id" class="d-inline m-0 p-0">
-                                                @Html.AntiForgeryToken()
-                                                <button type="submit" class="return-action-btn return-action-active text-danger" title="Hủy" aria-label="Hủy">
-                                                    <i class="bi bi-x-circle text-danger" aria-hidden="true"></i>
-                                                </button>
-                                            </form>
+                                            <a href="@Url.Action("Index", "ReturnReceive", new { search = order.ReturnCode })" 
+                                               class="return-action-btn return-action-active text-primary" 
+                                               title="Nhận hàng" 
+                                               aria-label="Nhận hàng">
+                                                <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>
+                                            </a>
                                         }
                                         else
                                         {
-                                            <button type="button" class="return-action-btn return-action-active text-danger" 
-                                                    data-bs-toggle="modal" 
-                                                    data-bs-target="#indexCancelModal" 
-                                                    data-return-id="@order.Id" 
-                                                    data-return-code="@order.ReturnCode" 
-                                                    title="Hủy" 
-                                                    aria-label="Hủy">
-                                                <i class="bi bi-x-circle text-danger" aria-hidden="true"></i>
+                                            <button type="button" class="return-action-btn return-action-disabled" disabled title="Nhận hàng" aria-label="Nhận hàng">
+                                                <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>
                                             </button>
                                         }
                                     }
                                     else
                                     {
-                                        <button type="button" class="return-action-btn return-action-disabled" disabled title="Hủy" aria-label="Hủy">
-                                            <i class="bi bi-x-circle" aria-hidden="true"></i>
-                                        </button>
+                                        @if (order.CanEdit)
+                                        {
+                                            <a class="return-action-btn return-action-active" asp-action="Edit" asp-route-id="@order.Id" title="Chỉnh sửa" aria-label="Chỉnh sửa">
+                                                <i class="bi bi-pencil" aria-hidden="true"></i>
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="return-action-btn return-action-disabled" disabled title="Chỉnh sửa" aria-label="Chỉnh sửa">
+                                                <i class="bi bi-pencil" aria-hidden="true"></i>
+                                            </button>
+                                        }
+                                        @if (order.CanCancel)
+                                        {
+                                            @if (order.Status == "DRAFT")
+                                            {
+                                                <form method="post" asp-action="Cancel" asp-route-id="@order.Id" class="d-inline m-0 p-0">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit" class="return-action-btn return-action-active text-danger" title="Hủy" aria-label="Hủy">
+                                                        <i class="bi bi-x-circle text-danger" aria-hidden="true"></i>
+                                                    </button>
+                                                </form>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="return-action-btn return-action-active text-danger" 
+                                                        data-bs-toggle="modal" 
+                                                        data-bs-target="#indexCancelModal" 
+                                                        data-return-id="@order.Id" 
+                                                        data-return-code="@order.ReturnCode" 
+                                                        title="Hủy" 
+                                                        aria-label="Hủy">
+                                                    <i class="bi bi-x-circle text-danger" aria-hidden="true"></i>
+                                                </button>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="return-action-btn return-action-disabled" disabled title="Hủy" aria-label="Hủy">
+                                                <i class="bi bi-x-circle" aria-hidden="true"></i>
+                                            </button>
+                                        }
                                     }
                                 </div>
                             </td>
@@ -334,50 +355,53 @@
     }
 </section>
 
-<!-- MODAL HỦY ĐƠN TRẢ HÀNG (TRANG DANH SÁCH) -->
-<div class="modal fade" id="indexCancelModal" tabindex="-1" aria-labelledby="indexCancelModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <form method="post" asp-action="Cancel" id="indexCancelForm">
-                @Html.AntiForgeryToken()
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold text-danger" id="indexCancelModalLabel">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i> Xác nhận hủy đơn trả hàng
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="mb-3">Bạn có chắc chắn muốn hủy đơn trả hàng <strong id="indexCancelReturnCode"></strong> không? Sau khi hủy, đơn sẽ chuyển sang trạng thái <strong>Đã hủy (CANCELLED)</strong> và giải phóng toàn bộ số lượng giữ chỗ.</p>
-                    <div class="mb-2">
-                        <label for="indexCancelReason" class="form-label small fw-semibold">Lý do hủy (tùy chọn):</label>
-                        <textarea class="form-control" id="indexCancelReason" name="cancelReason" rows="2" maxlength="1000" placeholder="Nhập lý do hủy đơn nếu có..."></textarea>
+@if (!Model.IsWarehouseStaff)
+{
+    <!-- MODAL HỦY ĐƠN TRẢ HÀNG (TRANG DANH SÁCH) -->
+    <div class="modal fade" id="indexCancelModal" tabindex="-1" aria-labelledby="indexCancelModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" asp-action="Cancel" id="indexCancelForm">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-header">
+                        <h5 class="modal-title fw-bold text-danger" id="indexCancelModalLabel">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i> Xác nhận hủy đơn trả hàng
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
-                    <button type="submit" class="btn btn-danger">
-                        <i class="bi bi-x-circle me-1"></i> Xác nhận hủy
-                    </button>
-                </div>
-            </form>
+                    <div class="modal-body">
+                        <p class="mb-3">Bạn có chắc chắn muốn hủy đơn trả hàng <strong id="indexCancelReturnCode"></strong> không? Sau khi hủy, đơn sẽ chuyển sang trạng thái <strong>Đã hủy (CANCELLED)</strong> và giải phóng toàn bộ số lượng giữ chỗ.</p>
+                        <div class="mb-2">
+                            <label for="indexCancelReason" class="form-label small fw-semibold">Lý do hủy (tùy chọn):</label>
+                            <textarea class="form-control" id="indexCancelReason" name="cancelReason" rows="2" maxlength="1000" placeholder="Nhập lý do hủy đơn nếu có..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-x-circle me-1"></i> Xác nhận hủy
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
-</div>
 
-@section Scripts {
-    <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            const modalEl = document.getElementById("indexCancelModal");
-            if (modalEl) {
-                modalEl.addEventListener("show.bs.modal", function (event) {
-                    const btn = event.relatedTarget;
-                    const id = btn.getAttribute("data-return-id");
-                    const code = btn.getAttribute("data-return-code");
-                    document.getElementById("indexCancelReturnCode").textContent = code || `#${id}`;
-                    document.getElementById("indexCancelForm").action = `/CustomerReturnOrder/Cancel/${id}`;
-                    document.getElementById("indexCancelReason").value = "";
-                });
-            }
-        });
-    </script>
+    @section Scripts {
+        <script>
+            document.addEventListener("DOMContentLoaded", function () {
+                const modalEl = document.getElementById("indexCancelModal");
+                if (modalEl) {
+                    modalEl.addEventListener("show.bs.modal", function (event) {
+                        const btn = event.relatedTarget;
+                        const id = btn.getAttribute("data-return-id");
+                        const code = btn.getAttribute("data-return-code");
+                        document.getElementById("indexCancelReturnCode").textContent = code || `#${id}`;
+                        document.getElementById("indexCancelForm").action = `/CustomerReturnOrder/Cancel/${id}`;
+                        document.getElementById("indexCancelReason").value = "";
+                    });
+                }
+            });
+        </script>
+    }
 }
