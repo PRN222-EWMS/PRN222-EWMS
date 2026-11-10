@@ -166,6 +166,10 @@ public class EligibleSalesOrderDto
     public long TotalRemaining { get; set; }
     public long TotalReserved { get; set; }
     public bool HasShortage { get; set; }
+    public bool IsPickingActive { get; set; }
+    public long? ActiveOutboundId { get; set; }
+    public string? ActiveIssueCode { get; set; }
+    public string? ActivePickerName { get; set; }
     public List<OutboundLineProgressDto> Lines { get; set; } = [];
 }
 

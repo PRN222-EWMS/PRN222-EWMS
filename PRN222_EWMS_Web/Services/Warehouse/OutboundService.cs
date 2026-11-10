@@ -293,12 +293,22 @@ public class OutboundService(EwmsDbContext db) : IOutboundService
 
         int warehouseId = user.WarehouseId.Value;
 
-        // SO hợp lệ: cùng kho, Status là SUBMITTED hoặc PARTIALLY_FULFILLED, và KHÔNG có phiên picking active
-        var activePickingSoIds = await db.Outbounds
+        // Lấy danh sách các phiên picking active để hiển thị trạng thái và liên kết tới phiên nhặt dở
+        var activeOutbounds = await db.Outbounds
             .AsNoTracking()
             .Where(o => o.IsActivePicking)
-            .Select(o => o.SalesOrderId)
+            .Select(o => new
+            {
+                o.SalesOrderId,
+                o.OutboundId,
+                o.IssueCode,
+                PickerName = o.AssignedToUser != null ? o.AssignedToUser.FullName : o.CreatedByUser.FullName
+            })
             .ToListAsync();
+
+        var activePickingDict = activeOutbounds
+            .GroupBy(o => o.SalesOrderId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.OutboundId).First());
 
         var orders = await db.SalesOrders
             .AsNoTracking()
@@ -306,8 +316,7 @@ public class OutboundService(EwmsDbContext db) : IOutboundService
             .Include(so => so.SalesOrderLines)
                 .ThenInclude(sol => sol.Product)
             .Where(so => so.WarehouseId == warehouseId
-                && (so.Status == "SUBMITTED" || so.Status == "PARTIALLY_FULFILLED")
-                && !activePickingSoIds.Contains(so.SalesOrderId))
+                && (so.Status == "SUBMITTED" || so.Status == "PARTIALLY_FULFILLED"))
             .OrderByDescending(so => so.SubmittedAt)
             .ToListAsync();
 
@@ -347,6 +356,8 @@ public class OutboundService(EwmsDbContext db) : IOutboundService
             long totalRemaining = lines.Sum(l => l.RemainingQuantity);
             if (totalRemaining <= 0) continue; // Đã fulfill xong, bỏ qua
 
+            activePickingDict.TryGetValue(so.SalesOrderId, out var activeOutbound);
+
             result.Add(new EligibleSalesOrderDto
             {
                 SalesOrderId = so.SalesOrderId,
@@ -361,6 +372,10 @@ public class OutboundService(EwmsDbContext db) : IOutboundService
                 TotalRemaining = totalRemaining,
                 TotalReserved = lines.Sum(l => l.ReservedBalance),
                 HasShortage = so.HasShortage,
+                IsPickingActive = (activeOutbound != null),
+                ActiveOutboundId = activeOutbound?.OutboundId,
+                ActiveIssueCode = activeOutbound?.IssueCode,
+                ActivePickerName = activeOutbound?.PickerName,
                 Lines = lines
             });
         }

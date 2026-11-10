@@ -8,7 +8,7 @@
         <div>
             <p class="eyebrow">XUẤT KHO / TẠO MỚI</p>
             <h1>Chọn đơn bán hàng cần xuất</h1>
-            <p class="muted">Chỉ hiển thị các đơn bán hàng đã xác nhận, còn sản phẩm cần xuất và chưa có phiên lấy hàng đang hoạt động.</p>
+            <p class="muted">Danh sách các đơn bán hàng đã xác nhận và còn sản phẩm cần xuất kho.</p>
         </div>
         <div class="outbound-toolbar">
             <a class="workspace-button sales-button-secondary" asp-action="Index">
@@ -38,9 +38,9 @@
             <i class="bi bi-inbox fs-1 text-muted d-block mb-3" aria-hidden="true"></i>
             <h3 class="h5 fw-bold text-dark">Không có đơn bán hàng nào cần xuất kho</h3>
             <p class="text-muted mb-3" style="font-size: 14px;">
-                Hiện tại tất cả đơn bán hàng thuộc kho làm việc đã được xuất đủ hoặc đang có phiên lấy hàng đang xử lý.
+                Hiện tại tất cả các đơn bán hàng thuộc kho làm việc đã hoàn tất xuất kho hoặc chưa có đơn nào được duyệt.
             </p>
-            <a class="workspace-button sales-button-secondary" asp-action="Index">Quay về danh sách</a>
+            <a class="workspace-button sales-button-secondary" asp-action="Index">Quay về danh sách phiếu xuất</a>
         </div>
     }
     else
@@ -50,17 +50,29 @@
             {
                 var isSelected = Model.SelectedSalesOrderId == order.SalesOrderId;
 
-                <div class="workspace-card p-4 @(isSelected ? "border-primary shadow-sm" : "")">
+                <div class="workspace-card p-4 @(order.IsPickingActive ? "border-warning-subtle" : isSelected ? "border-primary shadow-sm" : "")">
                     <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
                         <div>
-                            <div class="d-flex align-items-center gap-2 mb-2">
+                            <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
                                 <h3 class="h5 mb-0 fw-bold text-dark">@order.Socode</h3>
                                 <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
                                     Đã xác nhận
                                 </span>
+                                @if (order.IsPickingActive)
+                                {
+                                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1">
+                                        <i class="bi bi-clock-history me-1"></i>Đang nhặt: @order.ActiveIssueCode
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle px-2 py-1">
+                                        Chờ xuất hàng
+                                    </span>
+                                }
                                 @if (order.HasShortage)
                                 {
-                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-2 py-1">
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
                                         Thiếu hàng
                                     </span>
                                 }
@@ -74,13 +86,28 @@
                         </div>
 
                         <div class="text-end">
-                            <form asp-action="StartPicking" method="post">
-                                @Html.AntiForgeryToken()
-                                <input type="hidden" name="salesOrderId" value="@order.SalesOrderId" />
-                                <button type="submit" class="workspace-button" style="background: #0e733b; color: #ffffff; border-color: #0e733b; font-weight: 600;">
-                                    <i class="bi bi-box-arrow-in-right me-1"></i> Bắt đầu lấy hàng
-                                </button>
-                            </form>
+                            @if (order.IsPickingActive)
+                            {
+                                <a asp-action="Picking" asp-route-id="@order.ActiveOutboundId" class="workspace-button" style="background: #0d6efd; color: #ffffff; border-color: #0d6efd; font-weight: 600;" title="Mở lại bàn nhặt hàng của phiếu @order.ActiveIssueCode">
+                                    <i class="bi bi-box-arrow-in-right me-1"></i> Tiếp tục nhặt hàng
+                                </a>
+                                @if (!string.IsNullOrEmpty(order.ActivePickerName))
+                                {
+                                    <small class="text-muted d-block mt-2" style="font-size: 12px;">
+                                        Phụ trách: <strong class="text-dark">@order.ActivePickerName</strong>
+                                    </small>
+                                }
+                            }
+                            else
+                            {
+                                <form asp-action="StartPicking" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="salesOrderId" value="@order.SalesOrderId" />
+                                    <button type="submit" class="workspace-button" style="background: #0e733b; color: #ffffff; border-color: #0e733b; font-weight: 600;">
+                                        <i class="bi bi-box-arrow-in-right me-1"></i> Bắt đầu lấy hàng
+                                    </button>
+                                </form>
+                            }
                             <small class="text-muted d-block mt-2" style="font-size: 12px;">
                                 Hẹn giao: @(order.RequestedDate?.ToString("dd/MM/yyyy") ?? "Không yêu cầu")
                             </small>
