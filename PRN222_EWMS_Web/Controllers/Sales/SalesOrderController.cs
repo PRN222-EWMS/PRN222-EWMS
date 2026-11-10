@@ -127,6 +127,27 @@ public class SalesOrderController(ISalesService sales) : Controller
         }
     }
 
+    [Authorize(Roles = "SALES_STAFF,MANAGER")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Cancel(long id, string? reason, string? returnUrl = null)
+    {
+        var role = User.IsInRole("MANAGER") ? "MANAGER" : "SALES_STAFF";
+        var (success, message) = await sales.CancelOrderAsync(id, CurrentUserId, role, reason);
+        if (success)
+        {
+            TempData["Success"] = message;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+        else
+        {
+            TempData["Error"] = message;
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+                return Redirect(returnUrl);
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+    }
+
     [Authorize(Roles = "SALES_STAFF")]
     [HttpPost]
     [ValidateAntiForgeryToken]

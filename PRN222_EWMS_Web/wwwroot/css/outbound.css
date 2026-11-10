@@ -1,0 +1,68 @@
+/* ==========================================================================
+   EWMS - OUTBOUND MANAGEMENT STYLES (SYNCHRONIZED WITH WORKSPACE & NOTION)
+   ========================================================================== */
+
+.outbound-page {
+    display: grid;
+    gap: 24px;
+}
+
+.outbound-page .workspace-heading {
+    margin-bottom: 0;
+}
+
+.outbound-page .workspace-card {
+    max-width: none;
+    background: #ffffff;
+    border: 1px solid var(--workspace-line, #e6e6e6);
+    border-radius: 12px;
+}
+
+.outbound-toolbar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* Badge styles */
+.outbound-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.outbound-badge-draft {
+    color: #494541;
+    background: #f6f5f4;
+    border: 1px solid #d4d3d1;
+}
+
+.outbound-badge-picking {
+    color: #b76e00;
+    background: #fff8e1;
+    border: 1px solid #ffe082;
+}
+
+.outbound-badge-ready {
+    color: #0b7285;
+    background: #e3fafc;
+    border: 1px solid #99e9f2;
+}
+
+.outbound-badge-done {
+    color: #25633a;
+    background: #eaf6ee;
+    border: 1px solid #b2f2bb;
+}
+
+.outbound-badge-cancelled {
+    color: #c92a2a;
+    background: #fff5f5;
+    border: 1px solid #ffc9c9;
+}
