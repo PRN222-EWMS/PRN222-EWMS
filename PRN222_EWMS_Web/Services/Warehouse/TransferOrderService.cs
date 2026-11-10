@@ -494,8 +494,8 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
 
         if (order == null) return null;
 
-        // Trạng thái đã đóng hoặc hủy: không sửa được
-        if (order.Status == "COMPLETED" || order.Status == "CANCELLED" || order.Status == "CLOSED")
+        // Trạng thái đã đóng: không xem/sửa được
+        if (order.Status == "COMPLETED" || order.Status == "CLOSED")
             return null;
 
         bool hasDispatch = await db.TransferDispatches.AnyAsync(d => d.TransferOrderId == id);

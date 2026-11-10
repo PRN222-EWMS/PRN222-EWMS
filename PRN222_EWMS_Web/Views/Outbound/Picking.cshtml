@@ -86,36 +86,21 @@
                     Nhập hoặc quét mã vạch serial trên thân thiết bị. Hệ thống sẽ tự động đối chiếu tình trạng, kho và kiểm tra độc quyền giữ chỗ nhặt hàng.
                 </p>
 
-                <form asp-action="ScanSerial" method="post" id="scanSerialForm">
+                <form asp-action="ScanSerial" method="post" id="scanSerialForm" class="mb-0">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="outboundId" value="@Model.OutboundId" />
 
-                    <div class="mb-3">
-                        <label for="serialInput" class="form-label fw-semibold" style="font-size: 13px;">Mã Serial hoặc Barcode</label>
-                        <div class="input-group">
-                            <span class="input-group-text bg-light"><i class="bi bi-qr-code"></i></span>
-                            <input type="text"
-                                   id="serialInput"
-                                   name="serialNumber"
-                                   class="form-control form-control-lg font-monospace"
-                                   placeholder="Nhập hoặc quét mã..."
-                                   autofocus
-                                   required
-                                   autocomplete="off" />
-                            <button class="btn btn-primary px-3 fw-semibold" type="submit">
-                                <i class="bi bi-plus-lg me-1"></i> Quét
-                            </button>
-                        </div>
-                        <div class="form-text" style="font-size: 12px;">
-                            Bấm Enter sau khi quét hoặc nhập xong để thêm nhanh.
-                        </div>
-                    </div>
-                </form>
+                    <partial name="_SerialCapture" model="@(new PRN222_EWMS_Web.ViewModels.Shared.SerialCaptureViewModel {
+                        SerialName = "serialNumber",
+                        MethodName = "captureMethod",
+                        HelpText = "Quét qua camera, đọc ảnh tem hoặc dùng máy quét barcode.",
+                        Hint = "Nhập tay hoặc máy quét · Enter để thêm thiết bị."
+                    })" />
 
-                <div class="alert alert-info py-2 px-3 mb-0" style="font-size: 12.5px;">
-                    <i class="bi bi-info-circle me-1"></i>
-                    <strong>Quy tắc BR-05:</strong> Serial hàng tốt đang ở trạng thái <em>Chờ Putaway</em> vẫn được phép lấy hàng xuất kho.
-                </div>
+                    <button class="workspace-button w-100 justify-content-center mt-3" type="submit">
+                        <i class="bi bi-plus-lg me-1"></i> Xác nhận thêm Serial
+                    </button>
+                </form>
             </div>
         </div>
 
@@ -226,3 +211,7 @@
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <partial name="_SerialCaptureScripts" />
+}

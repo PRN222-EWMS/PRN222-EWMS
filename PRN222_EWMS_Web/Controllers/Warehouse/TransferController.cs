@@ -147,6 +147,6 @@ public class TransferController : Controller
         }
 
         TempData["Success"] = "Đã hủy lệnh chuyển kho thành công!";
-        return RedirectToAction("Details", "ManagerTransfer", new { id });
+        return RedirectToAction(nameof(Edit), new { id });
     }
 }

@@ -11,7 +11,7 @@
             <p class="muted">Chỉ hiển thị các đơn bán hàng đã xác nhận, còn sản phẩm cần xuất và chưa có phiên lấy hàng đang hoạt động.</p>
         </div>
         <div class="outbound-toolbar">
-            <a class="workspace-button sales-button-secondary" href="/">
+            <a class="workspace-button sales-button-secondary" asp-action="Index">
                 <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Thoát
             </a>
         </div>
@@ -40,7 +40,7 @@
             <p class="text-muted mb-3" style="font-size: 14px;">
                 Hiện tại tất cả đơn bán hàng thuộc kho làm việc đã được xuất đủ hoặc đang có phiên lấy hàng đang xử lý.
             </p>
-            <a class="workspace-button sales-button-secondary" href="/">Quay về trang chủ</a>
+            <a class="workspace-button sales-button-secondary" asp-action="Index">Quay về danh sách</a>
         </div>
     }
     else

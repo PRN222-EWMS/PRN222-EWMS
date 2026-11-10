@@ -22,14 +22,29 @@ public class OutboundController : Controller
     private string CurrentUserRole => User.IsInRole("MANAGER") ? "MANAGER" : "WAREHOUSE_STAFF";
 
     // =========================================================================
-    // 1. DANH SÁCH PHIẾU XUẤT KHO (Không thuộc phạm vi HoangN -> Chuyển hướng sang Tạo mới)
+    // 1. DANH SÁCH PHIẾU XUẤT KHO
     // =========================================================================
     [HttpGet]
-    public IActionResult Index()
+    public async Task<IActionResult> Index(
+        string? search,
+        string? status,
+        int? warehouseId,
+        DateOnly? fromDate,
+        DateOnly? toDate,
+        int page = 1)
     {
-        // Danh sách phiếu xuất kho không thuộc phạm vi Iteration 2 của HoangN
-        // Tự động chuyển hướng về Chức năng 71: Tạo phiếu xuất kho
-        return RedirectToAction(nameof(Create));
+        var model = await _outboundService.GetListAsync(
+            CurrentUserId,
+            CurrentUserRole,
+            search,
+            status,
+            warehouseId,
+            fromDate,
+            toDate,
+            page,
+            pageSize: 10);
+
+        return View(model);
     }
 
     // =========================================================================
