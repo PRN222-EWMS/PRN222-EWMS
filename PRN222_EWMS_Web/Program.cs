@@ -35,6 +35,10 @@ builder.Services.AddScoped<PRN222_EWMS_Web.Services.WarehouseStaff.IWarehouseSta
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.WarehouseStaff.IInboundRepository, PRN222_EWMS_Web.Repositories.WarehouseStaff.InboundRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.WarehouseStaff.IInboundService, PRN222_EWMS_Web.Services.WarehouseStaff.InboundService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.WarehouseStaff.IReturnReceiveRepository, PRN222_EWMS_Web.Repositories.WarehouseStaff.ReturnReceiveRepository>();
+builder.Services.AddScoped<
+    PRN222_EWMS_Web.Repositories.WarehouseStaff.WarehouseTransferRepository>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.WarehouseStaff.TransferDispatchWorkService>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.WarehouseStaff.TransferReceiptWorkService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.WarehouseStaff.IReturnReceiveService, PRN222_EWMS_Web.Services.WarehouseStaff.ReturnReceiveService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.WarehouseStaff.IPutawayRepository, PRN222_EWMS_Web.Repositories.WarehouseStaff.PutawayRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.WarehouseStaff.IPutawayService, PRN222_EWMS_Web.Services.WarehouseStaff.PutawayService>();
