@@ -126,6 +126,7 @@ public class EditTransferOrderViewModel
     public bool IsRelease { get; set; }
 
     public bool IsSourceContextFrozen { get; set; }
+    public bool CanCancel { get; set; }
 
     public List<EditTransferOrderLineInput> Lines { get; set; } = [];
 

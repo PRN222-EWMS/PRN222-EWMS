@@ -34,15 +34,21 @@
             <p class="muted mt-2">Cập nhật thông tin chi tiết hoặc sản phẩm khi lệnh chưa hoàn tất xuất hàng.</p>
         </div>
         <div class="transfer-toolbar">
-            <a class="workspace-button sales-button-secondary" href="/">
+            <a class="workspace-button sales-button-secondary" asp-controller="ManagerTransfer" asp-action="Index">
                 <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Thoát
             </a>
+            @if (Model.CanCancel)
+            {
+                <button type="button" class="workspace-button sales-button-secondary text-danger border-danger" data-bs-toggle="modal" data-bs-target="#cancelTransferModal">
+                    <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Hủy lệnh chuyển
+                </button>
+            }
         </div>
     </div>
 
     @if (TempData["Success"] != null)
     {
-        <div class="alert alert-success mb-0" role="alert">
+        <div class="alert alert-success mb-3" role="alert">
             <i class="bi bi-check-circle-fill me-1" aria-hidden="true"></i>
             <span>@TempData["Success"]</span>
         </div>
@@ -50,7 +56,7 @@
 
     @if (TempData["Error"] != null)
     {
-        <div class="alert alert-danger mb-0" role="alert">
+        <div class="alert alert-danger mb-3" role="alert">
             <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>
             <span>@TempData["Error"]</span>
         </div>
@@ -207,7 +213,13 @@
         @* THANH NÚT HÀNH ĐỘNG *@
         <section class="workspace-card">
             <div class="d-flex justify-content-end align-items-center gap-2">
-                <a class="workspace-button sales-button-secondary" href="/">Thoát</a>
+                <a class="workspace-button sales-button-secondary" asp-controller="ManagerTransfer" asp-action="Index">Thoát</a>
+                @if (Model.CanCancel)
+                {
+                    <button type="button" class="workspace-button sales-button-secondary text-danger border-danger" data-bs-toggle="modal" data-bs-target="#cancelTransferModal">
+                        <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Hủy lệnh chuyển
+                    </button>
+                }
                 @if (isDraft)
                 {
                     <button type="button" class="workspace-button sales-button-secondary" id="btnSaveDraft">
@@ -217,7 +229,7 @@
                         <i class="bi bi-check-circle me-1" aria-hidden="true"></i> Lưu & Phát hành
                     </button>
                 }
-                else
+                else if (Model.Status == "RELEASED")
                 {
                     <button type="button" class="workspace-button" id="btnSaveDraft" style="background: #0075de; border-color: #0075de;">
                         <i class="bi bi-check-circle me-1" aria-hidden="true"></i> Lưu cập nhật
@@ -227,6 +239,35 @@
         </section>
     </form>
 </div>
+
+@if (Model.CanCancel)
+{
+    @* MODAL XÁC NHẬN HỦY LỆNH CHUYỂN KHO *@
+    <div class="modal fade" id="cancelTransferModal" tabindex="-1" aria-labelledby="cancelTransferModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form asp-action="Cancel" asp-route-id="@Model.TransferOrderId" method="post">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-header">
+                        <h5 class="modal-title text-danger fw-bold" id="cancelTransferModalLabel">
+                            <i class="bi bi-exclamation-triangle me-1"></i> Xác nhận hủy lệnh chuyển kho
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-0">Bạn có chắc chắn muốn hủy lệnh chuyển kho <strong>@Model.TransferCode</strong>?</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="workspace-button sales-button-secondary" data-bs-dismiss="modal">Bỏ qua</button>
+                        <button type="submit" class="workspace-button" style="background: #c92a2a; border-color: #c92a2a; color: #ffffff;">
+                            <i class="bi bi-x-circle me-1"></i> Xác nhận hủy lệnh
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {

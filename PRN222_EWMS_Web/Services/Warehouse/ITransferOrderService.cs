@@ -29,4 +29,8 @@ public interface ITransferOrderService
     Task<(bool Success, string? Error)> UpdateTransferOrderAsync(
         EditTransferOrderViewModel model,
         int userId);
+
+    Task<(bool Success, string? Error)> CancelTransferOrderAsync(
+        long id,
+        int userId);
 }
