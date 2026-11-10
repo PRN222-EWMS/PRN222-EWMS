@@ -4,6 +4,7 @@ public interface IReturnReceiveService
 {
  Task<ReturnReceivePage> ListAsync(int userId,string? search,int page);
  Task<ReturnReceiveDetail?> DetailAsync(int userId,long id);
+ Task<ReturnSerialPreview> PreviewSerialAsync(int userId,long receiptId,string serial);
  Task<long> StartAsync(int userId,long returnOrderId,long outboundId);
  Task AddSerialAsync(int userId,long receiptId,string serial,string condition,string? note,string version);
  Task RemoveSerialAsync(int userId,long receiptId,long itemId,string version);

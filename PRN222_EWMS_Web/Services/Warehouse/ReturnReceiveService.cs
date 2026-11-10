@@ -16,7 +16,26 @@ public class ReturnReceiveService(IReturnReceiveRepository repo):IReturnReceiveS
  public async Task<ReturnReceiveDetail?> DetailAsync(int userId,long id)
  {
   var r=await repo.ReceiptAsync(id,await Warehouse(userId));if(r is null)return null;
-  return new ReturnReceiveDetail{Id=id,ReturnOrderId=r.ReturnOrderId,Code=r.ReceiptCode,ReturnCode=r.ReturnOrder.ReturnCode,SalesCode=r.ReturnOrder.SalesOrder.Socode,Customer=r.ReturnOrder.SalesOrder.Customer.CustomerName,Status=r.Status,Version=Convert.ToBase64String(r.RowVersion),Requested=r.ReturnOrder.CustomerReturnOrderLineReturnOrders.Sum(l=>l.RequestedQuantity-l.CancelledQuantity),Received=r.ReturnReceiptItemReturnReceipts.Count(i=>i.IsActive),Note=r.Note,Serials=r.ReturnReceiptItemReturnReceipts.Where(i=>i.IsActive).OrderByDescending(i=>i.ScannedAt).Select(i=>new ReturnSerialRow(i.ReturnItemId,i.OutboundItem.SerialItem.SerialNumber,i.OutboundItem.SerialItem.Product.ProductName,i.ReceivedCondition??"—",i.ConditionNote,i.IsActive)).ToList()};
+  var rows=new List<ReturnSerialRow>();
+  foreach(var item in r.ReturnReceiptItemReturnReceipts.Where(i=>i.IsActive).OrderByDescending(i=>i.ScannedAt))
+  {
+   var sold=item.OutboundItem;var original=await repo.OriginalInboundItemAsync(sold.SerialItemId);
+   rows.Add(new ReturnSerialRow(item.ReturnItemId,sold.SerialItem.SerialNumber,sold.SerialItem.Product.ProductName,item.ReceivedCondition??"—",item.ConditionNote,item.IsActive,sold.SerialItem.ManufacturingMonth,sold.SerialItem.ManufacturingYear,sold.ItemCondition,original?.ConditionNote));
+  }
+  return new ReturnReceiveDetail{Id=id,ReturnOrderId=r.ReturnOrderId,Code=r.ReceiptCode,ReturnCode=r.ReturnOrder.ReturnCode,SalesCode=r.ReturnOrder.SalesOrder.Socode,Customer=r.ReturnOrder.SalesOrder.Customer.CustomerName,Status=r.Status,Version=Convert.ToBase64String(r.RowVersion),Requested=r.ReturnOrder.CustomerReturnOrderLineReturnOrders.Sum(l=>l.RequestedQuantity-l.CancelledQuantity),Received=rows.Count,Note=r.Note,Serials=rows};
+ }
+ public async Task<ReturnSerialPreview> PreviewSerialAsync(int userId,long receiptId,string serial)
+ {
+  serial=serial?.Trim()??"";if(serial.Length is <1 or >100)throw new ArgumentException("Hãy nhập Serial hợp lệ.");
+  var r=await repo.ReceiptAsync(receiptId,await Warehouse(userId))??throw new ArgumentException("Không tìm thấy phiếu nhận hàng trả trong kho của bạn.");
+  if(r.Status!="DRAFT")throw new InvalidOperationException("Phiếu đã khóa, không thể quét thêm Serial.");
+  var sold=await repo.SoldSerialAsync(r.SalesOrderId,serial)??throw new ArgumentException("Serial không thuộc hàng đã bán trong đơn này.");
+  if(sold.OutboundId!=r.OutboundId)throw new ArgumentException("Serial thuộc phiếu xuất khác của đơn bán này.");
+  if(await repo.AlreadyReturnedAsync(sold.OutboundItemId))throw new InvalidOperationException("Serial đã được nhận trả trước đó.");
+  var line=r.ReturnOrder.CustomerReturnOrderLineReturnOrders.SingleOrDefault(l=>l.SolineId==sold.SolineId)??throw new ArgumentException("Sản phẩm không có trong đơn trả hàng.");
+  if(await repo.ReceivedLineCountAsync(line.ReturnLineId)>=line.RequestedQuantity-line.CancelledQuantity)throw new InvalidOperationException("Dòng hàng này đã nhận đủ số lượng.");
+  var original=await repo.OriginalInboundItemAsync(sold.SerialItemId);
+  return new ReturnSerialPreview(sold.SerialItem.SerialNumber,sold.SerialItem.Product.ProductName,sold.SerialItem.ManufacturingMonth,sold.SerialItem.ManufacturingYear,sold.ItemCondition,original?.ConditionNote);
  }
  public async Task<long> StartAsync(int userId,long returnOrderId,long outboundId)
  {
