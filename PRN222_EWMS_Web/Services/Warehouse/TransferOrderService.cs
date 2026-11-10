@@ -242,17 +242,11 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
             })
             .ToListAsync();
 
-        var staffUsers = await db.Users
-            .AsNoTracking()
-            .Where(u => u.Status == "ACTIVE" && u.WarehouseId != null)
-            .Select(u => new LookupItemDto { Id = u.UserId, Name = $"{u.FullName} ({u.Warehouse!.WarehouseName})" })
-            .ToListAsync();
-
         return new CreateTransferOrderViewModel
         {
             Warehouses = warehouses,
             Products = products,
-            StaffUsers = staffUsers,
+            StaffUsers = [],
             ExpectedDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3)),
             Lines = [new CreateTransferOrderLineInput { ProductId = 0, Quantity = 1 }]
         };
@@ -398,7 +392,7 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
                 Status = model.IsRelease ? "RELEASED" : "DRAFT",
                 ExpectedDate = model.ExpectedDate,
                 CreatedByUserId = userId,
-                AssignedToUserId = model.AssignedToUserId,
+                AssignedToUserId = null, // Để trống để nhân viên tại kho nguồn/kho đích tự do tiếp nhận
                 CreatedAt = DateTime.UtcNow,
                 Note = model.Note
             };
@@ -528,12 +522,6 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
             })
             .ToListAsync();
 
-        var staffUsers = await db.Users
-            .AsNoTracking()
-            .Where(u => u.Status == "ACTIVE" && u.WarehouseId != null)
-            .Select(u => new LookupItemDto { Id = u.UserId, Name = $"{u.FullName} ({u.Warehouse!.WarehouseName})" })
-            .ToListAsync();
-
         var dispatchItems = await db.TransferDispatchItems
             .AsNoTracking()
             .Where(di => di.Dispatch.TransferOrderId == id && di.IsActive)
@@ -570,7 +558,7 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
             Lines = lines,
             Warehouses = warehouses,
             Products = products,
-            StaffUsers = staffUsers
+            StaffUsers = []
         };
     }
 
@@ -715,7 +703,7 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
         try
         {
             order.ExpectedDate = model.ExpectedDate;
-            order.AssignedToUserId = model.AssignedToUserId;
+            order.AssignedToUserId = null; // Để trống để nhân viên tại kho nguồn/kho đích tự do tiếp nhận
             order.Note = model.Note;
 
             if (order.Status == "DRAFT" && model.IsRelease)
