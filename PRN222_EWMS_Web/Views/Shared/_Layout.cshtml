@@ -21,6 +21,14 @@
     {
         <link rel="stylesheet" href="~/css/inbound.css" asp-append-version="true" />
     }
+    @if (string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "Outbound", StringComparison.OrdinalIgnoreCase))
+    {
+        <link rel="stylesheet" href="~/css/outbound.css" asp-append-version="true" />
+    }
+    @if (string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "Transfer", StringComparison.OrdinalIgnoreCase))
+    {
+        <link rel="stylesheet" href="~/css/transfer.css" asp-append-version="true" />
+    }
     @if (string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "ReturnReceive", StringComparison.OrdinalIgnoreCase))
     {
         <link rel="stylesheet" href="~/css/return-receive.css" asp-append-version="true" />
@@ -43,7 +51,8 @@
     }
     @if (User.IsInRole("SALES_STAFF") ||
         ((User.IsInRole("MANAGER") || User.IsInRole("WAREHOUSE_STAFF")) &&
-         string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "SalesOrder", StringComparison.OrdinalIgnoreCase)))
+         (string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "SalesOrder", StringComparison.OrdinalIgnoreCase) ||
+          string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "CustomerReturnOrder", StringComparison.OrdinalIgnoreCase))))
     {
         <link rel="stylesheet" href="~/css/sales.css" asp-append-version="true" />
     }

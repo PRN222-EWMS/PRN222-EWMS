@@ -271,6 +271,7 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
             Note = order.Note,
             Status = order.Status,
             CanEdit = canEdit,
+            CanCancel = canEdit,
             ConcurrencyToken = Convert.ToBase64String(order.RowVersion),
             Warehouses = warehouses,
             Customers = customers,
@@ -432,6 +433,63 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
 
         await repository.SaveChangesWithActorAsync(actorId);
         return true;
+    }
+
+    public async Task<(bool Success, string Message)> CancelOrderAsync(long id, int actorId, string actorRole, string? cancelReason = null)
+    {
+        var order = await repository.FindOrderForEditAsync(id);
+        if (order is null)
+            return (false, "Không tìm thấy đơn bán hàng cần hủy.");
+
+        var isManager = string.Equals(actorRole, "MANAGER", StringComparison.OrdinalIgnoreCase);
+        if (!isManager && order.CreatedByUserId != actorId)
+            return (false, "Bạn không có quyền hủy đơn hàng này. Chỉ người tạo đơn mới được phép hủy.");
+
+        if (order.Status == "CANCELLED")
+            return (false, "Đơn bán hàng này đã ở trạng thái đã hủy.");
+
+        if (order.Status == "CLOSED")
+            return (false, "Đơn bán hàng đã đóng, không thể hủy.");
+
+        if (order.Status == "FULFILLED" || order.Status == "PARTIALLY_FULFILLED")
+            return (false, "Đơn bán hàng đã xuất kho một phần hoặc hoàn tất, không thể hủy.");
+
+        if (order.Status != "DRAFT" && order.Status != "SUBMITTED")
+            return (false, $"Trạng thái đơn hàng ({order.Status}) không cho phép hủy.");
+
+        if (order.Outbounds.Any())
+        {
+            var activePicking = order.Outbounds.Any(o => o.IsActivePicking || o.Status == "PICKING" || o.Status == "READY");
+            if (activePicking)
+                return (false, "Đơn hàng đang có phiếu xuất kho trong phiên nhặt hàng đang hoạt động. Vui lòng yêu cầu thủ kho hủy phiên nhặt hàng trước khi hủy đơn.");
+
+            var doneOutbound = order.Outbounds.Any(o => o.Status == "DONE");
+            if (doneOutbound)
+                return (false, "Đơn hàng đã có hàng thực tế xuất khỏi kho, không thể hủy đơn.");
+
+            return (false, "Đơn hàng đã phát sinh phiếu xuất kho, thông tin đơn đã bị khóa không thể hủy.");
+        }
+
+        order.Status = "CANCELLED";
+        order.ClosedAt = DateTime.UtcNow;
+        order.CloseReason = string.IsNullOrWhiteSpace(cancelReason) ? "Người dùng hủy đơn bán hàng" : cancelReason.Trim();
+        order.HasShortage = false;
+
+        foreach (var line in order.SalesOrderLines)
+        {
+            line.CancelledQuantity = line.RequestedQuantity;
+        }
+
+        foreach (var r in order.Reservations.Where(r => r.Status == "ACTIVE"))
+        {
+            r.Status = "CLOSED";
+            r.ReleasedQuantity = r.ReservedQuantity - r.ConsumedQuantity;
+            r.ClosedAt = DateTime.UtcNow;
+        }
+
+        await repository.SaveChangesWithActorAsync(actorId);
+
+        return (true, "Đơn bán hàng đã được hủy thành công và giải phóng toàn bộ số lượng giữ chỗ trong kho.");
     }
 
     public Task<List<ProductStockLookupDto>> GetAvailableProductsAsync(int warehouseId) =>

@@ -19,5 +19,6 @@ public interface ISalesService
     Task<SalesOrderFormViewModel?> GetEditFormAsync(long id, int userId);
     Task<long> CreateOrderAsync(SalesOrderFormViewModel model, string action, int actorId);
     Task<bool> UpdateOrderAsync(long id, SalesOrderFormViewModel model, string action, int actorId);
+    Task<(bool Success, string Message)> CancelOrderAsync(long id, int actorId, string actorRole, string? cancelReason = null);
     Task<List<ProductStockLookupDto>> GetAvailableProductsAsync(int warehouseId);
 }

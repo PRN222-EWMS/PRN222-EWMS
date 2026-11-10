@@ -29,6 +29,21 @@ public class CustomerReturnOrderController(ICustomerReturnOrderService returnOrd
     }
 
     // =========================================================================
+    // 1b. CHI TIẾT ĐƠN TRẢ HÀNG (UC59)
+    // =========================================================================
+    [HttpGet]
+    public async Task<IActionResult> Details(long id, CancellationToken cancellationToken)
+    {
+        if (CurrentUserId <= 0) return Challenge();
+        if (id <= 0) return NotFound();
+
+        var model = await returnOrderService.GetReturnOrderDetailAsync(id, CurrentUserId, cancellationToken);
+        if (model == null) return NotFound();
+
+        return View(model);
+    }
+
+    // =========================================================================
     // 2. TẠO MỚI ĐƠN TRẢ HÀNG (UC57)
     // =========================================================================
     [Authorize(Roles = "SALES_STAFF")]

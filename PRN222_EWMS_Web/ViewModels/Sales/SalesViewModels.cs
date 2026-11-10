@@ -149,6 +149,7 @@ public class SalesOrderFormViewModel
 
     public string Status { get; set; } = "DRAFT";
     public bool CanEdit { get; set; } = true;
+    public bool CanCancel { get; set; } = true;
     public bool IsEditMode => Id > 0;
     public string? ConcurrencyToken { get; set; }
 
