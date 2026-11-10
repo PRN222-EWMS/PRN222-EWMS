@@ -618,4 +618,34 @@ public class CustomerReturnOrderRepository(EwmsDbContext db) : ICustomerReturnOr
             .FirstOrDefaultAsync(cancellationToken);
         return (user?.WarehouseId, user?.WarehouseName, user?.RoleName);
     }
+
+    public virtual async Task<List<ReturnReceiptHistoryDto>> GetReturnReceiptHistoryAsync(
+        long returnOrderId, CancellationToken cancellationToken = default)
+    {
+        return await db.ReturnReceipts.AsNoTracking()
+            .Where(rr => rr.ReturnOrderId == returnOrderId)
+            .OrderByDescending(rr => rr.CreatedAt)
+            .Select(rr => new ReturnReceiptHistoryDto(
+                rr.ReturnReceiptId,
+                rr.ReceiptCode,
+                rr.ReceiptDate,
+                rr.Status,
+                rr.CreatedAt,
+                rr.CompletedAt,
+                rr.PerformedByUser != null ? rr.PerformedByUser.FullName : rr.CreatedByUser.FullName,
+                db.ReturnReceiptItems.Count(i => i.ReturnReceiptId == rr.ReturnReceiptId && i.IsActive),
+                rr.Note
+            ))
+            .ToListAsync(cancellationToken);
+    }
+
+    public virtual async Task<Dictionary<long, int>> GetLineReceivedCountsAsync(
+        long returnOrderId, CancellationToken cancellationToken = default)
+    {
+        return await db.ReturnReceiptItems.AsNoTracking()
+            .Where(rri => rri.ReturnReceipt.ReturnOrderId == returnOrderId && rri.IsActive && rri.ReturnReceipt.Status == "DONE")
+            .GroupBy(rri => rri.ReturnLineId)
+            .Select(g => new { ReturnLineId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.ReturnLineId, x => x.Count, cancellationToken);
+    }
 }

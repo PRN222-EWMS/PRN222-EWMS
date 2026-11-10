@@ -77,4 +77,12 @@ public interface ICustomerReturnOrderRepository
     Task<(int? WarehouseId, string? WarehouseName, string? RoleName)> GetUserRoleAndWarehouseAsync(
         int userId,
         CancellationToken cancellationToken = default);
+
+    Task<List<ReturnReceiptHistoryDto>> GetReturnReceiptHistoryAsync(
+        long returnOrderId,
+        CancellationToken cancellationToken = default);
+
+    Task<Dictionary<long, int>> GetLineReceivedCountsAsync(
+        long returnOrderId,
+        CancellationToken cancellationToken = default);
 }

@@ -37,5 +37,10 @@ public interface ICustomerReturnOrderService
         ReturnOrderListFilterViewModel filter,
         int userId,
         CancellationToken cancellationToken = default);
+
+    Task<ReturnOrderDetailViewModel?> GetReturnOrderDetailAsync(
+        long returnOrderId,
+        int userId,
+        CancellationToken cancellationToken = default);
 }
 

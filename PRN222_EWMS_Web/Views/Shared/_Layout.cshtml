@@ -43,7 +43,8 @@
     }
     @if (User.IsInRole("SALES_STAFF") ||
         ((User.IsInRole("MANAGER") || User.IsInRole("WAREHOUSE_STAFF")) &&
-         string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "SalesOrder", StringComparison.OrdinalIgnoreCase)))
+         (string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "SalesOrder", StringComparison.OrdinalIgnoreCase) ||
+          string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "CustomerReturnOrder", StringComparison.OrdinalIgnoreCase))))
     {
         <link rel="stylesheet" href="~/css/sales.css" asp-append-version="true" />
     }

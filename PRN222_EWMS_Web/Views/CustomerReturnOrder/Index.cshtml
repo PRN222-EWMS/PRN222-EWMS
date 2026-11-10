@@ -48,6 +48,14 @@
         color: #0075de !important;
         cursor: pointer;
     }
+    .return-action-active.text-secondary {
+        color: #64748b !important;
+    }
+    .return-action-active.text-secondary:hover {
+        background-color: #f1f5f9;
+        border-color: #cbd5e1;
+        color: #1e293b !important;
+    }
     .return-action-active:hover {
         background-color: #eff6ff;
         border-color: #bfdbfe;
@@ -237,14 +245,14 @@
                             </td>
                             <td class="text-end text-nowrap">
                                 <div class="d-inline-flex align-items-center justify-content-end gap-1">
-                                    <button type="button" class="return-action-btn return-action-disabled" disabled title="Chi tiết" aria-label="Chi tiết">
+                                    <a class="return-action-btn return-action-active text-secondary" asp-action="Details" asp-route-id="@order.Id" title="Chi tiết" aria-label="Chi tiết">
                                         <i class="bi bi-eye" aria-hidden="true"></i>
-                                    </button>
+                                    </a>
                                     @if (Model.IsWarehouseStaff)
                                     {
                                         @if (order.CanReceive)
                                         {
-                                            <a href="@Url.Action("Index", "ReturnReceive", new { search = order.ReturnCode })" 
+                                            <a href="/ReturnReceive?search=@order.ReturnCode" 
                                                class="return-action-btn return-action-active text-primary" 
                                                title="Nhận hàng" 
                                                aria-label="Nhận hàng">

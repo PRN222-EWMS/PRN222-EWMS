@@ -112,6 +112,109 @@ public class CustomerReturnOrderService(
         return result;
     }
 
+    public async Task<ReturnOrderDetailViewModel?> GetReturnOrderDetailAsync(
+        long returnOrderId,
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        if (returnOrderId <= 0) return null;
+
+        var (userWarehouseId, _, roleName) = await repo.GetUserRoleAndWarehouseAsync(userId, cancellationToken);
+        if (roleName != "SALES_STAFF" && roleName != "WAREHOUSE_STAFF")
+        {
+            throw new UnauthorizedAccessException("Người dùng không có quyền truy cập thông tin chi tiết đơn trả hàng.");
+        }
+        bool isWarehouseStaff = roleName == "WAREHOUSE_STAFF";
+        bool isSalesStaff = roleName == "SALES_STAFF";
+
+        var order = await repo.FindByIdAsync(returnOrderId, asNoTracking: true, cancellationToken);
+        if (order == null) return null;
+
+        // Warehouse Staff: strictly enforce warehouse isolation and DRAFT exclusion
+        if (isWarehouseStaff)
+        {
+            if (!userWarehouseId.HasValue || order.WarehouseId != userWarehouseId.Value || order.Status == "DRAFT")
+            {
+                return null;
+            }
+        }
+
+        var lineReceivedCounts = await repo.GetLineReceivedCountsAsync(returnOrderId, cancellationToken);
+        var receiptHistory = await repo.GetReturnReceiptHistoryAsync(returnOrderId, cancellationToken);
+
+        var lines = order.CustomerReturnOrderLineReturnOrders
+            .OrderBy(line => line.ReturnLineId)
+            .Select(line =>
+        {
+            int receivedQty = lineReceivedCounts.GetValueOrDefault(line.ReturnLineId, 0);
+            int remainingQty = Math.Max(0, line.RequestedQuantity - line.CancelledQuantity - receivedQty);
+            return new ReturnOrderDetailLineViewModel
+            {
+                ReturnLineId = line.ReturnLineId,
+                SolineId = line.SolineId,
+                ProductId = line.ProductId,
+                ProductCode = line.Soline?.Product?.ProductCode ?? string.Empty,
+                ProductName = line.Soline?.Product?.ProductName ?? string.Empty,
+                Unit = line.Soline?.Product?.Unit,
+                RequestedQuantity = line.RequestedQuantity,
+                CancelledQuantity = line.CancelledQuantity,
+                ReceivedQuantity = receivedQty,
+                RemainingQuantity = remainingQty
+            };
+        }).ToList();
+
+        int totalRequested = lines.Sum(l => l.RequestedQuantity);
+        int totalCancelled = lines.Sum(l => l.CancelledQuantity);
+        int totalReceived = lines.Sum(l => l.ReceivedQuantity);
+        int totalRemaining = lines.Sum(l => l.RemainingQuantity);
+        int progressPercentage = totalRequested > 0 ? Math.Clamp((int)Math.Round((double)totalReceived * 100 / totalRequested), 0, 100) : 0;
+
+        var receipts = receiptHistory.Select(r => new ReturnReceiptHistoryItemViewModel
+        {
+            ReturnReceiptId = r.ReturnReceiptId,
+            ReceiptCode = r.ReceiptCode,
+            ReceiptDate = r.ReceiptDate,
+            Status = r.Status,
+            CreatedAt = r.CreatedAt,
+            CompletedAt = r.CompletedAt,
+            PerformedByName = r.PerformedByName,
+            ActiveItemCount = r.ActiveItemCount,
+            Note = r.Note
+        }).ToList();
+
+        return new ReturnOrderDetailViewModel
+        {
+            ReturnOrderId = order.ReturnOrderId,
+            ReturnCode = order.ReturnCode,
+            Status = order.Status,
+            CreatedAt = order.CreatedAt,
+            Reason = order.Reason,
+            CloseReason = order.CloseReason,
+            ClosedAt = order.ClosedAt,
+
+            SalesOrderId = order.SalesOrderId,
+            SalesOrderCode = order.SalesOrder?.Socode ?? string.Empty,
+            CustomerName = order.SalesOrder?.Customer?.CustomerName ?? "Khách lẻ",
+            WarehouseId = order.WarehouseId,
+            WarehouseName = order.Warehouse?.WarehouseName ?? string.Empty,
+            CreatedByUserId = order.CreatedByUserId,
+            CreatedByName = order.CreatedByUser?.FullName ?? string.Empty,
+
+            TotalRequestedQuantity = totalRequested,
+            TotalCancelledQuantity = totalCancelled,
+            TotalReceivedQuantity = totalReceived,
+            TotalRemainingQuantity = totalRemaining,
+            ProgressPercentage = progressPercentage,
+
+            IsWarehouseStaff = isWarehouseStaff,
+            CanEdit = isSalesStaff && order.Status == "DRAFT",
+            CanReceive = isWarehouseStaff && (order.Status is "OPEN" or "PARTIALLY_RECEIVED") && totalReceived < totalRequested,
+
+            Lines = lines,
+            Receipts = receipts
+        };
+    }
+
     public async Task<ReturnOrderFormModel> GetCreateViewModelAsync(long? selectedSalesOrderId = null, CancellationToken cancellationToken = default)
     {
         var model = new ReturnOrderFormModel();
