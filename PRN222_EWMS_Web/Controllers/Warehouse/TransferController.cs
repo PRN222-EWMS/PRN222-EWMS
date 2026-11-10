@@ -30,8 +30,8 @@ public class TransferController : Controller
     [HttpGet("Index")]
     public IActionResult Index()
     {
-        // Màn hình Index thuộc phạm vi của đồng đội. Tạm thời điều hướng vào Create.
-        return RedirectToAction(nameof(Create));
+        // Điều hướng sang màn hình theo dõi chuyển kho của Quản lý
+        return RedirectToAction("Index", "ManagerTransfer");
     }
 
     // =========================================================================
