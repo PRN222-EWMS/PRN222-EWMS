@@ -1,3 +1,50 @@
 @model PRN222_EWMS_Web.ViewModels.Returns.ReturnReceiveDetail
-@{ViewData["Title"]="Chi tiết nhận hàng trả";var draft=Model.Status=="DRAFT";}
-<div class="return-page"><a asp-action="Index">← Nhận hàng trả</a><header class="return-detail-head"><div><p>PHIẾU NHẬN HÀNG TRẢ</p><h1>@Model.Code</h1><span>@Model.Status</span></div>@if(draft){<div class="return-actions"><form asp-action="Cancel" asp-route-id="@Model.Id" method="post" data-confirm="Hủy phiếu nháp này?"><input type="hidden" name="version" value="@Model.Version" /><button class="return-secondary">Hủy phiếu</button></form><form asp-action="Complete" asp-route-id="@Model.Id" method="post" data-confirm="Hoàn tất nhận hàng trả?"><input type="hidden" name="version" value="@Model.Version" /><button>Hoàn tất phiếu</button></form></div>}</header><section class="return-card"><h2>Thông tin đơn trả</h2><div class="return-facts"><div>Đơn trả<strong>@Model.ReturnCode</strong></div><div>Đơn bán<strong>@Model.SalesCode</strong></div><div>Khách hàng<strong>@Model.Customer</strong></div><div>Yêu cầu / đã quét<strong>@Model.Requested / @Model.Received</strong></div></div>@if(!string.IsNullOrWhiteSpace(Model.Note)){<p>@Model.Note</p>}</section><div class="return-work"><section><h2>Serial đã tiếp nhận (@Model.Serials.Count)</h2><div class="return-list">@foreach(var item in Model.Serials){<article><div><strong>@item.Serial</strong><p>@item.Product · @item.Condition</p>@if(!string.IsNullOrWhiteSpace(item.Note)){<small>@item.Note</small>}</div>@if(draft){<form asp-action="RemoveSerial" asp-route-id="@Model.Id" method="post" data-confirm="Hủy Serial này?"><input type="hidden" name="itemId" value="@item.Id" /><input type="hidden" name="version" value="@Model.Version" /><button class="return-danger">Hủy Serial</button></form>}</article>}@if(Model.Serials.Count==0){<p>Chưa quét Serial nào.</p>}</div></section>@if(draft){<aside class="return-card"><h2>Quét Serial hàng trả</h2><p>Serial phải đúng món hàng đã xuất cho đơn bán này.</p><form asp-action="AddSerial" asp-route-id="@Model.Id" method="post" class="return-scan"><input type="hidden" name="version" value="@Model.Version" /><div class="return-capture"><button type="button" data-camera>Quét camera</button><label class="return-upload">Tải ảnh tem<input type="file" accept="image/jpeg,image/png,image/webp" data-image hidden /></label></div><div class="return-camera" data-camera-box hidden><video playsinline muted autoplay data-video></video><button type="button" data-stop>Dừng camera</button></div><small data-scan-message aria-live="polite"></small><label>Serial<input name="serial" required maxlength="100" autocomplete="off" autofocus /></label><label>Tình trạng<select name="condition"><option value="GOOD">GOOD — Hàng tốt</option><option value="DAMAGED">DAMAGED — Hàng hỏng</option></select></label><label>Ghi chú tình trạng<textarea name="note" maxlength="1000" rows="2"></textarea></label><button>Thêm Serial</button></form></aside>}</div></div><script src="~/js/return-receive.js" asp-append-version="true" defer></script>
+@{
+    ViewData["Title"] = "Chi tiết nhận hàng trả";
+    var draft = Model.Status == "DRAFT";
+}
+<div class="return-page">
+    <a asp-action="Index">← Nhận hàng trả</a>
+    <header class="return-detail-head">
+        <div><p>PHIẾU NHẬN HÀNG TRẢ</p><h1>@Model.Code</h1><span>@Model.Status</span></div>
+        @if (draft)
+        {
+            <div class="return-actions">
+                <form asp-action="Cancel" asp-route-id="@Model.Id" method="post" data-confirm="Hủy phiếu nháp này?"><input type="hidden" name="version" value="@Model.Version" /><button class="return-secondary">Hủy phiếu</button></form>
+                <form asp-action="Complete" asp-route-id="@Model.Id" method="post" data-confirm="Hoàn tất nhận hàng trả?"><input type="hidden" name="version" value="@Model.Version" /><button>Hoàn tất phiếu</button></form>
+            </div>
+        }
+    </header>
+    <section class="return-card">
+        <h2>Thông tin đơn trả</h2>
+        <div class="return-facts"><div>Đơn trả<strong>@Model.ReturnCode</strong></div><div>Đơn bán<strong>@Model.SalesCode</strong></div><div>Khách hàng<strong>@Model.Customer</strong></div><div>Yêu cầu / đã quét<strong data-received-count data-requested="@Model.Requested">@Model.Requested / @Model.Received</strong></div></div>
+        @if (!string.IsNullOrWhiteSpace(Model.Note)) { <p>@Model.Note</p> }
+    </section>
+    <div class="return-work">
+        <partial name="_SerialList" model="Model" />
+        @if (draft)
+        {
+            <aside class="return-card">
+                <h2>Quét Serial hàng trả</h2>
+                <p>Serial phải đúng món hàng đã xuất cho đơn bán này.</p>
+                <form asp-action="AddSerial" asp-route-id="@Model.Id" method="post" class="return-scan" data-return-scan data-preview-url="@Url.Action("PreviewSerial", "ReturnReceive", new { id = Model.Id })">
+                    <input type="hidden" name="version" value="@Model.Version" />
+                    <partial name="_SerialCapture" model="@(new PRN222_EWMS_Web.ViewModels.Shared.SerialCaptureViewModel { SerialName = "serial", MethodName = "captureMethod", HelpText = "Quét hoặc đọc ảnh chỉ điền Serial. Kiểm tra thông tin trước khi thêm." })" />
+                    <div class="return-preview" data-return-preview hidden aria-live="polite">
+                        <h3>Thông tin trước khi bán</h3>
+                        <dl><div><dt>Sản phẩm</dt><dd data-preview-product></dd></div><div><dt>Ngày sản xuất</dt><dd data-preview-manufactured></dd></div><div><dt>Tình trạng khi xuất bán</dt><dd data-preview-condition></dd></div><div><dt>Ghi chú trước đó</dt><dd data-preview-note></dd></div></dl>
+                    </div>
+                    <p class="return-preview-error" data-preview-error role="alert" hidden></p>
+                    <label>Tình trạng khi nhận lại<select name="condition"><option value="GOOD">GOOD — Hàng tốt</option><option value="DAMAGED">DAMAGED — Hàng hỏng</option></select></label>
+                    <label>Ghi chú tình trạng khi nhận lại<textarea name="note" maxlength="1000" rows="2" aria-describedby="return-note-error"></textarea></label>
+                    <p id="return-note-error" class="return-preview-error" data-note-error role="alert" hidden></p>
+                    <p class="return-preview-error" data-save-error role="alert" hidden></p>
+                    <p class="return-save-success" data-save-success role="status" hidden></p>
+                    <button data-add-serial disabled>Thêm Serial</button>
+                </form>
+            </aside>
+        }
+    </div>
+</div>
+<partial name="_SerialCaptureScripts" />
+<script src="~/js/return-receive.js" asp-append-version="true" defer></script>

@@ -10,6 +10,7 @@ public interface IReturnReceiveRepository
  Task<CustomerReturnOrder?> OrderAsync(long id,int warehouseId);
  Task<ReturnReceipt?> ReceiptAsync(long id,int warehouseId);
  Task<OutboundItem?> SoldSerialAsync(long salesOrderId,string serial);
+ Task<InboundItem?> OriginalInboundItemAsync(long serialItemId);
  Task<bool> AlreadyReturnedAsync(long outboundItemId,long? excludeId=null);
  Task<int> ReceivedLineCountAsync(long returnLineId,long? excludeId=null);
  Task<T> TransactionAsync<T>(int actor,Func<Task<T>> work);
