@@ -14,6 +14,16 @@ public class WarehouseTransferRepository(EwmsDbContext db)
                         && user.Role.RoleName == "WAREHOUSE_STAFF")
             .Select(user => user.WarehouseId);
 
+        var work = db.TransferDispatches
+            .Where(d => staffWarehouseIds.Contains(d.TransferOrder.FromWarehouseId)
+                && (d.Status == "DRAFT" || d.IsActivePicking))
+            .Select(d => new { d.TransferOrderId, OwnerId = d.AssignedToUserId,
+                OwnerName = d.AssignedToUser == null ? null : d.AssignedToUser.FullName, d.Status })
+            .Concat(db.TransferReceipts
+                .Where(r => staffWarehouseIds.Contains(r.TransferOrder.ToWarehouseId) && r.Status == "DRAFT")
+                .Select(r => new { r.TransferOrderId, OwnerId = r.PerformedByUserId,
+                    OwnerName = r.PerformedByUser == null ? null : r.PerformedByUser.FullName, r.Status }));
+
         return db.TransferOrders
             .AsNoTracking()
             .Where(order => staffWarehouseIds.Contains(order.FromWarehouseId)
@@ -34,7 +44,17 @@ public class WarehouseTransferRepository(EwmsDbContext db)
                     && item.IsActive
                     && item.TransferReceipt.Status == "DONE"),
                 db.VwTransferInTransits.Count(item =>
-                    item.TransferOrderId == order.TransferOrderId)))
+                    item.TransferOrderId == order.TransferOrderId))
+            {
+                ViewerId = userId,
+                OpenCount = work.Count(w => w.TransferOrderId == order.TransferOrderId),
+                OwnerId = work.Where(w => w.TransferOrderId == order.TransferOrderId).Select(w => w.OwnerId).FirstOrDefault(),
+                OwnerName = work.Where(w => w.TransferOrderId == order.TransferOrderId).Select(w => w.OwnerName).FirstOrDefault(),
+                IsDraft = work.Any(w => w.TransferOrderId == order.TransferOrderId && w.Status == "DRAFT"),
+                HasRemainingToDispatch = order.TransferOrderLines.Any(line =>
+                    line.RequestedQuantity - line.CancelledQuantity > db.TransferDispatchItems.Count(item =>
+                        item.TransferLineId == line.TransferLineId && item.IsActive && item.Dispatch.Status == "DONE"))
+            })
             .ToListAsync();
     }
 
@@ -55,6 +75,7 @@ public class WarehouseTransferRepository(EwmsDbContext db)
             .Select(order => new WarehouseTransferDetail
             {
                 Code = order.TransferCode,
+                Id = order.TransferOrderId,
                 FromWarehouse = order.FromWarehouse.WarehouseName,
                 ToWarehouse = order.ToWarehouse.WarehouseName,
                 Status = order.Status,
@@ -81,6 +102,18 @@ public class WarehouseTransferRepository(EwmsDbContext db)
 
         if (detail.IsSource)
         {
+            if ((detail.Status is "RELEASED" or "IN_PROGRESS") &&
+                detail.Lines.Any(line => line.Requested - line.Cancelled > line.Dispatched))
+            {
+                var owners = await db.TransferDispatches
+                    .Where(d => d.TransferOrderId == orderId && (d.Status == "DRAFT" || d.IsActivePicking))
+                    .OrderBy(d => d.DispatchId)
+                    .Select(d => d.AssignedToUserId)
+                    .Take(2)
+                    .ToListAsync();
+                detail.CanClaimDispatch = owners.Count == 0 || (owners.Count == 1 && owners[0] is null);
+            }
+
             detail.Documents = await db.TransferDispatches
                 .Where(dispatch => dispatch.TransferOrderId == orderId)
                 .OrderBy(dispatch => dispatch.DispatchId)
@@ -91,8 +124,16 @@ public class WarehouseTransferRepository(EwmsDbContext db)
                         .Where(item => item.IsActive)
                         .OrderBy(item => item.DispatchItemId)
                         .Select(item => new WarehouseTransferSerial(item.TransferLine.Product.ProductCode,
-                            item.SerialItem.SerialNumber, item.DispatchedCondition))
-                        .ToList()))
+                            item.SerialItem.SerialNumber, item.DispatchedCondition)
+                        {
+                            ItemId = item.DispatchItemId
+                        })
+                        .ToList())
+                {
+                    DispatchId = dispatch.DispatchId,
+                    CanScan = dispatch.AssignedToUserId == userId && dispatch.Status == "DRAFT"
+                        && (dispatch.TransferOrder.Status == "RELEASED" || dispatch.TransferOrder.Status == "IN_PROGRESS")
+                })
                 .ToListAsync();
         }
         else
@@ -102,6 +143,16 @@ public class WarehouseTransferRepository(EwmsDbContext db)
                 .OrderBy(item => item.SerialNumber)
                 .Select(item => item.SerialNumber)
                 .ToListAsync();
+
+            if ((detail.Status is "RELEASED" or "IN_PROGRESS") && detail.IncomingSerials.Count > 0)
+            {
+                var owners = await db.TransferReceipts
+                    .Where(r => r.TransferOrderId == orderId && r.Status == "DRAFT")
+                    .OrderBy(r => r.TransferReceiptId)
+                    .Select(r => r.PerformedByUserId)
+                    .Take(2).ToListAsync();
+                detail.CanClaimReceipt = owners.Count == 0 || (owners.Count == 1 && owners[0] is null);
+            }
 
             detail.Documents = await db.TransferReceipts
                 .Where(receipt => receipt.TransferOrderId == orderId)
@@ -113,8 +164,17 @@ public class WarehouseTransferRepository(EwmsDbContext db)
                         .Where(item => item.IsActive)
                         .OrderBy(item => item.TransferReceiptItemId)
                         .Select(item => new WarehouseTransferSerial(item.DispatchItem.TransferLine.Product.ProductCode,
-                            item.DispatchItem.SerialItem.SerialNumber, item.ReceivedCondition))
-                        .ToList()))
+                            item.DispatchItem.SerialItem.SerialNumber, item.ReceivedCondition)
+                        {
+                            ConditionNote = item.ConditionNote
+                            , ItemId = item.TransferReceiptItemId
+                        })
+                        .ToList())
+                {
+                    ReceiptId = receipt.TransferReceiptId,
+                    CanScanReceipt = receipt.PerformedByUserId == userId && receipt.Status == "DRAFT"
+                        && (receipt.TransferOrder.Status == "RELEASED" || receipt.TransferOrder.Status == "IN_PROGRESS")
+                })
                 .ToListAsync();
         }
 

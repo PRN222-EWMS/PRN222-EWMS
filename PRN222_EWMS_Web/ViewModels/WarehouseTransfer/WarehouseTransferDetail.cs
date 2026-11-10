@@ -2,6 +2,9 @@ namespace PRN222_EWMS_Web.ViewModels.WarehouseTransfer;
 
 public class WarehouseTransferDetail
 {
+    public long Id { get; set; }
+    public bool CanClaimDispatch { get; set; }
+    public bool CanClaimReceipt { get; set; }
     public string Code { get; set; } = "";
     public string FromWarehouse { get; set; } = "";
     public string ToWarehouse { get; set; } = "";
@@ -19,6 +22,16 @@ public record TransferProgressRow(
 
 public record WarehouseTransferDocument(
     string Code, DateOnly Date, string Status, string? StaffName,
-    List<WarehouseTransferSerial> Serials);
+    List<WarehouseTransferSerial> Serials)
+{
+    public long? DispatchId { get; init; }
+    public bool CanScan { get; init; }
+    public long? ReceiptId { get; init; }
+    public bool CanScanReceipt { get; init; }
+}
 
-public record WarehouseTransferSerial(string ProductCode, string SerialNumber, string? Condition);
+public record WarehouseTransferSerial(string ProductCode, string SerialNumber, string? Condition)
+{
+    public long ItemId { get; init; }
+    public string? ConditionNote { get; init; }
+}

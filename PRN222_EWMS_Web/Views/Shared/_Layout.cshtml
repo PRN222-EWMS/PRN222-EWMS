@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/ewms-sidebar.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/workspace.css" asp-append-version="true" />
-    @if (ViewContext.RouteData.Values["controller"]?.ToString() is "Inbound" or "Putaway")
+    @if (ViewContext.RouteData.Values["controller"]?.ToString() is "Inbound" or "Putaway" or "WarehouseTransfer")
     {
         <link rel="stylesheet" href="~/css/serial-capture.css" asp-append-version="true" />
     }
