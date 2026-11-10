@@ -70,13 +70,14 @@ public class OutboundController : Controller
 
     [HttpGet]
     [Authorize(Roles = "WAREHOUSE_STAFF")]
-    public async Task<IActionResult> Create(long? soId = null)
+    public async Task<IActionResult> Create(long? soId = null, long? salesOrderId = null)
     {
+        var targetSoId = soId ?? salesOrderId;
         var eligibleOrders = await _outboundService.GetEligibleSalesOrdersAsync(CurrentUserId);
 
         var model = new CreateOutboundViewModel
         {
-            SelectedSalesOrderId = soId,
+            SelectedSalesOrderId = targetSoId,
             EligibleOrders = eligibleOrders
         };
 

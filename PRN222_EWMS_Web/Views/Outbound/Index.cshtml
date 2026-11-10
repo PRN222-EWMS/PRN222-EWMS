@@ -19,7 +19,7 @@
         {
             <div class="outbound-toolbar">
                 <a class="workspace-button" asp-action="Create">
-                    <i class="bi bi-plus-circle me-1" aria-hidden="true"></i> Tạo phiếu xuất kho
+                    <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> Tạo phiếu xuất kho
                 </a>
             </div>
         }
@@ -96,7 +96,7 @@
                     <i class="bi bi-arrow-counterclockwise me-1"></i> Xóa bộ lọc
                 </a>
                 <button class="workspace-button" type="submit" style="height: 38px; padding: 0 20px; font-size: 14px;">
-                    <i class="bi bi-search me-1" aria-hidden="true"></i> Tìm kiếm
+                    <i class="bi bi-funnel me-1" aria-hidden="true"></i> Tìm kiếm
                 </button>
             </div>
         </form>
@@ -191,11 +191,20 @@
                                         <a class="workspace-button sales-button-small" asp-action="Details" asp-route-id="@item.OutboundId" title="Xem chi tiết phiếu xuất">
                                             <i class="bi bi-eye me-1" aria-hidden="true"></i> Chi tiết
                                         </a>
-                                        @if (isStaff && item.Status == "PICKING")
+                                        @if (isStaff)
                                         {
-                                            <a class="workspace-button sales-button-small" asp-action="Picking" asp-route-id="@item.OutboundId" style="background: #0e733b; color: #ffffff; border-color: #0e733b;" title="Mở bàn nhặt hàng">
-                                                <i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i> Nhặt hàng
-                                            </a>
+                                            if (item.Status == "PICKING")
+                                            {
+                                                <a class="workspace-button sales-button-small" asp-action="Picking" asp-route-id="@item.OutboundId" style="background: #0e733b; color: #ffffff; border-color: #0e733b;" title="Mở bàn nhặt hàng">
+                                                    <i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i> Nhặt hàng
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="workspace-button sales-button-small disabled" disabled title="Phiếu xuất ở trạng thái @item.Status không thể nhặt hàng">
+                                                    <i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i> Nhặt hàng
+                                                </button>
+                                            }
                                         }
                                     </div>
                                 </td>
