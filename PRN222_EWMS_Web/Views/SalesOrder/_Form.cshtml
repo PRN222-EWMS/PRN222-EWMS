@@ -168,7 +168,7 @@
 <div class="sales-form-actions mt-4 justify-content-end">
     @if (!Model.IsEditMode)
     {
-        <a asp-action="Index" class="workspace-button sales-button-secondary">Hủy bỏ</a>
+        <a asp-action="Index" class="workspace-button sales-button-secondary">Thoát</a>
         <button type="submit" name="action" value="draft" class="workspace-button sales-button-secondary">
             <i class="bi bi-file-earmark me-1"></i> Lưu nháp
         </button>
@@ -178,7 +178,13 @@
     }
     else
     {
-        <a asp-action="Details" asp-route-id="@Model.Id" class="workspace-button sales-button-secondary">Hủy bỏ</a>
+        <a asp-action="Details" asp-route-id="@Model.Id" class="workspace-button sales-button-secondary">Thoát</a>
+        @if (Model.CanCancel && (Model.Status == "DRAFT" || Model.Status == "SUBMITTED"))
+        {
+            <button type="button" class="workspace-button sales-button-secondary text-danger border-danger" data-bs-toggle="modal" data-bs-target="#cancelOrderModal">
+                <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Hủy đơn hàng
+            </button>
+        }
         @if (Model.Status == "DRAFT")
         {
             <button type="submit" name="action" value="draft" class="workspace-button sales-button-secondary">

@@ -1,0 +1,228 @@
+@model PRN222_EWMS_Web.ViewModels.Outbound.PickingWorkbenchViewModel
+@{
+    ViewData["Title"] = "Phiên lấy hàng " + Model.IssueCode;
+}
+
+<div class="outbound-page">
+    <div class="workspace-heading">
+        <div>
+            <p class="eyebrow">XUẤT KHO / BÀN NHẶT HÀNG</p>
+            <h1>@Model.IssueCode</h1>
+            <p class="muted">
+                Đơn bán hàng: <strong class="text-dark">@Model.Socode</strong> · Khách hàng: <strong class="text-dark">@Model.CustomerName</strong> · Kho: <strong class="text-dark">@Model.WarehouseName</strong>
+            </p>
+        </div>
+        <div class="outbound-toolbar">
+            <a asp-action="Create" class="workspace-button sales-button-secondary">
+                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Quay lại chọn đơn
+            </a>
+            <button type="button" class="workspace-button sales-button-secondary text-danger border-danger" data-bs-toggle="modal" data-bs-target="#cancelPickingModal">
+                <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Hủy phiên lấy hàng
+            </button>
+            <form asp-action="MarkReady" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="outboundId" value="@Model.OutboundId" />
+                <button type="submit" class="workspace-button" style="background: #0e733b; color: #ffffff; border-color: #0e733b; font-weight: 600;" @(Model.TotalScanned == 0 ? "disabled" : "")>
+                    <i class="bi bi-check-circle me-1" aria-hidden="true"></i> Hoàn thành nhặt hàng
+                </button>
+            </form>
+        </div>
+    </div>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger mb-0" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>
+            <span>@TempData["Error"]</span>
+        </div>
+    }
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success mb-0" role="alert">
+            <i class="bi bi-check-circle-fill me-1" aria-hidden="true"></i>
+            <span>@TempData["Success"]</span>
+        </div>
+    }
+
+    @* 1. TIẾN ĐỘ TỪNG DÒNG HÀNG *@
+    <div class="row g-3">
+        @foreach (var line in Model.Lines)
+        {
+            var totalToFulfill = line.RemainingQuantity;
+            var pickedNow = line.InThisReceiptCount;
+            var isLineComplete = pickedNow >= totalToFulfill;
+
+            <div class="col-md-6 col-lg-4">
+                <div class="workspace-card h-100 p-3 @(isLineComplete ? "border-success bg-light" : "")">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <strong class="d-block text-dark">@line.ProductCode</strong>
+                            <small class="text-muted">@line.ProductName</small>
+                        </div>
+                        <span class="badge @(isLineComplete ? "bg-success" : "bg-warning text-dark")">
+                            @(isLineComplete ? "Đã lấy đủ" : $"Cần lấy: {totalToFulfill}")
+                        </span>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top" style="font-size: 13.5px;">
+                        <span class="text-muted">Đã quét trong phiên:</span>
+                        <strong class="fs-6 @(isLineComplete ? "text-success" : "text-primary")">
+                            @pickedNow / @totalToFulfill @line.Unit
+                        </strong>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="row g-4">
+        @* 2. KHUNG QUÉT MÃ SERIAL *@
+        <div class="col-lg-5">
+            <div class="workspace-card p-4">
+                <h3 class="h5 fw-bold mb-3 d-flex align-items-center gap-2 text-dark">
+                    <i class="bi bi-upc-scan text-primary"></i> Quét mã Serial thiết bị
+                </h3>
+                <p class="text-muted" style="font-size: 13.5px;">
+                    Nhập hoặc quét mã vạch serial trên thân thiết bị. Hệ thống sẽ tự động đối chiếu tình trạng, kho và kiểm tra độc quyền giữ chỗ nhặt hàng.
+                </p>
+
+                <form asp-action="ScanSerial" method="post" id="scanSerialForm">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="outboundId" value="@Model.OutboundId" />
+
+                    <div class="mb-3">
+                        <label for="serialInput" class="form-label fw-semibold" style="font-size: 13px;">Mã Serial hoặc Barcode</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-qr-code"></i></span>
+                            <input type="text"
+                                   id="serialInput"
+                                   name="serialNumber"
+                                   class="form-control form-control-lg font-monospace"
+                                   placeholder="Nhập hoặc quét mã..."
+                                   autofocus
+                                   required
+                                   autocomplete="off" />
+                            <button class="btn btn-primary px-3 fw-semibold" type="submit">
+                                <i class="bi bi-plus-lg me-1"></i> Quét
+                            </button>
+                        </div>
+                        <div class="form-text" style="font-size: 12px;">
+                            Bấm Enter sau khi quét hoặc nhập xong để thêm nhanh.
+                        </div>
+                    </div>
+                </form>
+
+                <div class="alert alert-info py-2 px-3 mb-0" style="font-size: 12.5px;">
+                    <i class="bi bi-info-circle me-1"></i>
+                    <strong>Quy tắc BR-05:</strong> Serial hàng tốt đang ở trạng thái <em>Chờ Putaway</em> vẫn được phép lấy hàng xuất kho.
+                </div>
+            </div>
+        </div>
+
+        @* 3. DANH SÁCH SERIAL ĐÃ QUÉT TRONG PHIÊN *@
+        <div class="col-lg-7">
+            <div class="workspace-card p-0 overflow-hidden">
+                <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-light">
+                    <h3 class="h6 fw-bold mb-0 text-dark">
+                        Thiết bị đã quét trong phiên: <span class="text-primary">@Model.TotalScanned</span>
+                    </h3>
+                    <span class="text-muted" style="font-size: 12.5px;">
+                        Tự động giữ chỗ nhặt hàng cho đến khi hoàn thành
+                    </span>
+                </div>
+
+                <div>
+                    @if (Model.ScannedSerials.Count == 0)
+                    {
+                        <div class="p-5 text-center text-muted">
+                            <i class="bi bi-qr-code-scan fs-1 d-block mb-2 text-secondary"></i>
+                            <p class="mb-0">Chưa có thiết bị nào được quét. Hãy dùng máy quét hoặc nhập mã serial vào ô bên trái.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0" style="font-size: 13.5px;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 40px;">STT</th>
+                                        <th>Mã Serial</th>
+                                        <th>Sản phẩm</th>
+                                        <th>Tình trạng</th>
+                                        <th>Thời điểm quét</th>
+                                        <th class="text-end" style="width: 80px;">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @{ var serialIndex = 1; }
+                                    @foreach (var s in Model.ScannedSerials)
+                                    {
+                                        <tr>
+                                            <td class="text-muted">@serialIndex</td>
+                                            <td>
+                                                <strong class="font-monospace text-dark">@s.SerialNumber</strong>
+                                            </td>
+                                            <td>
+                                                <div class="fw-semibold text-dark">@s.ProductCode</div>
+                                                <small class="text-muted">@s.ProductName</small>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                                    @s.ItemCondition
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <small class="text-muted">
+                                                    @s.ScannedAt.ToLocalTime().ToString("HH:mm:ss")
+                                                </small>
+                                            </td>
+                                            <td class="text-end">
+                                                <form asp-action="RemoveSerial" method="post" class="d-inline">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="outboundId" value="@Model.OutboundId" />
+                                                    <input type="hidden" name="serialItemId" value="@s.SerialItemId" />
+                                                    <button type="submit" class="btn btn-outline-danger btn-sm p-1 px-2" title="Gỡ bỏ serial và giải phóng giữ chỗ" onclick="return confirm('Bạn có chắc muốn bỏ serial này khỏi phiên lấy hàng?');">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        serialIndex++;
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* MODAL HỦY PHIÊN LẤY HÀNG *@
+<div class="modal fade" id="cancelPickingModal" tabindex="-1" aria-labelledby="cancelPickingModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-danger fw-bold" id="cancelPickingModalLabel">
+                    <i class="bi bi-exclamation-triangle me-1"></i> Xác nhận hủy phiên lấy hàng
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+            </div>
+            <div class="modal-body">
+                <p>Bạn có chắc chắn muốn hủy phiên lấy hàng cho phiếu <strong>@Model.IssueCode</strong>?</p>
+                <div class="alert alert-warning py-2 px-3 mb-0" style="font-size: 13px;">
+                    Toàn bộ <strong>@Model.TotalScanned</strong> thiết bị đã quét sẽ được gỡ bỏ và giải phóng để các nhân viên khác có thể thao tác.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button>
+                <form asp-action="CancelPicking" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="outboundId" value="@Model.OutboundId" />
+                    <button type="submit" class="btn btn-danger btn-sm">Xác nhận hủy</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

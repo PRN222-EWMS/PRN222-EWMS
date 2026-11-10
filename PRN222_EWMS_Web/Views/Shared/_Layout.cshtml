@@ -21,6 +21,14 @@
     {
         <link rel="stylesheet" href="~/css/inbound.css" asp-append-version="true" />
     }
+    @if (string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "Outbound", StringComparison.OrdinalIgnoreCase))
+    {
+        <link rel="stylesheet" href="~/css/outbound.css" asp-append-version="true" />
+    }
+    @if (string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "Transfer", StringComparison.OrdinalIgnoreCase))
+    {
+        <link rel="stylesheet" href="~/css/transfer.css" asp-append-version="true" />
+    }
     @if (string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "ReturnReceive", StringComparison.OrdinalIgnoreCase))
     {
         <link rel="stylesheet" href="~/css/return-receive.css" asp-append-version="true" />

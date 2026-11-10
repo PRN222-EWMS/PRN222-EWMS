@@ -1,0 +1,136 @@
+@model PRN222_EWMS_Web.ViewModels.Outbound.CreateOutboundViewModel
+@{
+    ViewData["Title"] = "Tạo phiếu xuất kho";
+}
+
+<div class="outbound-page">
+    <div class="workspace-heading">
+        <div>
+            <p class="eyebrow">XUẤT KHO / TẠO MỚI</p>
+            <h1>Chọn đơn bán hàng cần xuất</h1>
+            <p class="muted">Chỉ hiển thị các đơn bán hàng đã xác nhận, còn sản phẩm cần xuất và chưa có phiên lấy hàng đang hoạt động.</p>
+        </div>
+        <div class="outbound-toolbar">
+            <a class="workspace-button sales-button-secondary" href="/">
+                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Thoát
+            </a>
+        </div>
+    </div>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger mb-0" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>
+            <span>@TempData["Error"]</span>
+        </div>
+    }
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success mb-0" role="alert">
+            <i class="bi bi-check-circle-fill me-1" aria-hidden="true"></i>
+            <span>@TempData["Success"]</span>
+        </div>
+    }
+
+    @if (Model.EligibleOrders.Count == 0)
+    {
+        <div class="workspace-card text-center py-5">
+            <i class="bi bi-inbox fs-1 text-muted d-block mb-3" aria-hidden="true"></i>
+            <h3 class="h5 fw-bold text-dark">Không có đơn bán hàng nào cần xuất kho</h3>
+            <p class="text-muted mb-3" style="font-size: 14px;">
+                Hiện tại tất cả đơn bán hàng thuộc kho làm việc đã được xuất đủ hoặc đang có phiên lấy hàng đang xử lý.
+            </p>
+            <a class="workspace-button sales-button-secondary" href="/">Quay về trang chủ</a>
+        </div>
+    }
+    else
+    {
+        <div class="d-flex flex-column gap-4">
+            @foreach (var order in Model.EligibleOrders)
+            {
+                var isSelected = Model.SelectedSalesOrderId == order.SalesOrderId;
+
+                <div class="workspace-card p-4 @(isSelected ? "border-primary shadow-sm" : "")">
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                        <div>
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <h3 class="h5 mb-0 fw-bold text-dark">@order.Socode</h3>
+                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                                    Đã xác nhận
+                                </span>
+                                @if (order.HasShortage)
+                                {
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-2 py-1">
+                                        Thiếu hàng
+                                    </span>
+                                }
+                            </div>
+                            <p class="text-muted mb-1" style="font-size: 13.5px;">
+                                Khách hàng: <strong class="text-dark">@order.CustomerName</strong> · Số điện thoại: @(order.CustomerPhone ?? "—")
+                            </p>
+                            <p class="text-muted mb-0" style="font-size: 13px;">
+                                Địa chỉ giao: @(order.ShippingAddress ?? "—")
+                            </p>
+                        </div>
+
+                        <div class="text-end">
+                            <form asp-action="StartPicking" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="salesOrderId" value="@order.SalesOrderId" />
+                                <button type="submit" class="workspace-button" style="background: #0e733b; color: #ffffff; border-color: #0e733b; font-weight: 600;">
+                                    <i class="bi bi-box-arrow-in-right me-1"></i> Bắt đầu lấy hàng
+                                </button>
+                            </form>
+                            <small class="text-muted d-block mt-2" style="font-size: 12px;">
+                                Hẹn giao: @(order.RequestedDate?.ToString("dd/MM/yyyy") ?? "Không yêu cầu")
+                            </small>
+                        </div>
+                    </div>
+
+                    <hr class="my-3 text-secondary opacity-25" />
+
+                    <div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                            <span class="fw-semibold text-dark" style="font-size: 13.5px;">
+                                Danh sách mặt hàng · Còn lại cần xuất: <strong class="text-danger">@order.TotalRemaining</strong> · Đã đặt: @order.TotalRequested
+                            </span>
+                            <span class="badge bg-light text-dark border px-2 py-1">
+                                Đã giữ chỗ: @order.TotalReserved
+                            </span>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered align-middle mb-0" style="font-size: 13px;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Mã sản phẩm</th>
+                                        <th>Tên sản phẩm</th>
+                                        <th class="text-center">Số lượng đặt</th>
+                                        <th class="text-center">Đã xuất</th>
+                                        <th class="text-center">Còn lại cần xuất</th>
+                                        <th class="text-center">Đang giữ chỗ</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var line in order.Lines)
+                                    {
+                                        <tr>
+                                            <td class="fw-bold text-dark">@line.ProductCode</td>
+                                            <td>@line.ProductName</td>
+                                            <td class="text-center">@line.RequestedQuantity @line.Unit</td>
+                                            <td class="text-center text-success">@line.DoneQuantity @line.Unit</td>
+                                            <td class="text-center fw-bold @(line.RemainingQuantity > 0 ? "text-danger" : "text-muted")">
+                                                @line.RemainingQuantity @line.Unit
+                                            </td>
+                                            <td class="text-center">@line.ReservedBalance @line.Unit</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
