@@ -1,0 +1,24 @@
+@model PRN222_EWMS_Web.ViewModels.Returns.ReturnReceiveDetail
+@{ var draft = Model.Status == "DRAFT"; }
+<section data-return-serial-list>
+    <h2>Serial đã tiếp nhận (@Model.Serials.Count)</h2>
+    <div class="return-list">
+        @foreach (var item in Model.Serials)
+        {
+            <article>
+                <div>
+                    <strong>@item.Serial</strong>
+                    <p>@item.Product · Tình trạng nhận lại: @item.Condition</p>
+                    <div class="return-previous-row"><span>Trước khi bán: @item.SoldCondition</span><span>NSX: @(item.ManufacturingMonth.HasValue && item.ManufacturingYear.HasValue ? $"{item.ManufacturingMonth:00}/{item.ManufacturingYear}" : "Chưa có")</span></div>
+                    @if (!string.IsNullOrWhiteSpace(item.PreviousNote)) { <small>Ghi chú trước khi bán: @item.PreviousNote</small> }
+                    @if (!string.IsNullOrWhiteSpace(item.Note)) { <small>Ghi chú khi nhận trả: @item.Note</small> }
+                </div>
+                @if (draft)
+                {
+                    <form asp-action="RemoveSerial" asp-route-id="@Model.Id" method="post" data-confirm="Hủy Serial này?"><input type="hidden" name="itemId" value="@item.Id" /><input type="hidden" name="version" value="@Model.Version" /><button class="return-danger">Hủy Serial</button></form>
+                }
+            </article>
+        }
+        @if (Model.Serials.Count == 0) { <p>Chưa quét Serial nào.</p> }
+    </div>
+</section>

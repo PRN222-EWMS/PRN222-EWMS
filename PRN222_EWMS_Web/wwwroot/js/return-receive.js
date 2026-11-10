@@ -1,11 +1,127 @@
-(() => {
- document.querySelectorAll('[data-confirm]').forEach(form => form.addEventListener('submit', event => { if (!confirm(form.dataset.confirm)) event.preventDefault(); }));
- const form=document.querySelector('.return-scan');if(!form)return;
- const serial=form.querySelector('[name="serial"]'),message=form.querySelector('[data-scan-message]'),box=form.querySelector('[data-camera-box]'),video=form.querySelector('[data-video]');
- let stream,timer,busy=false;
- const stop=()=>{clearInterval(timer);timer=null;stream?.getTracks().forEach(track=>track.stop());stream=null;video.srcObject=null;box.hidden=true;};
- form.querySelector('[data-stop]').addEventListener('click',stop);window.addEventListener('pagehide',stop);
- const detector=async()=>{if(!window.BarcodeDetector)throw new Error('Trình duyệt chưa hỗ trợ đọc mã vạch. Hãy nhập Serial thủ công.');const formats=await BarcodeDetector.getSupportedFormats();const wanted=['code_128','code_39','ean_13','ean_8'].filter(f=>formats.includes(f));return new BarcodeDetector(wanted.length?{formats:wanted}:{});};
- form.querySelector('[data-camera]').addEventListener('click',async()=>{try{const reader=await detector();stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});video.srcObject=stream;box.hidden=false;await video.play();message.textContent='Đưa mã vạch vào giữa khung.';timer=setInterval(async()=>{if(busy||video.readyState<2)return;busy=true;try{const values=(await reader.detect(video)).map(x=>x.rawValue?.trim()).filter(Boolean);if(values.length===1){serial.value=values[0];stop();serial.focus({preventScroll:true});message.textContent='Đã đọc Serial. Đối chiếu với tem trước khi thêm.';}}finally{busy=false;}},500);}catch(e){stop();message.textContent=e.message||'Không mở được camera.';}});
- form.querySelector('[data-image]').addEventListener('change',async event=>{const file=event.target.files?.[0];if(!file)return;if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>10*1024*1024){message.textContent='Chỉ chọn JPEG, PNG hoặc WebP tối đa 10 MB.';return;}try{const reader=await detector();const bitmap=await createImageBitmap(file);try{const values=[...new Set((await reader.detect(bitmap)).map(x=>x.rawValue?.trim()).filter(Boolean))];if(values.length!==1){message.textContent=values.length?'Ảnh có nhiều mã. Hãy nhập đúng Serial thủ công.':'Không đọc được mã vạch. Hãy nhập Serial thủ công.';return;}serial.value=values[0];serial.focus({preventScroll:true});message.textContent='Đã đọc Serial từ ảnh. Đối chiếu với tem trước khi thêm.';}finally{bitmap.close();}}catch(e){message.textContent=e.message||'Không đọc được ảnh tem.';}});
-})();
+document.addEventListener('submit', event => {
+    const form = event.target.closest('[data-confirm]');
+    if (form && !confirm(form.dataset.confirm)) event.preventDefault();
+});
+
+const scanForm = document.querySelector('[data-return-scan]');
+if (scanForm) {
+    const input = scanForm.querySelector('[data-serial-input]');
+    const preview = scanForm.querySelector('[data-return-preview]');
+    const error = scanForm.querySelector('[data-preview-error]');
+    const addButton = scanForm.querySelector('[data-add-serial]');
+    const condition = scanForm.querySelector('[name="condition"]');
+    const note = scanForm.querySelector('[name="note"]');
+    const noteError = scanForm.querySelector('[data-note-error]');
+    const saveError = scanForm.querySelector('[data-save-error]');
+    const saveSuccess = scanForm.querySelector('[data-save-success]');
+    let timer;
+    let request;
+    let checkedSerial = '';
+
+    function reset() {
+        checkedSerial = '';
+        preview.hidden = true;
+        error.hidden = true;
+        addButton.disabled = true;
+        if (request) request.abort();
+    }
+
+    async function lookup() {
+        const serial = input.value.trim();
+        reset();
+        if (!serial) return;
+        request = new AbortController();
+        try {
+            const url = new URL(scanForm.dataset.previewUrl, location.href);
+            url.searchParams.set('serial', serial);
+            const response = await fetch(url, { signal: request.signal, headers: { Accept: 'application/json' } });
+            const result = await response.json();
+            if (input.value.trim() !== serial) return;
+            if (!response.ok) throw new Error(result.message || 'Không tra cứu được Serial.');
+            const data = result.data;
+            scanForm.querySelector('[data-preview-product]').textContent = data.product;
+            scanForm.querySelector('[data-preview-manufactured]').textContent = data.manufacturingMonth && data.manufacturingYear
+                ? `${String(data.manufacturingMonth).padStart(2, '0')}/${data.manufacturingYear}` : 'Chưa có thông tin';
+            scanForm.querySelector('[data-preview-condition]').textContent = data.soldCondition;
+            scanForm.querySelector('[data-preview-note]').textContent = data.previousNote || 'Không có ghi chú';
+            checkedSerial = serial;
+            preview.hidden = false;
+            addButton.disabled = false;
+        } catch (e) {
+            if (e.name === 'AbortError') return;
+            error.textContent = e.message;
+            error.hidden = false;
+        }
+    }
+
+    function schedule() {
+        clearTimeout(timer);
+        reset();
+        timer = setTimeout(lookup, 350);
+    }
+    input.addEventListener('input', schedule);
+    scanForm.addEventListener('serialcapture:changed', schedule);
+    function clearNoteError() {
+        noteError.hidden = true;
+        note.removeAttribute('aria-invalid');
+    }
+    function validateNote() {
+        if (condition.value !== 'DAMAGED' || note.value.trim()) {
+            clearNoteError();
+            return true;
+        }
+        noteError.textContent = 'Vui lòng ghi rõ tình trạng hàng hỏng trước khi thêm Serial.';
+        noteError.hidden = false;
+        note.setAttribute('aria-invalid', 'true');
+        note.focus();
+        return false;
+    }
+    note.addEventListener('input', clearNoteError);
+    condition.addEventListener('change', clearNoteError);
+    // Click is handled as well because native form validation may prevent submit from firing.
+    addButton.addEventListener('click', event => {
+        if (!validateNote()) event.preventDefault();
+    });
+    input.addEventListener('keydown', event => {
+        if (event.key === 'Enter') { event.preventDefault(); clearTimeout(timer); lookup(); }
+    });
+    scanForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!validateNote()) { event.preventDefault(); return; }
+        if (checkedSerial !== input.value.trim()) { clearTimeout(timer); lookup(); return; }
+        saveError.hidden = true;
+        saveSuccess.hidden = true;
+        addButton.disabled = true;
+        try {
+            const response = await fetch(scanForm.action, {
+                method: 'POST',
+                body: new FormData(scanForm),
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if (!response.ok) {
+                const result = await response.json();
+                throw new Error(result.message || 'Không thể lưu Serial.');
+            }
+            const html = await response.text();
+            const replacement = new DOMParser().parseFromString(html, 'text/html').querySelector('[data-return-serial-list]');
+            if (!replacement) throw new Error('Không cập nhật được danh sách Serial. Hãy tải lại trang để kiểm tra.');
+            document.querySelector('[data-return-serial-list]').replaceWith(replacement);
+            const version = response.headers.get('X-Receipt-Version');
+            if (version) document.querySelectorAll('input[name="version"]').forEach(field => { field.value = version; });
+            const count = response.headers.get('X-Received-Count');
+            const counter = document.querySelector('[data-received-count]');
+            if (count !== null && counter) counter.textContent = `${counter.dataset.requested} / ${count}`;
+            input.value = '';
+            note.value = '';
+            condition.value = 'GOOD';
+            reset();
+            clearNoteError();
+            saveSuccess.textContent = 'Đã thêm Serial vào phiếu nháp.';
+            saveSuccess.hidden = false;
+        } catch (e) {
+            saveError.textContent = e.message || 'Không thể lưu Serial.';
+            saveError.hidden = false;
+            addButton.disabled = false;
+        }
+    });
+}
