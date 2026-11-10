@@ -14,7 +14,7 @@
             </p>
         </div>
         <div class="outbound-toolbar">
-            <a class="workspace-button sales-button-secondary" href="/">
+            <a class="workspace-button sales-button-secondary" asp-action="Index">
                 <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Thoát
             </a>
             @if (User.IsInRole("WAREHOUSE_STAFF") && Model.Status == "PICKING")

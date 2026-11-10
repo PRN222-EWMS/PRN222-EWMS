@@ -494,13 +494,14 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
 
         if (order == null) return null;
 
-        // Trạng thái đã đóng hoặc hủy: không sửa được
-        if (order.Status == "COMPLETED" || order.Status == "CANCELLED" || order.Status == "CLOSED")
+        // Trạng thái đã đóng: không xem/sửa được
+        if (order.Status == "COMPLETED" || order.Status == "CLOSED")
             return null;
 
         bool hasDispatch = await db.TransferDispatches.AnyAsync(d => d.TransferOrderId == id);
         bool hasReceipt = await db.TransferReceipts.AnyAsync(r => r.TransferOrderId == id);
         bool isSourceFrozen = hasDispatch || hasReceipt;
+        bool canCancel = (order.Status == "DRAFT" || order.Status == "RELEASED") && !isSourceFrozen;
 
         var warehouses = await db.Warehouses
             .AsNoTracking()
@@ -555,6 +556,7 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
             AssignedToUserId = order.AssignedToUserId,
             Note = order.Note,
             IsSourceContextFrozen = isSourceFrozen,
+            CanCancel = canCancel,
             Lines = lines,
             Warehouses = warehouses,
             Products = products,
@@ -821,6 +823,60 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
         {
             await tx.RollbackAsync();
             return (false, $"Lỗi hệ thống khi cập nhật: {ex.Message}");
+        }
+    }
+
+    // =========================================================================
+    // 5. HỦY LỆNH CHUYỂN KHO (MANAGER ONLY)
+    // =========================================================================
+    public async Task<(bool Success, string? Error)> CancelTransferOrderAsync(long id, int userId)
+    {
+        var order = await db.TransferOrders
+            .Include(t => t.TransferOrderLines)
+            .Include(t => t.Reservations)
+            .FirstOrDefaultAsync(t => t.TransferOrderId == id);
+
+        if (order == null)
+            return (false, "Không tìm thấy lệnh chuyển kho.");
+
+        if (order.Status == "COMPLETED" || order.Status == "CANCELLED" || order.Status == "CLOSED")
+            return (false, $"Lệnh chuyển kho đã ở trạng thái '{order.Status}', không thể hủy.");
+
+        if (order.Status != "DRAFT" && order.Status != "RELEASED")
+            return (false, "Chỉ có thể hủy lệnh chuyển kho ở trạng thái Bản nháp (DRAFT) hoặc Đã phát hành (RELEASED).");
+
+        bool hasDispatch = await db.TransferDispatches.AnyAsync(d => d.TransferOrderId == id);
+        bool hasReceipt = await db.TransferReceipts.AnyAsync(r => r.TransferOrderId == id);
+        if (hasDispatch || hasReceipt)
+            return (false, "Lệnh chuyển kho đã phát sinh phiếu xuất chuyển hoặc nhận hàng, không thể hủy.");
+
+        await using var tx = await db.Database.BeginTransactionAsync();
+        try
+        {
+            order.Status = "CANCELLED";
+            order.ClosedAt = DateTime.UtcNow;
+            order.CloseReason = "Đã hủy bởi Quản lý kho";
+
+            foreach (var line in order.TransferOrderLines)
+            {
+                line.CancelledQuantity = line.RequestedQuantity;
+            }
+
+            var activeReservations = order.Reservations.Where(r => r.Status == "ACTIVE").ToList();
+            if (activeReservations.Count > 0)
+            {
+                db.Reservations.RemoveRange(activeReservations);
+            }
+
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            return (true, null);
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync();
+            return (false, $"Lỗi khi hủy lệnh chuyển kho: {ex.Message}");
         }
     }
 }

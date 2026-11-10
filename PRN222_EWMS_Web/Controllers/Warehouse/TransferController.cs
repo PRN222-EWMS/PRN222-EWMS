@@ -129,4 +129,24 @@ public class TransferController : Controller
         TempData["Success"] = "Cập nhật lệnh chuyển kho thành công!";
         return RedirectToAction(nameof(Edit), new { id = model.TransferOrderId });
     }
+
+    // =========================================================================
+    // 5. HỦY LỆNH CHUYỂN KHO (MANAGER ONLY)
+    // =========================================================================
+    [HttpPost("Cancel/{id:long}")]
+    [Authorize(Roles = "MANAGER")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Cancel(long id)
+    {
+        var result = await _transferService.CancelTransferOrderAsync(id, CurrentUserId);
+
+        if (!result.Success)
+        {
+            TempData["Error"] = result.Error;
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        TempData["Success"] = "Đã hủy lệnh chuyển kho thành công!";
+        return RedirectToAction(nameof(Edit), new { id });
+    }
 }
