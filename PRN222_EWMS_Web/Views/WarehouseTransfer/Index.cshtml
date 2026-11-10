@@ -1,0 +1,46 @@
+@model List<PRN222_EWMS_Web.ViewModels.WarehouseTransfer.TransferListRow>
+
+@{
+    ViewData["Title"] = "Lệnh điều chuyển";
+}
+
+<h1>Lệnh điều chuyển</h1>
+
+@if (Model.Count == 0)
+{
+    <p>Kho của bạn chưa có lệnh điều chuyển.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Mã lệnh</th>
+                <th>Kho nguồn</th>
+                <th>Kho đích</th>
+                <th>Việc của kho</th>
+                <th>Trạng thái lệnh</th>
+                <th>Đã xuất</th>
+                <th>Đã nhận</th>
+                <th>Đang vận chuyển</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in Model)
+            {
+                <tr>
+                    <td>
+                        <a asp-action="Details" asp-route-id="@row.Id">@row.Code</a>
+                    </td>
+                    <td>@row.FromWarehouse</td>
+                    <td>@row.ToWarehouse</td>
+                    <td>@(row.IsSource ? "Xuất hàng" : "Nhận hàng")</td>
+                    <td>@row.Status</td>
+                    <td>@row.Dispatched</td>
+                    <td>@row.Received</td>
+                    <td>@row.InTransit</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

@@ -1,0 +1,93 @@
+@model PRN222_EWMS_Web.ViewModels.WarehouseTransfer.WarehouseTransferDetail
+
+@{
+    ViewData["Title"] = $"Lệnh điều chuyển {Model.Code}";
+}
+
+<a asp-action="Index">← Danh sách điều chuyển</a>
+<h1>Lệnh @Model.Code</h1>
+<p>Kho nguồn: @Model.FromWarehouse → Kho đích: @Model.ToWarehouse</p>
+<p>Trạng thái: @Model.Status · Tình trạng hàng yêu cầu: @Model.ItemCondition</p>
+
+<h2>Tiến độ theo sản phẩm</h2>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Sản phẩm</th>
+            <th>Yêu cầu</th>
+            <th>Đã hủy</th>
+            <th>Đã xuất</th>
+            <th>Kho đích đã nhận</th>
+            <th>Đang vận chuyển</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var line in Model.Lines)
+        {
+            <tr>
+                <td>@line.ProductCode – @line.ProductName</td>
+                <td>@line.Requested</td>
+                <td>@line.Cancelled</td>
+                <td>@line.Dispatched</td>
+                <td>@line.Received</td>
+                <td>@line.InTransit</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (!Model.IsSource)
+{
+    <h2>Serial đang chuyển đến kho</h2>
+    @if (Model.IncomingSerials.Count == 0)
+    {
+        <p>Không có serial đang chuyển đến.</p>
+    }
+    else
+    {
+        <ul>
+            @foreach (var serial in Model.IncomingSerials)
+            {
+                <li>@serial</li>
+            }
+        </ul>
+    }
+}
+
+<h2>@(Model.IsSource ? "Phiếu xuất của kho" : "Phiếu nhận của kho")</h2>
+@if (Model.Documents.Count == 0)
+{
+    <p>Kho chưa có phiếu cho lệnh này.</p>
+}
+
+@foreach (var doc in Model.Documents)
+{
+    <h3>@doc.Code</h3>
+    <p>@doc.Date.ToString("dd/MM/yyyy") · @doc.Status · @(doc.StaffName ?? "Chưa có người phụ trách")</p>
+    @if (doc.Serials.Count == 0)
+    {
+        <p>Phiếu chưa có serial.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Mã sản phẩm</th>
+                    <th>Serial</th>
+                    <th>@(Model.IsSource ? "Tình trạng lúc xuất" : "Tình trạng thực nhận")</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in doc.Serials)
+                {
+                    <tr>
+                        <td>@item.ProductCode</td>
+                        <td>@item.SerialNumber</td>
+                        <td>@(item.Condition ?? "Chưa ghi nhận")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
