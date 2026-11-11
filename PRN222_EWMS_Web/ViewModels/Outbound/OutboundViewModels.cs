@@ -166,6 +166,10 @@ public class EligibleSalesOrderDto
     public long TotalRemaining { get; set; }
     public long TotalReserved { get; set; }
     public bool HasShortage { get; set; }
+    public bool IsPickingActive { get; set; }
+    public long? ActiveOutboundId { get; set; }
+    public string? ActiveIssueCode { get; set; }
+    public string? ActivePickerName { get; set; }
     public List<OutboundLineProgressDto> Lines { get; set; } = [];
 }
 
@@ -191,6 +195,7 @@ public class PickingWorkbenchViewModel
 
     public List<OutboundLineProgressDto> Lines { get; set; } = [];
     public List<OutboundSerialItemDto> ScannedSerials { get; set; } = [];
+    public List<SuggestedSerialPickDto> SuggestedSerials { get; set; } = [];
 
     public int TotalScanned => ScannedSerials.Count(s => s.IsActive);
     public long TotalRemainingToPick => Lines.Sum(l => l.RemainingQuantity) - TotalScanned;
@@ -199,4 +204,26 @@ public class PickingWorkbenchViewModel
     public string? ErrorMessage { get; set; }
     public string? SuccessMessage { get; set; }
 }
+
+public class SuggestedSerialPickDto
+{
+    public long SerialItemId { get; set; }
+    public string SerialNumber { get; set; } = null!;
+    public int ProductId { get; set; }
+    public string ProductCode { get; set; } = null!;
+    public string ProductName { get; set; } = null!;
+    public byte? ManufacturingMonth { get; set; }
+    public short? ManufacturingYear { get; set; }
+    public DateTime RegisteredAt { get; set; }
+    public string ItemCondition { get; set; } = "GOOD";
+    public int? LocationId { get; set; }
+    public string LocationPath { get; set; } = "Chưa gán vị trí";
+    public bool IsPriority { get; set; }
+    public bool IsAlreadyPickedInSession { get; set; }
+
+    public string MfgDateDisplay => (ManufacturingMonth.HasValue && ManufacturingYear.HasValue)
+        ? $"{ManufacturingMonth.Value:D2}/{ManufacturingYear.Value}"
+        : (ManufacturingYear.HasValue ? $"{ManufacturingYear.Value}" : RegisteredAt.ToString("MM/yyyy"));
+}
+
 

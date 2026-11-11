@@ -19,6 +19,8 @@ public partial class TransferOrder
 
     public DateTime CreatedAt { get; set; }
 
+    public DateOnly? DispatchDate { get; set; }
+
     public DateOnly? ExpectedDate { get; set; }
 
     public string ItemCondition { get; set; } = null!;

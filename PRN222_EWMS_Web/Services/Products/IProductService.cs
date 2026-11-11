@@ -7,7 +7,8 @@ public interface IProductService
 {
     Task<ProductListViewModel?> GetProductListPageAsync(
         string? keyword, int? warehouseId, int userId,
-        bool isManager, bool isWarehouseStaff, bool isPurchasingStaff = false);
+        bool isManager, bool isWarehouseStaff, bool isPurchasingStaff = false,
+        string? status = null);
     Task<List<Product>> GetListAsync(
         string? keyword, int userId, bool isWarehouseStaff);
 

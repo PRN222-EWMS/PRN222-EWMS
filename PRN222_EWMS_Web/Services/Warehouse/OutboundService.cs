@@ -293,12 +293,22 @@ public class OutboundService(EwmsDbContext db) : IOutboundService
 
         int warehouseId = user.WarehouseId.Value;
 
-        // SO hợp lệ: cùng kho, Status là SUBMITTED hoặc PARTIALLY_FULFILLED, và KHÔNG có phiên picking active
-        var activePickingSoIds = await db.Outbounds
+        // Lấy danh sách các phiên picking active để hiển thị trạng thái và liên kết tới phiên nhặt dở
+        var activeOutbounds = await db.Outbounds
             .AsNoTracking()
             .Where(o => o.IsActivePicking)
-            .Select(o => o.SalesOrderId)
+            .Select(o => new
+            {
+                o.SalesOrderId,
+                o.OutboundId,
+                o.IssueCode,
+                PickerName = o.AssignedToUser != null ? o.AssignedToUser.FullName : o.CreatedByUser.FullName
+            })
             .ToListAsync();
+
+        var activePickingDict = activeOutbounds
+            .GroupBy(o => o.SalesOrderId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.OutboundId).First());
 
         var orders = await db.SalesOrders
             .AsNoTracking()
@@ -306,8 +316,7 @@ public class OutboundService(EwmsDbContext db) : IOutboundService
             .Include(so => so.SalesOrderLines)
                 .ThenInclude(sol => sol.Product)
             .Where(so => so.WarehouseId == warehouseId
-                && (so.Status == "SUBMITTED" || so.Status == "PARTIALLY_FULFILLED")
-                && !activePickingSoIds.Contains(so.SalesOrderId))
+                && (so.Status == "SUBMITTED" || so.Status == "PARTIALLY_FULFILLED"))
             .OrderByDescending(so => so.SubmittedAt)
             .ToListAsync();
 
@@ -347,6 +356,8 @@ public class OutboundService(EwmsDbContext db) : IOutboundService
             long totalRemaining = lines.Sum(l => l.RemainingQuantity);
             if (totalRemaining <= 0) continue; // Đã fulfill xong, bỏ qua
 
+            activePickingDict.TryGetValue(so.SalesOrderId, out var activeOutbound);
+
             result.Add(new EligibleSalesOrderDto
             {
                 SalesOrderId = so.SalesOrderId,
@@ -361,6 +372,10 @@ public class OutboundService(EwmsDbContext db) : IOutboundService
                 TotalRemaining = totalRemaining,
                 TotalReserved = lines.Sum(l => l.ReservedBalance),
                 HasShortage = so.HasShortage,
+                IsPickingActive = (activeOutbound != null),
+                ActiveOutboundId = activeOutbound?.OutboundId,
+                ActiveIssueCode = activeOutbound?.IssueCode,
+                ActivePickerName = activeOutbound?.PickerName,
                 Lines = lines
             });
         }
@@ -521,6 +536,87 @@ public class OutboundService(EwmsDbContext db) : IOutboundService
             });
         }
 
+        // Tải vị trí kho để dựng đường dẫn trực quan (Zone > Kệ > Tầng / Ô sàn)
+        var allLocations = await db.StorageLocations
+            .AsNoTracking()
+            .Where(l => l.WarehouseId == outbound.SalesOrder.WarehouseId)
+            .ToListAsync();
+
+        var locationDict = allLocations.ToDictionary(l => l.LocationId);
+
+        string BuildLocationPath(int? locId)
+        {
+            if (!locId.HasValue || !locationDict.TryGetValue(locId.Value, out var loc))
+                return "Chưa gán vị trí (Chờ xếp chỗ)";
+
+            var path = new List<string> { loc.LocationName };
+            var curr = loc;
+            int depth = 0;
+            while (curr.ParentLocationId.HasValue && depth < 5)
+            {
+                if (locationDict.TryGetValue(curr.ParentLocationId.Value, out var parent))
+                {
+                    path.Insert(0, parent.LocationName);
+                    curr = parent;
+                    depth++;
+                }
+                else break;
+            }
+            return string.Join(" > ", path);
+        }
+
+        // Truy vấn gợi ý thiết bị theo nguyên tắc FIFO (Ưu tiên năm sản xuất cũ nhất)
+        var productIds = outbound.SalesOrder.SalesOrderLines.Select(l => l.ProductId).Distinct().ToList();
+
+        var availableSerials = await db.SerialItems
+            .AsNoTracking()
+            .Include(s => s.Product)
+            .Where(s => s.CurrentWarehouseId == outbound.SalesOrder.WarehouseId
+                     && productIds.Contains(s.ProductId)
+                     && s.StockState == "IN_WAREHOUSE"
+                     && s.ItemCondition == "GOOD"
+                     && !s.IsQuarantined)
+            .ToListAsync();
+
+        var activeOtherClaims = (await db.PickingClaims
+            .AsNoTracking()
+            .Where(c => c.OutboundId != outboundId)
+            .Select(c => c.SerialItemId)
+            .ToListAsync()).ToHashSet();
+
+        var scannedSerialIds = scannedItems.Select(oi => oi.SerialItemId).ToHashSet();
+
+        // Sắp xếp ưu tiên FIFO: Năm sản xuất cũ nhất -> Tháng cũ nhất -> Ngày nhập kho cũ nhất
+        var candidateSerials = availableSerials
+            .Where(s => !activeOtherClaims.Contains(s.SerialItemId))
+            .OrderBy(s => s.ManufacturingYear ?? 9999)
+            .ThenBy(s => s.ManufacturingMonth ?? 99)
+            .ThenBy(s => s.RegisteredAt)
+            .ToList();
+
+        var earliestSerialIds = candidateSerials
+            .Where(s => !scannedSerialIds.Contains(s.SerialItemId))
+            .GroupBy(s => s.ProductId)
+            .Select(g => g.First().SerialItemId)
+            .ToHashSet();
+
+        var suggestedSerials = candidateSerials.Select(s => new SuggestedSerialPickDto
+        {
+            SerialItemId = s.SerialItemId,
+            SerialNumber = s.SerialNumber,
+            ProductId = s.ProductId,
+            ProductCode = s.Product.ProductCode,
+            ProductName = s.Product.ProductName,
+            ManufacturingMonth = s.ManufacturingMonth,
+            ManufacturingYear = s.ManufacturingYear,
+            RegisteredAt = s.RegisteredAt,
+            ItemCondition = s.ItemCondition,
+            LocationId = s.CurrentLocationId,
+            LocationPath = BuildLocationPath(s.CurrentLocationId),
+            IsPriority = earliestSerialIds.Contains(s.SerialItemId),
+            IsAlreadyPickedInSession = scannedSerialIds.Contains(s.SerialItemId)
+        }).ToList();
+
         return new PickingWorkbenchViewModel
         {
             OutboundId = outbound.OutboundId,
@@ -538,7 +634,8 @@ public class OutboundService(EwmsDbContext db) : IOutboundService
             AssignedToUserId = outbound.AssignedToUserId ?? userId,
             AssignedToName = outbound.AssignedToUser?.FullName ?? "Tôi",
             Lines = lines,
-            ScannedSerials = serialDtos
+            ScannedSerials = serialDtos,
+            SuggestedSerials = suggestedSerials
         };
     }
 

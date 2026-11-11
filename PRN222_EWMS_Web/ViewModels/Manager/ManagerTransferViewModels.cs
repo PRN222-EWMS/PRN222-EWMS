@@ -1,4 +1,4 @@
-﻿namespace PRN222_EWMS_Web.ViewModels.Manager;
+namespace PRN222_EWMS_Web.ViewModels.Manager;
 
 public record ManagerTransferSummary(
     long Id,
@@ -34,6 +34,7 @@ public class ManagerTransferDetail
     public string Status { get; set; } = "";
     public string ItemCondition { get; set; } = "";
     public string? AssignedTo { get; set; }
+    public DateOnly? DispatchDate { get; set; }
     public DateOnly? ExpectedDate { get; set; }
     public string? Note { get; set; }
     public List<ManagerTransferLine> Lines { get; set; } = [];

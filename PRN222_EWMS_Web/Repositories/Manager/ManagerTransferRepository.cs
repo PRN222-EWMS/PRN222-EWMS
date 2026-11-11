@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System.Text.RegularExpressions;
 using PRN222_EWMS_Web.Models;
 using PRN222_EWMS_Web.ViewModels.Manager;
@@ -106,6 +106,7 @@ public class ManagerTransferRepository(EwmsDbContext db)
                 Status = order.Status,
                 ItemCondition = order.ItemCondition,
                 AssignedTo = order.AssignedToUser == null ? null : order.AssignedToUser.FullName,
+                DispatchDate = order.DispatchDate,
                 ExpectedDate = order.ExpectedDate,
                 Note = order.Note
             })

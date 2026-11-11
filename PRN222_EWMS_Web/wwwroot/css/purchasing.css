@@ -377,11 +377,12 @@ button.workspace-button:disabled:hover {
 
 .po-modal {
     background: #fff;
-    border-radius: 12px;
+    border: 1px solid var(--workspace-line);
+    border-radius: 16px;
     width: 90%;
     max-width: 520px;
     padding: 24px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.08);
 }
 
 .po-modal-header {

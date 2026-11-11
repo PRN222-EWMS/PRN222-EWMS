@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/ewms-sidebar.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/workspace.css" asp-append-version="true" />
-    @if (ViewContext.RouteData.Values["controller"]?.ToString() is "Inbound" or "Putaway")
+    @if (ViewContext.RouteData.Values["controller"]?.ToString() is "Inbound" or "Putaway" or "Outbound" or "WarehouseTransfer")
     {
         <link rel="stylesheet" href="~/css/serial-capture.css" asp-append-version="true" />
     }
@@ -63,6 +63,10 @@
     @if (User.IsInRole("WAREHOUSE_STAFF") || User.IsInRole("MANAGER"))
     {
         <link rel="stylesheet" href="~/css/warehouse.css" asp-append-version="true" />
+    }
+    @if (ViewContext.RouteData.Values["controller"]?.ToString() is "Product" or "ManagerTransfer" or "WarehouseTransfer" or "Transfer")
+    {
+        <link rel="stylesheet" href="~/css/product-transfer.css" asp-append-version="true" />
     }
 </head>
 <body class="ewms-shell">

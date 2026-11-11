@@ -30,8 +30,8 @@ public class TransferController : Controller
     [HttpGet("Index")]
     public IActionResult Index()
     {
-        // Màn hình Index thuộc phạm vi của đồng đội. Tạm thời điều hướng vào Create.
-        return RedirectToAction(nameof(Create));
+        // Điều hướng sang màn hình theo dõi chuyển kho của Quản lý
+        return RedirectToAction("Index", "ManagerTransfer");
     }
 
     // =========================================================================
@@ -69,6 +69,7 @@ public class TransferController : Controller
             form.FromWarehouseId = model.FromWarehouseId;
             form.ToWarehouseId = model.ToWarehouseId;
             form.ItemCondition = model.ItemCondition;
+            form.DispatchDate = model.DispatchDate;
             form.ExpectedDate = model.ExpectedDate;
             form.AssignedToUserId = model.AssignedToUserId;
             form.Note = model.Note;
@@ -81,6 +82,14 @@ public class TransferController : Controller
             : "Đã lưu bản nháp (DRAFT) lệnh chuyển kho thành công!";
 
         return RedirectToAction(nameof(Edit), new { id = result.TransferOrderId });
+    }
+
+    [HttpGet("GetAvailableProducts")]
+    [Authorize(Roles = "MANAGER,WAREHOUSE_STAFF")]
+    public async Task<IActionResult> GetAvailableProducts(int warehouseId, string itemCondition = "GOOD")
+    {
+        var products = await _transferService.GetAvailableProductsAsync(warehouseId, itemCondition);
+        return Json(products);
     }
 
     // =========================================================================
@@ -119,6 +128,7 @@ public class TransferController : Controller
             var form = await _transferService.GetEditFormAsync(id, CurrentUserId);
             if (form == null) return RedirectToAction(nameof(Index));
 
+            form.DispatchDate = model.DispatchDate;
             form.ExpectedDate = model.ExpectedDate;
             form.AssignedToUserId = model.AssignedToUserId;
             form.Note = model.Note;
@@ -128,5 +138,25 @@ public class TransferController : Controller
 
         TempData["Success"] = "Cập nhật lệnh chuyển kho thành công!";
         return RedirectToAction(nameof(Edit), new { id = model.TransferOrderId });
+    }
+
+    // =========================================================================
+    // 5. HỦY LỆNH CHUYỂN KHO (MANAGER ONLY)
+    // =========================================================================
+    [HttpPost("Cancel/{id:long}")]
+    [Authorize(Roles = "MANAGER")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Cancel(long id)
+    {
+        var result = await _transferService.CancelTransferOrderAsync(id, CurrentUserId);
+
+        if (!result.Success)
+        {
+            TempData["Error"] = result.Error;
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        TempData["Success"] = "Đã hủy lệnh chuyển kho thành công!";
+        return RedirectToAction(nameof(Edit), new { id });
     }
 }

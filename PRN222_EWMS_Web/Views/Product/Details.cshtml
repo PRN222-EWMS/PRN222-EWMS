@@ -1,4 +1,4 @@
-﻿@model PRN222_EWMS_Web.Models.Product
+@model PRN222_EWMS_Web.Models.Product
 @using System.Text.Json
 
 @{
@@ -54,77 +54,96 @@
     };
 }
 
-<h2 class="mb-4">@Model.ProductName</h2>
-
-<dl class="row">
-    <dt class="col-sm-3">Mã sản phẩm</dt>
-    <dd class="col-sm-9">@Model.ProductCode</dd>
-
-    <dt class="col-sm-3">Model</dt>
-    <dd class="col-sm-9">@Model.Model</dd>
-
-    <dt class="col-sm-3">Danh mục</dt>
-    <dd class="col-sm-9">@(Model.Category?.CategoryName ?? "Chưa có")</dd>
-
-    <dt class="col-sm-3">Thương hiệu</dt>
-    <dd class="col-sm-9">@(Model.Brand?.BrandName ?? "Chưa có")</dd>
-
-    <dt class="col-sm-3">Đơn vị</dt>
-    <dd class="col-sm-9">@Model.Unit</dd>
-
-    <dt class="col-sm-3">Thông số kỹ thuật</dt>
-    <dd class="col-sm-9">
-        @if (isJsonObject && specifications.Count > 0)
+<div class="mx-auto" style="max-width: 1200px;">
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div class="mw-100">
+        <p class="text-muted small mb-2">@Model.ProductCode</p>
+        <h1 class="text-break mb-3">@Model.ProductName</h1>
+        <span class="badge rounded-pill px-3 py-2 @(Model.Status == "ACTIVE" ? "bg-success" : "bg-secondary")">
+            @statusLabel
+        </span>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a asp-action="Index" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Danh sách sản phẩm
+        </a>
+        @if (User.IsInRole("PURCHASING_STAFF"))
         {
-            <table class="table table-bordered table-sm mb-2">
+            <a asp-action="Edit" asp-route-id="@Model.ProductId" class="btn btn-primary">
+                <i class="bi bi-pencil-square me-1" aria-hidden="true"></i> Sửa sản phẩm
+            </a>
+        }
+    </div>
+</div>
+
+<section class="workspace-card mb-4" aria-labelledby="product-info-heading">
+    <h2 id="product-info-heading" class="h5 mb-4">Thông tin chung</h2>
+    <dl class="row g-4 mb-0">
+        <div class="col-12 col-sm-6 col-lg-4">
+            <dt class="text-muted small fw-normal mb-1">Mã sản phẩm</dt>
+            <dd class="fw-semibold text-break mb-0">@Model.ProductCode</dd>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-4">
+            <dt class="text-muted small fw-normal mb-1">Model</dt>
+            <dd class="text-break mb-0">@Model.Model</dd>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-4">
+            <dt class="text-muted small fw-normal mb-1">Danh mục</dt>
+            <dd class="text-break mb-0">@(Model.Category?.CategoryName ?? "Chưa có")</dd>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-4">
+            <dt class="text-muted small fw-normal mb-1">Thương hiệu</dt>
+            <dd class="text-break mb-0">@(Model.Brand?.BrandName ?? "Chưa có")</dd>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-4">
+            <dt class="text-muted small fw-normal mb-1">Đơn vị</dt>
+            <dd class="text-break mb-0">@Model.Unit</dd>
+        </div>
+    </dl>
+
+    <section class="border-top mt-4 pt-4" aria-labelledby="product-packaging-heading">
+        <h2 id="product-packaging-heading" class="h5 mb-4">Đóng gói &amp; vận chuyển</h2>
+        <dl class="row g-4 mb-0">
+            <div class="col-12 col-sm-6">
+                <dt class="text-muted small fw-normal mb-1">Dài × Rộng × Cao</dt>
+                <dd class="mb-0">
+                    @Model.LengthCm.ToString("0.##") × @Model.WidthCm.ToString("0.##") × @Model.HeightCm.ToString("0.##")
+                    <span class="text-muted">cm</span>
+                </dd>
+            </div>
+            <div class="col-12 col-sm-6">
+                <dt class="text-muted small fw-normal mb-1">Trọng lượng</dt>
+                <dd class="mb-0">@Model.GrossWeightKg.ToString("0.###") <span class="text-muted">kg</span></dd>
+            </div>
+        </dl>
+    </section>
+</section>
+
+<section class="workspace-card" aria-labelledby="product-specifications-heading">
+    <h2 id="product-specifications-heading" class="h5 mb-3">Thông số kỹ thuật</h2>
+    @if (isJsonObject && specifications.Count > 0)
+    {
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Thông số kỹ thuật, có thể cuộn ngang">
+            <table class="workspace-table">
                 <tbody>
                     @foreach (var specification in specifications)
                     {
                         <tr>
-                            <th scope="row" class="w-50">
-                                @specification.Key
-                            </th>
-                            <td>@specification.Value</td>
+                            <th scope="row" class="w-50 text-break">@specification.Key</th>
+                            <td class="text-break">@specification.Value</td>
                         </tr>
                     }
                 </tbody>
             </table>
-        }
-        else if (isJsonObject || string.IsNullOrWhiteSpace(Model.Specifications))
-        {
-            <span class="text-muted">Chưa có thông số</span>
-        }
-        else
-        {
-            <div style="white-space: pre-wrap;">@Model.Specifications</div>
-        }
-    </dd>
-
-    <dt class="col-sm-3">Kích thước đóng gói</dt>
-    <dd class="col-sm-9">
-        @Model.LengthCm.ToString("0.##") ×
-        @Model.WidthCm.ToString("0.##") ×
-        @Model.HeightCm.ToString("0.##") cm
-    </dd>
-
-    <dt class="col-sm-3">Trọng lượng</dt>
-    <dd class="col-sm-9">
-        @Model.GrossWeightKg.ToString("0.###") kg
-    </dd>
-
-    <dt class="col-sm-3">Trạng thái</dt>
-    <dd class="col-sm-9">@statusLabel</dd>
-</dl>
-
-<a asp-action="Index" class="btn btn-secondary">
-    Quay lại danh sách
-</a>
-
-@if (User.IsInRole("PURCHASING_STAFF"))
-{
-    <a asp-action="Edit"
-       asp-route-id="@Model.ProductId"
-       class="btn btn-primary">
-        Sửa sản phẩm
-    </a>
-}
+        </div>
+    }
+    else if (isJsonObject || string.IsNullOrWhiteSpace(Model.Specifications))
+    {
+        <p class="text-muted small mb-0">Chưa có thông số kỹ thuật.</p>
+    }
+    else
+    {
+        <div class="text-break" style="white-space: pre-wrap;">@Model.Specifications</div>
+    }
+</section>
+</div>

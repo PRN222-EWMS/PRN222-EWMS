@@ -29,6 +29,7 @@ public class TransferListItemDto
     public string ToWarehouseName { get; set; } = null!;
     public string ItemCondition { get; set; } = null!;
     public string Status { get; set; } = null!;
+    public DateOnly? DispatchDate { get; set; }
     public DateOnly? ExpectedDate { get; set; }
     public DateTime CreatedAt { get; set; }
     public string CreatedByName { get; set; } = null!;
@@ -47,6 +48,7 @@ public class TransferDetailsViewModel
     public string ToWarehouseName { get; set; } = null!;
     public string ItemCondition { get; set; } = null!;
     public string Status { get; set; } = null!;
+    public DateOnly? DispatchDate { get; set; }
     public DateOnly? ExpectedDate { get; set; }
     public DateTime CreatedAt { get; set; }
     public string CreatedByName { get; set; } = null!;
@@ -88,6 +90,7 @@ public class CreateTransferOrderViewModel
     public int FromWarehouseId { get; set; }
     public int ToWarehouseId { get; set; }
     public string ItemCondition { get; set; } = "GOOD";
+    public DateOnly? DispatchDate { get; set; }
     public DateOnly? ExpectedDate { get; set; }
     public int? AssignedToUserId { get; set; }
     public string? Note { get; set; }
@@ -104,6 +107,7 @@ public class CreateTransferOrderLineInput
 {
     public int ProductId { get; set; }
     public int Quantity { get; set; }
+    public long AvailableQuantity { get; set; }
 }
 
 public class EditTransferOrderViewModel
@@ -120,12 +124,14 @@ public class EditTransferOrderViewModel
     public string ToWarehouseName { get; set; } = string.Empty;
     public string ItemCondition { get; set; } = "GOOD";
 
+    public DateOnly? DispatchDate { get; set; }
     public DateOnly? ExpectedDate { get; set; }
     public int? AssignedToUserId { get; set; }
     public string? Note { get; set; }
     public bool IsRelease { get; set; }
 
     public bool IsSourceContextFrozen { get; set; }
+    public bool CanCancel { get; set; }
 
     public List<EditTransferOrderLineInput> Lines { get; set; } = [];
 
@@ -142,6 +148,7 @@ public class EditTransferOrderLineInput
     public int MinQuantityAllowed { get; set; }
     public string ProductCode { get; set; } = string.Empty;
     public string ProductName { get; set; } = string.Empty;
+    public long AvailableQuantity { get; set; }
     public int DispatchedQuantity { get; set; }
     public bool IsProductFrozen => DispatchedQuantity > 0;
 }
@@ -154,6 +161,7 @@ public class ProductLookupDto
     public string Unit { get; set; } = null!;
     public int CategoryId { get; set; }
     public int? BrandId { get; set; }
+    public long UnreservedQuantity { get; set; }
 }
 
 public class LookupItemDto
