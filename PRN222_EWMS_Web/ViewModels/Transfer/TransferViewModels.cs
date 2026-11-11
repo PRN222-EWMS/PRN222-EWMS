@@ -1,3 +1,6 @@
+using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+
 namespace PRN222_EWMS_Web.ViewModels.Transfer;
 
 public class TransferListViewModel
@@ -87,70 +90,70 @@ public class TransferDispatchSummaryDto
 
 public class CreateTransferOrderViewModel
 {
+    [Range(1, int.MaxValue, ErrorMessage = "Hãy chọn kho nguồn.")]
     public int FromWarehouseId { get; set; }
+    [Range(1, int.MaxValue, ErrorMessage = "Hãy chọn kho đích.")]
     public int ToWarehouseId { get; set; }
+    [RegularExpression("^(GOOD|DAMAGED)$", ErrorMessage = "Tình trạng hàng không hợp lệ.")]
     public string ItemCondition { get; set; } = "GOOD";
     public DateOnly? DispatchDate { get; set; }
     public DateOnly? ExpectedDate { get; set; }
     public int? AssignedToUserId { get; set; }
+    [StringLength(1000, ErrorMessage = "Ghi chú tối đa 1.000 ký tự.")]
     public string? Note { get; set; }
     public bool IsRelease { get; set; }
 
+    [MinLength(1, ErrorMessage = "Cần ít nhất một sản phẩm.")]
+    [MaxLength(100, ErrorMessage = "Mỗi lệnh tối đa 100 dòng sản phẩm.")]
     public List<CreateTransferOrderLineInput> Lines { get; set; } = [];
 
+    [BindNever]
     public List<LookupItemDto> Warehouses { get; set; } = [];
+    [BindNever]
     public List<ProductLookupDto> Products { get; set; } = [];
+    [BindNever]
     public List<LookupItemDto> StaffUsers { get; set; } = [];
+    [BindNever]
+    public TransferAssessment Assessment { get; set; } = new();
+    [BindNever]
+    public bool CanEdit { get; set; } = true;
+    [BindNever]
+    public string? LockReason { get; set; }
 }
 
 public class CreateTransferOrderLineInput
 {
+    public long TransferLineId { get; set; }
+    [Range(1, int.MaxValue, ErrorMessage = "Hãy chọn sản phẩm.")]
     public int ProductId { get; set; }
+    [Range(1, 1000000, ErrorMessage = "Số lượng phải là số nguyên từ 1 đến 1.000.000.")]
     public int Quantity { get; set; }
+    [BindNever]
     public long AvailableQuantity { get; set; }
 }
 
-public class EditTransferOrderViewModel
+public class EditTransferOrderViewModel : CreateTransferOrderViewModel
 {
     public long TransferOrderId { get; set; }
-    public string TransferCode { get; set; } = null!;
-    public string Status { get; set; } = null!;
+    [BindNever]
+    public string TransferCode { get; set; } = string.Empty;
+    [BindNever]
+    public string Status { get; set; } = string.Empty;
+    [BindNever]
     public byte[] RowVersion { get; set; } = [];
+    [Required(ErrorMessage = "Thiếu phiên bản dữ liệu. Hãy tải lại trang.")]
     public string RowVersionBase64 { get; set; } = string.Empty;
-
-    public int FromWarehouseId { get; set; }
-    public string FromWarehouseName { get; set; } = string.Empty;
-    public int ToWarehouseId { get; set; }
-    public string ToWarehouseName { get; set; } = string.Empty;
-    public string ItemCondition { get; set; } = "GOOD";
-
-    public DateOnly? DispatchDate { get; set; }
-    public DateOnly? ExpectedDate { get; set; }
-    public int? AssignedToUserId { get; set; }
-    public string? Note { get; set; }
-    public bool IsRelease { get; set; }
-
-    public bool IsSourceContextFrozen { get; set; }
+    [BindNever]
     public bool CanCancel { get; set; }
-
-    public List<EditTransferOrderLineInput> Lines { get; set; } = [];
-
-    public List<LookupItemDto> Warehouses { get; set; } = [];
-    public List<ProductLookupDto> Products { get; set; } = [];
-    public List<LookupItemDto> StaffUsers { get; set; } = [];
 }
 
-public class EditTransferOrderLineInput
+public sealed class TransferAssessment
 {
-    public long TransferLineId { get; set; }
-    public int ProductId { get; set; }
-    public int Quantity { get; set; }
-    public int MinQuantityAllowed { get; set; }
-    public string ProductCode { get; set; } = string.Empty;
-    public string ProductName { get; set; } = string.Empty;
-    public long AvailableQuantity { get; set; }
-    public int DispatchedQuantity { get; set; }
-    public bool IsProductFrozen => DispatchedQuantity > 0;
+    public List<string> Errors { get; set; } = [];
+    public List<string> Warnings { get; set; } = [];
+    public string? CurrentCapacity { get; set; }
+    public string? ForecastCapacity { get; set; }
+    public bool CanRelease => Errors.Count == 0;
 }
 
 public class ProductLookupDto

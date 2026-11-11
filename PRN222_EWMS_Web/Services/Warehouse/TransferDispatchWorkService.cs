@@ -2,10 +2,11 @@ using System.Data;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Models;
+using PRN222_EWMS_Web.Services.Warehouse;
 
 namespace PRN222_EWMS_Web.Services.WarehouseStaff;
 
-public class TransferDispatchWorkService(EwmsDbContext db)
+public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService expiry)
 {
     private IQueryable<TransferOrder> SourceOrderForUpdate(long orderId, int userId) =>
         db.TransferOrders
@@ -22,6 +23,11 @@ public class TransferDispatchWorkService(EwmsDbContext db)
 
         if (order is null)
             return (false, "Bạn chỉ có thể nhận việc xuất tại kho nguồn của mình.");
+        if (await expiry.CancelLockedAsync(order))
+        {
+            await transaction.CommitAsync();
+            return (false, "Lệnh đã quá ETA và tự động hủy. Không thể tạo phiếu gửi; hãy yêu cầu quản lý tạo lệnh mới.");
+        }
         if (order.Status is not ("RELEASED" or "IN_PROGRESS"))
             return (false, "Trạng thái hiện tại của lệnh chưa cho phép nhận việc xuất.");
 
