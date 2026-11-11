@@ -5,13 +5,48 @@
     ViewData["Title"] = $"Lệnh điều chuyển {Model.Code}";
 }
 
-<a asp-action="Index">← Danh sách điều chuyển</a>
-<h1>Lệnh @Model.Code</h1>
-<p>Kho nguồn: @Model.FromWarehouse → Kho đích: @Model.ToWarehouse</p>
-<p>Trạng thái: @Model.Status · Tình trạng hàng yêu cầu: @Model.ItemCondition</p>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+    <h1 class="mb-0 text-break">Lệnh @Model.Code</h1>
+    <a asp-action="Index" class="btn btn-outline-secondary rounded-pill">
+        <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Danh sách điều chuyển
+    </a>
+</div>
 
-<h2>Tiến độ theo sản phẩm</h2>
-<table class="table">
+<section class="workspace-card mb-4" aria-label="Thông tin điều chuyển">
+    <div class="row g-4">
+        <div class="col-md-5">
+            <p class="small text-muted mb-2">Kho nguồn</p>
+            <p class="fw-semibold text-break mb-0">@Model.FromWarehouse</p>
+        </div>
+        <div class="col-md-2 d-flex align-items-center justify-content-md-center text-primary">
+            <i class="bi bi-arrow-right fs-4 d-none d-md-block" aria-hidden="true"></i>
+            <i class="bi bi-arrow-down fs-4 d-md-none" aria-hidden="true"></i>
+        </div>
+        <div class="col-md-5">
+            <p class="small text-muted mb-2">Kho đích</p>
+            <p class="fw-semibold text-break mb-0">@Model.ToWarehouse</p>
+        </div>
+    </div>
+    <dl class="d-flex flex-wrap gap-4 border-top pt-3 mt-4 mb-0">
+        <div>
+            <dt class="small text-muted fw-normal mb-2">Trạng thái lệnh</dt>
+            <dd class="mb-0"><span class="badge bg-light text-dark border rounded-pill px-3 py-2">@Model.Status</span></dd>
+        </div>
+        <div>
+            <dt class="small text-muted fw-normal mb-2">Tình trạng hàng yêu cầu</dt>
+            <dd class="mb-0">@(Model.ItemCondition switch { "GOOD" => "Tốt", "DAMAGED" => "Hư hỏng", _ => Model.ItemCondition })</dd>
+        </div>
+        <div>
+            <dt class="small text-muted fw-normal mb-2">Việc của kho</dt>
+            <dd class="mb-0">@(Model.IsSource ? "Xuất hàng" : "Nhận hàng")</dd>
+        </div>
+    </dl>
+</section>
+
+<section class="workspace-card mb-4" aria-labelledby="transfer-progress-heading">
+<h2 id="transfer-progress-heading" class="h5 mb-4">Tiến độ theo sản phẩm</h2>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Tiến độ sản phẩm, có thể cuộn ngang">
+<table class="workspace-table">
     <thead>
         <tr>
             <th>Sản phẩm</th>
@@ -36,46 +71,63 @@
         }
     </tbody>
 </table>
+</div>
+@if (Model.Lines.Count == 0)
+{
+    <p class="text-muted mt-3 mb-0">Lệnh chưa có sản phẩm.</p>
+}
+</section>
 
 @if (!Model.IsSource)
 {
-    <h2>Serial đang chuyển đến kho</h2>
+    <section class="workspace-card mb-4" aria-labelledby="incoming-serials-heading">
+    <h2 id="incoming-serials-heading" class="h5 mb-3">Serial đang chuyển đến kho</h2>
     @if (Model.IncomingSerials.Count == 0)
     {
-        <p>Không có serial đang chuyển đến.</p>
+        <p class="text-muted mb-0">Không có serial đang chuyển đến.</p>
     }
     else
     {
-        <ul>
+        <ul class="list-unstyled d-flex flex-wrap gap-2 mb-0">
             @foreach (var serial in Model.IncomingSerials)
             {
-                <li>@serial</li>
+                <li class="border rounded px-3 py-2 text-break bg-light">@serial</li>
             }
         </ul>
     }
+    </section>
 }
 
-<h2>@(Model.IsSource ? "Phiếu xuất của kho" : "Phiếu nhận của kho")</h2>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
+<h2 class="h4 mb-0">@(Model.IsSource ? "Phiếu xuất của kho" : "Phiếu nhận của kho")</h2>
 @if (Model.CanClaimDispatch)
 {
     <form asp-action="ClaimDispatch" asp-route-id="@Model.Id" method="post">
-        <button type="submit" class="btn btn-primary">Nhận việc xuất</button>
+        <button type="submit" class="btn btn-primary rounded-pill">Nhận việc xuất</button>
     </form>
 }
 @if (Model.CanClaimReceipt)
 {
     <form asp-action="ClaimReceipt" asp-route-id="@Model.Id" method="post">
-        <button type="submit" class="btn btn-primary">Nhận việc nhận hàng</button>
+        <button type="submit" class="btn btn-primary rounded-pill">Nhận việc nhận hàng</button>
     </form>
 }
+</div>
 @if (Model.Documents.Count == 0)
 {
-    <p>Kho chưa có phiếu cho lệnh này.</p>
+    <p class="workspace-card text-muted">Kho chưa có phiếu cho lệnh này.</p>
 }
 
 @foreach (var doc in Model.Documents)
 {
-    <h3 id="@(doc.CanScan || doc.CanScanReceipt ? "my-transfer-work" : null)">@doc.Code</h3>
+    <section class="workspace-card mb-4" aria-label="Phiếu @doc.Code">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom pb-3 mb-4">
+        <div>
+            <h3 class="h5 mb-2 text-break" id="@(doc.CanScan || doc.CanScanReceipt ? "my-transfer-work" : null)">@doc.Code</h3>
+            <p class="small text-muted mb-0">@doc.Date.ToString("dd/MM/yyyy") · @(doc.StaffName ?? "Chưa có người phụ trách")</p>
+        </div>
+        <span class="badge bg-light text-dark border rounded-pill px-3 py-2">@doc.Status</span>
+    </div>
     @if (doc.CanScan)
     {
         <form asp-action="ScanDispatch" asp-route-id="@Model.Id" method="post">
@@ -86,7 +138,7 @@
                 HelpText = "Quét hoặc tải ảnh tem của máy cần xuất. Đối chiếu mã trước khi thêm vào phiếu.",
                 Hint = "Bạn cũng có thể nhập tay hoặc dùng máy quét USB/Bluetooth."
             })" />
-            <button type="submit" class="btn btn-primary mt-2">Thêm serial</button>
+            <button type="submit" class="btn btn-primary rounded-pill mt-3">Thêm serial</button>
         </form>
     }
     @if (doc.CanScanReceipt)
@@ -99,25 +151,25 @@
                 HelpText = "Quét hoặc tải ảnh tem của máy vừa nhận. Đối chiếu mã rồi chọn tình trạng thực tế.",
                 Hint = "Bạn cũng có thể nhập tay hoặc dùng máy quét USB/Bluetooth."
             })" />
-            <label for="condition-@doc.ReceiptId">Tình trạng thực nhận</label>
+            <label class="form-label mt-3" for="condition-@doc.ReceiptId">Tình trạng thực nhận</label>
             <select id="condition-@doc.ReceiptId" name="receivedCondition" class="form-select" required>
                 <option value="">Chọn tình trạng</option>
                 <option value="GOOD">Tốt</option>
                 <option value="DAMAGED">Hư hỏng</option>
             </select>
-            <label for="note-@doc.ReceiptId">Ghi chú tình trạng</label>
+            <label class="form-label mt-3" for="note-@doc.ReceiptId">Ghi chú tình trạng</label>
             <input id="note-@doc.ReceiptId" name="conditionNote" class="form-control" maxlength="1000" />
-            <button type="submit" class="btn btn-primary mt-2">Thêm serial nhận</button>
+            <button type="submit" class="btn btn-primary rounded-pill mt-3">Thêm serial nhận</button>
         </form>
     }
-    <p>@doc.Date.ToString("dd/MM/yyyy") · @doc.Status · @(doc.StaffName ?? "Chưa có người phụ trách")</p>
     @if (doc.Serials.Count == 0)
     {
-        <p>Phiếu chưa có serial.</p>
+        <p class="text-muted mt-3 mb-0">Phiếu chưa có serial.</p>
     }
     else
     {
-        <table class="table">
+        <div class="table-wrap mt-4" tabindex="0" role="region" aria-label="Serial trong phiếu @doc.Code, có thể cuộn ngang">
+        <table class="workspace-table">
             <thead>
                 <tr>
                     <th>Mã sản phẩm</th>
@@ -151,7 +203,7 @@
                                       asp-route-id="@Model.Id" method="post">
                                     <input type="hidden" name="documentId" value="@(doc.DispatchId ?? doc.ReceiptId)" />
                                     <input type="hidden" name="itemId" value="@item.ItemId" />
-                                    <button type="submit" class="btn btn-outline-danger btn-sm"
+                                    <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill text-nowrap"
                                             aria-label="Gỡ serial @item.SerialNumber">Gỡ serial</button>
                                 </form>
                             </td>
@@ -160,21 +212,23 @@
                 }
             </tbody>
         </table>
+        </div>
         @if (doc.CanScan)
         {
             <form asp-action="CompleteDispatch" asp-route-id="@Model.Id" method="post">
                 <input type="hidden" name="dispatchId" value="@doc.DispatchId" />
-                <button type="submit" class="btn btn-primary">Hoàn tất xuất</button>
+                <button type="submit" class="btn btn-primary rounded-pill mt-4">Hoàn tất xuất</button>
             </form>
         }
         @if (doc.CanScanReceipt)
         {
             <form asp-action="CompleteReceipt" asp-route-id="@Model.Id" method="post">
                 <input type="hidden" name="receiptId" value="@doc.ReceiptId" />
-                <button type="submit" class="btn btn-primary">Hoàn tất nhận</button>
+                <button type="submit" class="btn btn-primary rounded-pill mt-4">Hoàn tất nhận</button>
             </form>
         }
     }
+    </section>
 }
 
 @section Scripts {

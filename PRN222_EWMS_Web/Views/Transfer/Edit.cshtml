@@ -7,7 +7,6 @@
 <div class="transfer-page">
     <div class="workspace-heading">
         <div>
-            <p class="eyebrow">CHUYỂN KHO / CHỈNH SỬA</p>
             <div class="d-flex align-items-center gap-3">
                 <h1 class="mb-0">Chỉnh sửa lệnh @Model.TransferCode</h1>
                 @if (Model.Status == "DRAFT")
@@ -35,7 +34,7 @@
         </div>
         <div class="transfer-toolbar">
             <a class="workspace-button sales-button-secondary" asp-controller="ManagerTransfer" asp-action="Index">
-                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Thoát
+                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Quay lại danh sách
             </a>
             @if (Model.CanCancel)
             {

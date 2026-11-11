@@ -50,14 +50,15 @@
 </form>
 
 <section aria-label="Danh sách lệnh điều chuyển" class="card">
-<div class="card-body table-responsive">
+<div class="card-body">
+<div class="table-wrap">
 @if (Model.Count == 0)
 {
     <p class="mb-0">@(hasFilters ? "Không tìm thấy lệnh chuyển kho phù hợp với bộ lọc." : "Kho của bạn chưa có lệnh điều chuyển.")</p>
 }
 else
 {
-    <table class="table mb-0">
+    <table class="workspace-table">
         <thead>
             <tr>
                 <th>Mã lệnh</th>
@@ -118,5 +119,6 @@ else
         </tbody>
     </table>
 }
+</div>
 </div>
 </section>
