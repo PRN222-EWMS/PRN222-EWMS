@@ -12,29 +12,31 @@
         </div>
         <div class="transfer-toolbar">
             <a class="workspace-button sales-button-secondary" asp-controller="ManagerTransfer" asp-action="Index">
-                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Thoát
+                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Danh sách lệnh
             </a>
         </div>
     </div>
 
     @if (TempData["Error"] != null)
     {
-        <div class="alert alert-danger mb-3" role="alert">
+        <div class="alert alert-danger mb-4" role="alert">
             <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>
             <span>@TempData["Error"]</span>
         </div>
     }
 
+    <div asp-validation-summary="All" class="sales-warning mb-4" role="alert" style="@(ViewData.ModelState.IsValid ? "display:none;" : "")"></div>
+
     <form asp-action="Create" method="post" id="createTransferForm">
         @Html.AntiForgeryToken()
         <input type="hidden" name="IsRelease" id="isReleaseInput" value="false" />
 
-        @* THÔNG TIN LỆNH CHUYỂN *@
-        <section class="workspace-card">
-            <h2 class="h5 fw-bold mb-3 border-bottom pb-2">Thông tin lệnh chuyển</h2>
-            <div class="row g-3">
-                <div class="col-md-6 col-lg-4">
-                    <label class="form-label fw-semibold" style="font-size: 13px;">
+        <div class="transfer-form-grid">
+            <!-- CỘT 1: THÔNG TIN ĐIỀU CHUYỂN -->
+            <div class="workspace-card">
+                <h2 class="h5 mb-3">1. Thông tin điều chuyển</h2>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">
                         Kho nguồn <span class="text-danger">*</span>
                     </label>
                     <select class="form-select" name="FromWarehouseId" id="fromWarehouseSelect" required>
@@ -46,8 +48,8 @@
                     </select>
                 </div>
 
-                <div class="col-md-6 col-lg-4">
-                    <label class="form-label fw-semibold" style="font-size: 13px;">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">
                         Kho đích <span class="text-danger">*</span>
                     </label>
                     <select class="form-select" name="ToWarehouseId" id="toWarehouseSelect" required>
@@ -59,8 +61,8 @@
                     </select>
                 </div>
 
-                <div class="col-md-6 col-lg-4">
-                    <label class="form-label fw-semibold" style="font-size: 13px;">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">
                         Tình trạng hàng hóa <span class="text-danger">*</span>
                     </label>
                     <select class="form-select" name="ItemCondition" id="itemConditionSelect" required>
@@ -68,59 +70,71 @@
                         <option value="DAMAGED" selected="@(Model.ItemCondition == "DAMAGED")">Hàng lỗi</option>
                     </select>
                 </div>
+            </div>
 
-                <div class="col-md-6 col-lg-3">
-                    <label class="form-label fw-semibold" style="font-size: 13px;">
-                        Ngày chuyển đi <span class="text-danger">*</span>
-                    </label>
-                    <input type="date"
-                           class="form-control"
-                           name="DispatchDate"
-                           id="dispatchDateInput"
-                           value="@(Model.DispatchDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd"))"
-                           min="@DateTime.Today.ToString("yyyy-MM-dd")"
-                           required />
+            <!-- CỘT 2: MỐC THỜI GIAN & GHI CHÚ -->
+            <div class="workspace-card">
+                <h2 class="h5 mb-3">2. Mốc thời gian & ghi chú</h2>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Mã lệnh chuyển</label>
+                    <input type="text" class="form-control" value="Tự động sinh (TR-YYYY-XXX)" readonly style="background:#f6f5f4;" />
                 </div>
 
-                <div class="col-md-6 col-lg-3">
-                    <label class="form-label fw-semibold" style="font-size: 13px;">
-                        Ngày dự kiến nhận <span class="text-danger">*</span>
-                    </label>
-                    <input type="date"
-                           class="form-control"
-                           name="ExpectedDate"
-                           id="expectedDateInput"
-                           value="@(Model.ExpectedDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.AddDays(3).ToString("yyyy-MM-dd"))"
-                           min="@(Model.DispatchDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd"))"
-                           required />
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">
+                            Ngày chuyển đi <span class="text-danger">*</span>
+                        </label>
+                        <input type="date"
+                               class="form-control"
+                               name="DispatchDate"
+                               id="dispatchDateInput"
+                               value="@(Model.DispatchDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd"))"
+                               min="@DateTime.Today.ToString("yyyy-MM-dd")"
+                               required />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">
+                            Ngày dự kiến nhận <span class="text-danger">*</span>
+                        </label>
+                        <input type="date"
+                               class="form-control"
+                               name="ExpectedDate"
+                               id="expectedDateInput"
+                               value="@(Model.ExpectedDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.AddDays(3).ToString("yyyy-MM-dd"))"
+                               min="@(Model.DispatchDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd"))"
+                               required />
+                    </div>
                 </div>
 
-                <div class="col-md-12 col-lg-6">
-                    <label class="form-label fw-semibold" style="font-size: 13px;">Ghi chú</label>
-                    <input type="text" class="form-control" name="Note" value="@Model.Note" placeholder="Ghi chú thêm về chuyến chuyển hàng..." maxlength="1000" />
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Ghi chú điều chuyển</label>
+                    <textarea class="form-control" name="Note" rows="2" maxlength="1000" placeholder="Ghi chú thêm về chuyến chuyển hàng...">@Model.Note</textarea>
                 </div>
             </div>
-        </section>
+        </div>
 
-        @* DANH SÁCH MẶT HÀNG *@
-        <section class="workspace-card">
-            <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-                <h2 class="h5 fw-bold mb-0">Danh sách sản phẩm</h2>
-                <button type="button" class="workspace-button sales-button-secondary" style="min-height: 34px; padding: 4px 14px; font-size: 13px;" id="btnAddLine">
-                    <i class="bi bi-plus-lg me-1"></i> Thêm sản phẩm
+        <!-- KHỐI SẢN PHẨM CHUYỂN KHO -->
+        <section class="workspace-card mt-4">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <div>
+                    <h2 class="h5 mb-0">3. Danh sách sản phẩm chuyển kho <span class="text-danger">*</span></h2>
+                </div>
+                <button type="button" class="workspace-button sales-button-small" id="btnAddLine">
+                    <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> Thêm sản phẩm
                 </button>
             </div>
 
-            <div class="table-responsive">
-                <table class="table table-bordered align-middle" id="linesTable" style="font-size: 14px;">
-                    <thead class="table-light">
+            <div class="table-wrap">
+                <table class="workspace-table transfer-lines-table" id="linesTable">
+                    <thead>
                         <tr>
-                            <th style="width: 50px;" class="text-center">#</th>
+                            <th style="width: 50px;">STT</th>
                             <th style="min-width: 280px;">Sản phẩm <span class="text-danger">*</span></th>
-                            <th style="width: 100px;">ĐVT</th>
-                            <th style="width: 180px;">Tồn khả dụng</th>
-                            <th style="width: 160px;" class="text-center">Số lượng yêu cầu <span class="text-danger">*</span></th>
-                            <th style="width: 70px;" class="text-center">Thao tác</th>
+                            <th style="width: 90px;">ĐVT</th>
+                            <th style="width: 170px;">Tồn khả dụng</th>
+                            <th style="width: 160px; text-align: right;">Số lượng yêu cầu <span class="text-danger">*</span></th>
+                            <th style="width: 70px; text-align: center;">Xóa</th>
                         </tr>
                     </thead>
                     <tbody id="linesTableBody">
@@ -130,7 +144,7 @@
                             var selectedProduct = Model.Products.FirstOrDefault(p => p.ProductId == line.ProductId);
                             var unreserved = selectedProduct?.UnreservedQuantity ?? line.AvailableQuantity;
                             <tr class="line-row">
-                                <td class="row-num text-center text-muted fw-semibold">@(i + 1)</td>
+                                <td class="row-num text-muted fw-semibold">@(i + 1)</td>
                                 <td>
                                     <select class="form-select line-product-select" name="Lines[@i].ProductId" required>
                                         <option value="">-- Chọn sản phẩm --</option>
@@ -172,13 +186,14 @@
                                            name="Lines[@i].Quantity"
                                            value="@(line.Quantity > 0 ? line.Quantity : 1)"
                                            min="1"
-                                           data-available="@line.AvailableQuantity"
+                                           max="1000000"
+                                           data-available="@unreserved"
                                            required />
                                     <div class="qty-error-msg text-danger mt-1" style="font-size: 11.5px; display: none;"></div>
                                 </td>
-                                <td class="text-center">
-                                    <button type="button" class="btn btn-outline-danger btn-sm btn-remove-line" title="Xóa">
-                                        <i class="bi bi-trash"></i>
+                                <td style="text-align: center;">
+                                    <button type="button" class="btn-remove-line sales-danger-icon" title="Xóa dòng">
+                                        <i class="bi bi-trash" aria-hidden="true"></i>
                                     </button>
                                 </td>
                             </tr>
@@ -193,20 +208,22 @@
                     </tfoot>
                 </table>
             </div>
-        </section>
 
-        @* THANH NÚT HÀNH ĐỘNG *@
-        <section class="workspace-card">
-            <div class="d-flex justify-content-end align-items-center gap-2">
-                <a class="workspace-button sales-button-secondary" asp-controller="ManagerTransfer" asp-action="Index">Thoát</a>
-                <button type="button" class="workspace-button sales-button-secondary" id="btnSaveDraft">
-                    <i class="bi bi-file-earmark me-1" aria-hidden="true"></i> Lưu bản nháp
-                </button>
-                <button type="button" class="workspace-button" id="btnRelease" style="background: #0e733b; border-color: #0e733b;">
-                    <i class="bi bi-check-circle me-1" aria-hidden="true"></i> Lưu & Phát hành
-                </button>
+            <div id="noLinesWarning" class="sales-muted-small text-danger mt-2" style="display:none;">
+                <i class="bi bi-exclamation-circle me-1"></i> Lệnh chuyển kho phải có ít nhất 1 dòng sản phẩm yêu cầu.
             </div>
         </section>
+
+        <!-- THANH NÚT THAO TÁC -->
+        <div class="transfer-form-actions d-flex justify-content-end align-items-center gap-2 mt-4">
+            <a class="workspace-button sales-button-secondary" asp-controller="ManagerTransfer" asp-action="Index">Thoát</a>
+            <button type="button" class="workspace-button sales-button-secondary" id="btnSaveDraft">
+                <i class="bi bi-file-earmark me-1" aria-hidden="true"></i> Lưu bản nháp
+            </button>
+            <button type="button" class="workspace-button" id="btnRelease" style="background: #0e733b; border-color: #0e733b;">
+                <i class="bi bi-check-circle me-1" aria-hidden="true"></i> Lưu & Phát hành
+            </button>
+        </div>
     </form>
 </div>
 
@@ -222,6 +239,7 @@
         const dispatchDateInput = document.getElementById('dispatchDateInput');
         const expectedDateInput = document.getElementById('expectedDateInput');
         const totalQtyDisplay = document.getElementById('totalQtyDisplay');
+        const noLinesWarning = document.getElementById('noLinesWarning');
 
         // Danh sách sản phẩm hiện tại cùng số lượng khả dụng
         let currentProducts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Products.Select(p => new {
@@ -378,7 +396,13 @@
             let firstErrorMsg = '';
             let firstInvalidInput = null;
 
-            tableBody.querySelectorAll('.line-row').forEach(row => {
+            const rows = tableBody.querySelectorAll('.line-row');
+            if (rows.length === 0) {
+                alert('Lệnh chuyển kho phải có ít nhất một dòng sản phẩm yêu cầu.');
+                return false;
+            }
+
+            rows.forEach(row => {
                 const select = row.querySelector('.line-product-select') || row.querySelector('select');
                 const opt = select?.options[select.selectedIndex];
                 const prodName = opt?.textContent?.trim() || 'sản phẩm';
@@ -429,41 +453,65 @@
                 }
             });
             if (totalQtyDisplay) totalQtyDisplay.textContent = total;
+
+            if (rows.length === 0) {
+                if (noLinesWarning) noLinesWarning.style.display = 'block';
+            } else {
+                if (noLinesWarning) noLinesWarning.style.display = 'none';
+            }
         }
 
         btnAddLine.addEventListener('click', function () {
+            if (!fromWhSelect.value) {
+                alert('Vui lòng chọn Kho nguồn trước khi thêm sản phẩm.');
+                fromWhSelect.focus();
+                return;
+            }
+
             const rows = tableBody.querySelectorAll('.line-row');
             const newIndex = rows.length;
-            const firstRow = rows[0];
-            const clone = firstRow.cloneNode(true);
 
-            const select = clone.querySelector('.line-product-select');
-            select.name = `Lines[${newIndex}].ProductId`;
-            select.selectedIndex = 0;
+            const newRow = document.createElement('tr');
+            newRow.className = 'line-row';
 
-            const unitLabel = clone.querySelector('.unit-label');
-            if (unitLabel) unitLabel.textContent = '—';
+            let optionsHtml = '<option value="">-- Chọn sản phẩm --</option>';
+            currentProducts.forEach(p => {
+                optionsHtml += `<option value="${p.productId}" data-unit="${p.unit}" data-code="${p.productCode}" data-unreserved="${p.unreservedQuantity}">[${p.productCode}] ${p.productName}</option>`;
+            });
 
-            const stockBadge = clone.querySelector('.stock-badge');
-            if (stockBadge) {
-                stockBadge.className = 'stock-badge badge-stock';
-                stockBadge.innerHTML = 'Khả dụng: <strong>—</strong>';
-            }
+            newRow.innerHTML = `
+                <td class="row-num text-muted fw-semibold">${newIndex + 1}</td>
+                <td>
+                    <select class="form-select line-product-select" name="Lines[${newIndex}].ProductId" required>
+                        ${optionsHtml}
+                    </select>
+                </td>
+                <td>
+                    <span class="unit-label text-muted">—</span>
+                </td>
+                <td>
+                    <span class="stock-badge badge-stock">Khả dụng: <strong>—</strong></span>
+                </td>
+                <td>
+                    <input type="number"
+                           class="form-control text-end qty-input"
+                           name="Lines[${newIndex}].Quantity"
+                           value="1"
+                           min="1"
+                           max="1000000"
+                           data-available="0"
+                           required />
+                    <div class="qty-error-msg text-danger mt-1" style="font-size: 11.5px; display: none;"></div>
+                </td>
+                <td style="text-align: center;">
+                    <button type="button" class="btn-remove-line sales-danger-icon" title="Xóa dòng">
+                        <i class="bi bi-trash" aria-hidden="true"></i>
+                    </button>
+                </td>
+            `;
 
-            const qtyInput = clone.querySelector('.qty-input');
-            qtyInput.name = `Lines[${newIndex}].Quantity`;
-            qtyInput.value = '1';
-            qtyInput.dataset.available = '0';
-            qtyInput.classList.remove('is-invalid');
-
-            const errSpan = clone.querySelector('.qty-error-msg');
-            if (errSpan) {
-                errSpan.textContent = '';
-                errSpan.style.display = 'none';
-            }
-
-            tableBody.appendChild(clone);
-            bindLineEvents(clone);
+            tableBody.appendChild(newRow);
+            bindLineEvents(newRow);
             recalcTotal();
         });
 
@@ -485,6 +533,19 @@
             if (select) {
                 select.onchange = function () {
                     updateLineDetails(this);
+
+                    const selectedVal = this.value;
+                    if (selectedVal) {
+                        let count = 0;
+                        tableBody.querySelectorAll('.line-product-select').forEach(s => {
+                            if (s.value === selectedVal) count++;
+                        });
+                        if (count > 1) {
+                            alert('Sản phẩm này đã có trong danh sách chuyển kho. Vui lòng cộng dồn số lượng thay vì chọn trùng.');
+                            this.value = '';
+                            updateLineDetails(this);
+                        }
+                    }
                 };
             }
 

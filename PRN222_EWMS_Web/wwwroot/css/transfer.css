@@ -88,3 +88,57 @@
     background: #fee2e2;
     color: #b91c1c;
 }
+
+/* Transfer Form Grid & Table (Notion Design Guidelines) */
+.transfer-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+}
+@media (max-width: 900px) {
+    .transfer-form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.transfer-lines-table th {
+    background: #f6f5f4;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--workspace-muted);
+}
+.transfer-lines-table td {
+    vertical-align: middle;
+}
+.transfer-lines-table .form-select,
+.transfer-lines-table .form-control {
+    font-size: 14px;
+}
+
+.transfer-form-actions {
+    display: flex !important;
+    gap: 12px;
+    align-items: center;
+    justify-content: flex-end !important;
+    flex-wrap: wrap;
+    margin-top: 24px;
+}
+
+.sales-danger-icon {
+    background: transparent;
+    border: 1px solid #fed7aa;
+    color: #e11d48;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.sales-danger-icon:hover {
+    background: #fff1f2;
+    border-color: #fca5a5;
+    color: #be123c;
+}
