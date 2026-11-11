@@ -48,14 +48,6 @@
         color: #0075de !important;
         cursor: pointer;
     }
-    .return-action-active.text-secondary {
-        color: #64748b !important;
-    }
-    .return-action-active.text-secondary:hover {
-        background-color: #f1f5f9;
-        border-color: #cbd5e1;
-        color: #1e293b !important;
-    }
     .return-action-active:hover {
         background-color: #eff6ff;
         border-color: #bfdbfe;
@@ -210,12 +202,11 @@
                 <thead>
                     <tr>
                         <th scope="col" style="white-space: nowrap; width: 140px;">Mã đơn trả</th>
-                        <th scope="col" style="white-space: nowrap; width: 130px;">Đơn bán hàng</th>
                         <th scope="col">Khách hàng</th>
                         <th scope="col">Kho tiếp nhận</th>
                         <th scope="col" style="white-space: nowrap; width: 140px;">Ngày tạo</th>
                         <th scope="col">Người tạo</th>
-                        <th scope="col" style="white-space: nowrap;">Mặt hàng / Số lượng</th>
+                        <th scope="col" style="white-space: nowrap;">Đã nhận</th>
                         <th scope="col" class="text-center" style="white-space: nowrap; width: 130px;">Trạng thái</th>
                         <th scope="col" class="text-end" style="white-space: nowrap; min-width: 220px;">Thao tác</th>
                     </tr>
@@ -228,17 +219,12 @@
                             <td style="white-space: nowrap; font-weight: 600;">
                                 @order.ReturnCode
                             </td>
-                            <td style="white-space: nowrap;">
-                                <a asp-controller="SalesOrder" asp-action="Details" asp-route-id="@order.SalesOrderId">
-                                    @order.SalesOrderCode
-                                </a>
-                            </td>
                             <td>@order.CustomerName</td>
                             <td>@order.WarehouseName</td>
                             <td style="white-space: nowrap;">@FormatVietnamTime(order.CreatedAt)</td>
                             <td>@order.CreatedByName</td>
-                            <td style="white-space: nowrap;">
-                                <span class="fw-semibold">@order.LinesCount</span> mặt hàng | Yêu cầu: <span class="fw-semibold">@order.TotalRequestedQuantity</span> | Đã nhận: <span class="fw-semibold text-success">@order.CompletedReceivedQuantity</span>
+                            <td style="white-space: nowrap;" title="Đã nhận / Còn lại">
+                                <span class="fw-semibold text-success">@order.CompletedReceivedQuantity</span>/@order.RemainingQuantity
                             </td>
                             <td class="text-center" style="white-space: nowrap;">
                                 <span class="@statusInfo.Class">@statusInfo.Text</span>

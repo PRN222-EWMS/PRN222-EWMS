@@ -576,20 +576,14 @@ public class CustomerReturnOrderRepository(EwmsDbContext db) : ICustomerReturnOr
             .Select(r => new ReturnOrderListRowDto(
                 r.ReturnOrderId,
                 r.ReturnCode,
-                r.SalesOrderId,
-                r.SalesOrder.Socode,
                 r.SalesOrder.Customer != null ? r.SalesOrder.Customer.CustomerName : "Khách lẻ",
-                r.WarehouseId,
                 r.Warehouse.WarehouseName,
                 r.CreatedAt,
-                r.CreatedByUserId,
                 r.CreatedByUser.FullName,
                 r.Status,
-                r.CustomerReturnOrderLineReturnOrders.Count,
                 r.CustomerReturnOrderLineReturnOrders.Sum(l => l.RequestedQuantity),
                 db.ReturnReceiptItems.Count(rri => rri.IsActive && rri.ReturnReceipt.ReturnOrderId == r.ReturnOrderId && rri.ReturnReceipt.Status == "DONE"),
-                db.ReturnReceipts.Any(rr => rr.ReturnOrderId == r.ReturnOrderId),
-                r.Reason
+                db.ReturnReceipts.Any(rr => rr.ReturnOrderId == r.ReturnOrderId)
             ))
             .ToListAsync(cancellationToken);
 
