@@ -1,0 +1,282 @@
+@model PRN222_EWMS_Web.ViewModels.Outbound.OutboundDetailsViewModel
+@{
+    ViewData["Title"] = "Chi tiết phiếu xuất kho " + Model.IssueCode;
+    var isDone = Model.Status == "DONE";
+}
+
+<div class="outbound-page">
+    <div class="workspace-heading">
+        <div>
+            <p class="eyebrow">XUẤT KHO / CHI TIẾT</p>
+            <h1>@Model.IssueCode</h1>
+            <p class="muted">
+                Kho xuất: <strong class="text-dark">@Model.WarehouseName</strong> @(string.IsNullOrWhiteSpace(Model.WarehouseAddress) ? "" : $"— {Model.WarehouseAddress}")
+            </p>
+        </div>
+        <div class="outbound-toolbar">
+            <a class="workspace-button sales-button-secondary" asp-action="Index">
+                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Thoát
+            </a>
+            @if (User.IsInRole("WAREHOUSE_STAFF") && Model.Status == "PICKING")
+            {
+                <a asp-action="Picking" asp-route-id="@Model.OutboundId" class="workspace-button">
+                    <i class="bi bi-box-arrow-in-right me-1"></i> Mở bàn nhặt hàng
+                </a>
+            }
+        </div>
+    </div>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="outbound-notice outbound-notice-danger" role="alert">
+            <i class="bi bi-exclamation-triangle-fill flex-shrink-0" aria-hidden="true"></i>
+            <span>@TempData["Error"]</span>
+        </div>
+    }
+    @if (TempData["Success"] != null)
+    {
+        <div class="outbound-notice outbound-notice-success" role="alert">
+            <i class="bi bi-check-circle-fill flex-shrink-0" aria-hidden="true"></i>
+            <span>@TempData["Success"]</span>
+        </div>
+    }
+
+    @* 1. THÔNG TIN PHIẾU VÀ ĐƠN BÁN HÀNG NGUỒN *@
+    <section class="workspace-card p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-3">
+            <h2 class="h5 fw-bold mb-0 text-dark">Thông tin phiếu xuất</h2>
+            @{
+                var badgeClass = Model.Status switch
+                {
+                    "DONE" => "outbound-badge-done",
+                    "READY" => "outbound-badge-ready",
+                    "PICKING" => "outbound-badge-picking",
+                    "CANCELLED" => "outbound-badge-cancelled",
+                    _ => "outbound-badge-draft"
+                };
+                var statusText = Model.Status switch
+                {
+                    "DRAFT" => "Bản nháp",
+                    "PICKING" => "Đang lấy hàng",
+                    "READY" => "Sẵn sàng xuất",
+                    "DONE" => "Đã xuất kho",
+                    "CANCELLED" => "Đã hủy",
+                    _ => Model.Status
+                };
+            }
+            <span class="outbound-badge @badgeClass">
+                @statusText
+            </span>
+        </div>
+
+        <dl class="outbound-info-grid">
+            <div>
+                <dt>Đơn bán hàng</dt>
+                <dd>
+                    <strong class="text-dark fs-6">@Model.Socode</strong>
+                    <div class="muted small mt-1">Trạng thái SO: @Model.SoStatus</div>
+                </dd>
+            </div>
+
+            <div>
+                <dt>Khách hàng</dt>
+                <dd>
+                    <strong class="text-dark fs-6">@Model.CustomerName</strong>
+                    <div class="muted small mt-1">SĐT: @(Model.CustomerPhone ?? "—")</div>
+                </dd>
+            </div>
+
+            <div>
+                <dt>Địa chỉ giao hàng</dt>
+                <dd>
+                    <span class="text-dark">@(string.IsNullOrWhiteSpace(Model.CustomerAddress) ? "—" : Model.CustomerAddress)</span>
+                </dd>
+            </div>
+
+            <div>
+                <dt>Người tạo phiếu</dt>
+                <dd>
+                    <strong class="text-dark">@Model.CreatedByName</strong>
+                    <div class="muted small mt-1">@Model.CreatedAt.ToLocalTime().ToString("HH:mm dd/MM/yyyy")</div>
+                </dd>
+            </div>
+
+            <div>
+                <dt>Nhân viên phụ trách</dt>
+                <dd>
+                    <strong class="text-dark">@(Model.AssignedToName ?? "Chưa chỉ định")</strong>
+                    @if (Model.StartedAt.HasValue)
+                    {
+                        <div class="muted small mt-1">Bắt đầu: @Model.StartedAt.Value.ToLocalTime().ToString("HH:mm dd/MM/yyyy")</div>
+                    }
+                </dd>
+            </div>
+
+            <div>
+                <dt>Thời điểm xuất kho</dt>
+                <dd>
+                    <strong class="text-dark">@(Model.CompletedAt.HasValue ? Model.CompletedAt.Value.ToLocalTime().ToString("HH:mm dd/MM/yyyy") : "Chưa hoàn tất")</strong>
+                    @if (Model.IsActivePicking)
+                    {
+                        <div class="mt-1">
+                            <span class="outbound-badge outbound-badge-picking">Phiên lấy hàng đang mở</span>
+                        </div>
+                    }
+                </dd>
+            </div>
+        </dl>
+    </section>
+
+    @* 2. TIẾN ĐỘ CỦA ĐƠN BÁN HÀNG THEO TỪNG MẶT HÀNG *@
+    <section>
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <h2 class="h5 fw-bold mb-0 text-dark">Tiến độ xuất hàng của đơn</h2>
+            <small class="muted" style="font-size: 13px;">
+                Tổng đặt: @Model.TotalRequested · Đã xuất: @Model.TotalDone · Còn lại: @Model.TotalRemaining
+            </small>
+        </div>
+
+        <div class="row g-3">
+            @foreach (var line in Model.Lines)
+            {
+                var percent = line.LineProgressPercent;
+                var isComplete = line.RemainingQuantity == 0;
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="workspace-card p-3 h-100">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <h3 class="h6 fw-bold mb-1 text-dark">@line.ProductCode</h3>
+                                <p class="mb-0 muted" style="font-size: 13px;">@line.ProductName · @(line.Model ?? "Tiêu chuẩn")</p>
+                            </div>
+                            @if (isComplete)
+                            {
+                                <span class="outbound-badge outbound-badge-done">
+                                    <i class="bi bi-check2"></i> Đủ hàng
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="outbound-badge outbound-badge-picking">
+                                    Còn thiếu: @line.RemainingQuantity
+                                </span>
+                            }
+                        </div>
+
+                        <div class="d-flex justify-content-between muted border-top pt-2 mt-2" style="font-size: 13px;">
+                            <span>Đã xuất: <strong class="text-success">@line.DoneQuantity</strong> / @line.RequestedQuantity @line.Unit</span>
+                            <span>Còn lại: <strong class="@(line.RemainingQuantity > 0 ? "text-danger" : "muted")">@line.RemainingQuantity</strong> @line.Unit</span>
+                        </div>
+
+                        <div class="outbound-progress-wrap">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <small class="muted" style="font-size: 12px;">Tiến độ</small>
+                                <small class="fw-bold text-dark" style="font-size: 12px;">@percent%</small>
+                            </div>
+                            <div class="outbound-progress-bar">
+                                <div class="outbound-progress-fill @(isComplete ? "complete" : "")" style="width: @percent%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </section>
+
+    @* 3. DANH SÁCH SERIAL GẮN VỚI PHIẾU XUẤT NÀY *@
+    <section>
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <div>
+                <h2 class="h5 fw-bold mb-1 text-dark">Thiết bị trong phiếu xuất này</h2>
+                <p class="muted mb-0" style="font-size: 13px;">
+                    Tổng cộng: <strong>@Model.Serials.Count</strong> thiết bị gắn liền với phiếu xuất này.
+                </p>
+            </div>
+            @if (isDone)
+            {
+                <span class="outbound-badge outbound-badge-done">
+                    <i class="bi bi-shield-check"></i> Toàn bộ serial đã chính thức xuất kho
+                </span>
+            }
+            else
+            {
+                <span class="outbound-badge outbound-badge-picking">
+                    <i class="bi bi-clock-history"></i> Phiếu chưa hoàn tất: Serial đang ở trạng thái giữ chỗ
+                </span>
+            }
+        </div>
+
+        <div class="workspace-card p-0 overflow-hidden">
+            @if (Model.Serials.Count == 0)
+            {
+                <div class="p-5 text-center muted">
+                    <i class="bi bi-upc-scan fs-1 d-block mb-2 text-secondary" aria-hidden="true"></i>
+                    <h3 class="h6 fw-bold text-dark">Chưa có serial nào trong phiếu</h3>
+                    <p class="mb-0" style="font-size: 13.5px;">Phiếu này chưa được quét hoặc nhặt bất kỳ serial nào.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="workspace-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;">STT</th>
+                                <th>Mã Serial</th>
+                                <th>Sản phẩm</th>
+                                <th>Tình trạng</th>
+                                <th>Trạng thái phiếu</th>
+                                <th>Người quét</th>
+                                <th>Thời điểm quét</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @{ var serialIndex = 1; }
+                            @foreach (var s in Model.Serials)
+                            {
+                                <tr>
+                                    <td class="muted">@serialIndex</td>
+                                    <td>
+                                        <strong class="font-monospace text-dark">@s.SerialNumber</strong>
+                                    </td>
+                                    <td>
+                                        <div class="fw-semibold text-dark">@s.ProductCode</div>
+                                        <small class="muted">@s.ProductName</small>
+                                    </td>
+                                    <td>
+                                        <span class="outbound-condition-badge">
+                                            <i class="bi bi-check2"></i> @s.ItemCondition
+                                        </span>
+                                    </td>
+                                    <td>
+                                        @if (s.IsDone)
+                                        {
+                                            <span class="outbound-badge outbound-badge-done">
+                                                <i class="bi bi-check-circle-fill"></i> @s.StatusBadgeText
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="outbound-badge outbound-badge-picking">
+                                                <i class="bi bi-clock"></i> @s.StatusBadgeText
+                                            </span>
+                                        }
+                                    </td>
+                                    <td class="text-dark">
+                                        @(s.ClaimedByName ?? "—")
+                                    </td>
+                                    <td>
+                                        <small class="muted">
+                                            @s.ScannedAt.ToLocalTime().ToString("HH:mm:ss dd/MM/yyyy")
+                                        </small>
+                                    </td>
+                                </tr>
+                                serialIndex++;
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </section>
+</div>

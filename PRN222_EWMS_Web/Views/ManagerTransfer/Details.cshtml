@@ -1,0 +1,170 @@
+@model PRN222_EWMS_Web.ViewModels.Manager.ManagerTransferDetail
+
+@{
+    ViewData["Title"] = $"Lệnh chuyển {Model.TransferCode}";
+}
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+    <h1 class="mb-0 text-break">Lệnh chuyển @Model.TransferCode</h1>
+    <a asp-action="Index" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Danh sách chuyển kho
+    </a>
+</div>
+
+<section class="workspace-card mb-4" aria-label="Thông tin điều chuyển">
+    <div class="row g-4">
+        <div class="col-md-5">
+            <p class="small text-muted mb-2">Kho nguồn</p>
+            <p class="fw-semibold text-break mb-0">@Model.FromWarehouse</p>
+        </div>
+        <div class="col-md-2 d-flex align-items-center justify-content-md-center text-primary">
+            <i class="bi bi-arrow-right fs-4 d-none d-md-block" aria-hidden="true"></i>
+            <i class="bi bi-arrow-down fs-4 d-md-none" aria-hidden="true"></i>
+        </div>
+        <div class="col-md-5">
+            <p class="small text-muted mb-2">Kho đích</p>
+            <p class="fw-semibold text-break mb-0">@Model.ToWarehouse</p>
+        </div>
+    </div>
+    <dl class="transfer-order-facts border-top pt-3 mt-4 mb-0">
+        <div>
+            <dt class="small text-muted fw-normal mb-2">Trạng thái lệnh</dt>
+            <dd class="mb-0"><span class="badge bg-light text-dark border rounded-pill px-3 py-2">@Model.Status</span></dd>
+        </div>
+        <div>
+            <dt class="small text-muted fw-normal mb-2">Tình trạng hàng yêu cầu</dt>
+            <dd class="mb-0">@(Model.ItemCondition switch { "GOOD" => "Tốt", "DAMAGED" => "Hư hỏng", _ => Model.ItemCondition })</dd>
+        </div>
+        <div>
+            <dt class="small text-muted fw-normal mb-2">Người phụ trách lệnh</dt>
+            <dd class="mb-0 text-break">@(Model.AssignedTo ?? "Chưa phân công")</dd>
+        </div>
+        <div>
+            <dt class="small text-muted fw-normal mb-2">Ngày chuyển đi</dt>
+            <dd class="mb-0">@(Model.DispatchDate?.ToString("dd/MM/yyyy") ?? "Chưa có")</dd>
+        </div>
+        <div>
+            <dt class="small text-muted fw-normal mb-2">Ngày dự kiến</dt>
+            <dd class="mb-0">@(Model.ExpectedDate?.ToString("dd/MM/yyyy") ?? "Chưa có")</dd>
+        </div>
+    </dl>
+    @if (!string.IsNullOrWhiteSpace(Model.Note))
+    {
+        <div class="border-top pt-3 mt-4">
+            <p class="small text-muted mb-2">Ghi chú</p>
+            <p class="text-break mb-0" style="white-space: pre-wrap;">@Model.Note</p>
+        </div>
+    }
+</section>
+
+<section class="workspace-card mb-4" aria-labelledby="transfer-progress-heading">
+<h2 id="transfer-progress-heading" class="h5 mb-4">Tiến độ theo sản phẩm</h2>
+@if (Model.Lines.Count == 0)
+{
+    <p class="text-muted mb-0">Lệnh chưa có dòng sản phẩm.</p>
+}
+else
+{
+    <div class="table-wrap" tabindex="0" role="region" aria-label="Tiến độ sản phẩm, có thể cuộn ngang">
+        <table class="workspace-table">
+            <thead>
+                <tr>
+                    <th>Mã sản phẩm</th>
+                    <th>Tên sản phẩm</th>
+                    <th class="text-end">Yêu cầu</th>
+                    <th class="text-end">Đã hủy</th>
+                    <th class="text-end">Đã xuất</th>
+                    <th class="text-end">Đã nhận</th>
+                    <th class="text-end">Đang vận chuyển</th>
+                    <th class="text-end">Còn phải xuất</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var line in Model.Lines)
+                {
+                    <tr>
+                        <td>@line.ProductCode</td>
+                        <td>@line.ProductName</td>
+                        <td class="text-end">@line.Requested</td>
+                        <td class="text-end">@line.Cancelled</td>
+                        <td class="text-end">@line.Dispatched</td>
+                        <td class="text-end">@line.Received</td>
+                        <td class="text-end">@line.InTransit</td>
+                        <td class="text-end">@line.Outstanding</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+</section>
+
+<section class="workspace-card mb-4" aria-labelledby="transfer-dispatches-heading">
+<h2 id="transfer-dispatches-heading" class="h5 mb-4">Phiếu xuất chuyển kho</h2>
+@if (Model.Dispatches.Count == 0)
+{
+    <p class="text-muted mb-0">Chưa có phiếu xuất.</p>
+}
+else
+{
+    <div class="table-wrap" tabindex="0" role="region" aria-label="Phiếu xuất chuyển kho, có thể cuộn ngang">
+        <table class="workspace-table">
+            <thead>
+                <tr>
+                    <th>Mã phiếu</th>
+                    <th>Ngày xuất</th>
+                    <th>Trạng thái</th>
+                    <th>Người phụ trách xuất</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var document in Model.Dispatches)
+                {
+                    <tr>
+                        <td>@document.Code</td>
+                        <td>@document.Date.ToString("dd/MM/yyyy")</td>
+                        <td>@document.Status</td>
+                        <td>@(document.StaffName ?? "Chưa phân công")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+</section>
+
+<section class="workspace-card mb-4" aria-labelledby="transfer-receipts-heading">
+<h2 id="transfer-receipts-heading" class="h5 mb-4">Phiếu nhận chuyển kho</h2>
+@if (Model.Receipts.Count == 0)
+{
+    <p class="text-muted mb-0">Chưa có phiếu nhận.</p>
+}
+else
+{
+    <div class="table-wrap" tabindex="0" role="region" aria-label="Phiếu nhận chuyển kho, có thể cuộn ngang">
+        <table class="workspace-table">
+            <thead>
+                <tr>
+                    <th>Mã phiếu</th>
+                    <th>Ngày nhận</th>
+                    <th>Trạng thái</th>
+                    <th>Người thực hiện nhận</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var document in Model.Receipts)
+                {
+                    <tr>
+                        <td>@document.Code</td>
+                        <td>@document.Date.ToString("dd/MM/yyyy")</td>
+                        <td>@document.Status</td>
+                        <td>@(document.StaffName ?? "Chưa ghi nhận")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+</section>

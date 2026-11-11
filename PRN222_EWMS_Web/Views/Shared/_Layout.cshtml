@@ -9,7 +9,8 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/ewms-sidebar.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/workspace.css" asp-append-version="true" />
-    @if (ViewContext.RouteData.Values["controller"]?.ToString() is "Inbound" or "Putaway" or "Stocktake")
+        @if (ViewContext.RouteData.Values["controller"]?.ToString()
+        is "Inbound" or "Putaway" or "Outbound" or "WarehouseTransfer" or "Stocktake")
     {
         <link rel="stylesheet" href="~/css/serial-capture.css" asp-append-version="true" />
     }
@@ -20,6 +21,14 @@
     @if (string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "Inbound", StringComparison.OrdinalIgnoreCase))
     {
         <link rel="stylesheet" href="~/css/inbound.css" asp-append-version="true" />
+    }
+    @if (string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "Outbound", StringComparison.OrdinalIgnoreCase))
+    {
+        <link rel="stylesheet" href="~/css/outbound.css" asp-append-version="true" />
+    }
+    @if (string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "Transfer", StringComparison.OrdinalIgnoreCase))
+    {
+        <link rel="stylesheet" href="~/css/transfer.css" asp-append-version="true" />
     }
     @if (string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "ReturnReceive", StringComparison.OrdinalIgnoreCase))
     {
@@ -43,7 +52,8 @@
     }
     @if (User.IsInRole("SALES_STAFF") ||
         ((User.IsInRole("MANAGER") || User.IsInRole("WAREHOUSE_STAFF")) &&
-         string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "SalesOrder", StringComparison.OrdinalIgnoreCase)))
+         (string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "SalesOrder", StringComparison.OrdinalIgnoreCase) ||
+          string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "CustomerReturnOrder", StringComparison.OrdinalIgnoreCase))))
     {
         <link rel="stylesheet" href="~/css/sales.css" asp-append-version="true" />
     }
@@ -54,6 +64,10 @@
     @if (User.IsInRole("WAREHOUSE_STAFF") || User.IsInRole("MANAGER"))
     {
         <link rel="stylesheet" href="~/css/warehouse.css" asp-append-version="true" />
+    }
+    @if (ViewContext.RouteData.Values["controller"]?.ToString() is "Product" or "ManagerTransfer" or "WarehouseTransfer" or "Transfer")
+    {
+        <link rel="stylesheet" href="~/css/product-transfer.css" asp-append-version="true" />
     }
 </head>
 <body class="ewms-shell">

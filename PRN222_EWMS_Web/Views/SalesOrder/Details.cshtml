@@ -120,7 +120,7 @@ else if (User.IsInRole("SALES_STAFF") && !Model.CanEdit)
             && Model.Lines.Any(line => line.RemainingQuantity > 0))
         {
             <a class="workspace-button" href="@Url.Content($"~/Outbound/Create?salesOrderId={Model.Id}")">
-                <i class="bi bi-plus-circle me-1" aria-hidden="true"></i> Tạo phiếu xuất
+                <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> Tạo phiếu xuất
             </a>
         }
     </div>

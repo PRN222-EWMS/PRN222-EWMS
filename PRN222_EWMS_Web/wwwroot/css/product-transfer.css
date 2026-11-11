@@ -1,0 +1,74 @@
+.transfer-order-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+    gap: 1.5rem 2rem;
+}
+
+/* Shared controls for the product catalogue and transfer orders. */
+.ewms-content .btn,
+.ewms-content .workspace-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 32px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+
+.ewms-content .serial-capture-button {
+    border-radius: 8px;
+}
+
+.ewms-content .btn-primary {
+    color: white;
+    background: var(--workspace-blue);
+    border-color: var(--workspace-blue);
+}
+
+.ewms-content .btn-primary:hover,
+.ewms-content .btn-primary:active {
+    background: #005bab;
+    border-color: #005bab;
+}
+
+.ewms-content .btn-outline-secondary,
+.ewms-content .btn-secondary {
+    color: #31302e;
+    background: white;
+    border-color: var(--workspace-line);
+}
+
+.ewms-content .btn-outline-secondary:hover,
+.ewms-content .btn-secondary:hover {
+    background: #f6f5f4;
+    border-color: #a39e98;
+}
+
+.ewms-content .form-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.ewms-content .form-control,
+.ewms-content .form-select {
+    border-radius: 4px;
+    border-color: #d4d3d1;
+}
+
+.ewms-content .form-control:focus,
+.ewms-content .form-select:focus,
+.ewms-content .btn:focus-visible {
+    outline: 2px solid var(--workspace-blue);
+    outline-offset: 2px;
+    box-shadow: none;
+}
+
+.ewms-content .input-validation-error,
+.ewms-content .is-invalid {
+    border-color: #b42318;
+}

@@ -1,0 +1,144 @@
+/* ==========================================================================
+   EWMS - TRANSFER ORDER STYLES (SYNCHRONIZED WITH PURCHASING & WORKSPACE)
+   ========================================================================== */
+
+.transfer-page {
+    display: grid;
+    gap: 24px;
+}
+
+.transfer-page .workspace-heading {
+    margin-bottom: 0;
+}
+
+.transfer-page .workspace-card {
+    max-width: none;
+    background: #ffffff;
+    border: 1px solid var(--workspace-line, #e6e6e6);
+    border-radius: 12px;
+    padding: 24px;
+}
+
+.transfer-toolbar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.transfer-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.transfer-badge-draft {
+    color: #494541;
+    background: #f6f5f4;
+    border: 1px solid #d4d3d1;
+}
+
+.transfer-badge-released {
+    color: #0b7285;
+    background: #e3fafc;
+    border: 1px solid #99e9f2;
+}
+
+.transfer-badge-in_progress {
+    color: #b76e00;
+    background: #fff8e1;
+    border: 1px solid #ffe082;
+}
+
+.transfer-badge-completed {
+    color: #25633a;
+    background: #eaf6ee;
+    border: 1px solid #b2f2bb;
+}
+
+.transfer-badge-cancelled,
+.transfer-badge-closed {
+    color: #c92a2a;
+    background: #fff5f5;
+    border: 1px solid #ffc9c9;
+}
+
+/* Stock Badges (Synchronized with SO) */
+.stock-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.badge-stock {
+    background: #f1f5f9;
+    color: #475569;
+}
+.badge-stock-ok {
+    background: #dcfce7;
+    color: #15803d;
+}
+.badge-stock-zero {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+/* Transfer Form Grid & Table (Notion Design Guidelines) */
+.transfer-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+}
+@media (max-width: 900px) {
+    .transfer-form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.transfer-lines-table th {
+    background: #f6f5f4;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--workspace-muted);
+}
+.transfer-lines-table td {
+    vertical-align: middle;
+}
+.transfer-lines-table .form-select,
+.transfer-lines-table .form-control {
+    font-size: 14px;
+}
+
+.transfer-form-actions {
+    display: flex !important;
+    gap: 12px;
+    align-items: center;
+    justify-content: flex-end !important;
+    flex-wrap: wrap;
+    margin-top: 24px;
+}
+
+.sales-danger-icon {
+    background: transparent;
+    border: 1px solid #fed7aa;
+    color: #e11d48;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.sales-danger-icon:hover {
+    background: #fff1f2;
+    border-color: #fca5a5;
+    color: #be123c;
+}

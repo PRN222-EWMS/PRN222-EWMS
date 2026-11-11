@@ -39,7 +39,7 @@
             ("Theo dõi phiếu nhập", "bi-clipboard-data", "ManagerInbound", "Index", new[] { "MANAGER" }),
             ("Chờ xếp kho", "bi-boxes", "Putaway", "Index", new[] { "WAREHOUSE_STAFF" }),
             ("Xuất kho", "bi-box-arrow-up", "Outbound", "Index", new[] { "WAREHOUSE_STAFF", "MANAGER" }),
-            ("Chuyển kho", "bi-arrow-left-right", "Transfer", "Index", new[] { "MANAGER", "WAREHOUSE_STAFF" }),
+            ("Chuyển kho", "bi-arrow-left-right", "ManagerTransfer", "Index", new[] { "MANAGER" }),
             ("Kiểm kê", "bi-clipboard-check", "ManagerStocktake", "Index", new[] { "MANAGER" }),
             ("Duyệt điều chỉnh kiểm kê", "bi-check2-square", "CeoStocktakeAdjustment", "Index", new[] { "CEO" })
         })
@@ -53,8 +53,7 @@
                 ("Danh sách đơn bán hàng", "bi-receipt", "SalesOrder", "Index", Array.Empty<string>()),
                 ("Tạo đơn bán hàng", "bi-plus-circle", "SalesOrder", "Create", Array.Empty<string>()) }),
             ("Đơn trả hàng", new[] {
-                ("Danh sách đơn trả hàng", "bi-arrow-return-left", "CustomerReturnOrder", "Index", Array.Empty<string>()),
-                ("Tạo đơn trả hàng", "bi-plus-circle", "CustomerReturnOrder", "Create", Array.Empty<string>()) }),
+                ("Đơn trả hàng", "bi-card-checklist", "CustomerReturnOrder", "Index", Array.Empty<string>()) }),
             ("Khách hàng", new[] {
                 ("Danh sách khách hàng", "bi-people", "Customer", "Index", Array.Empty<string>()),
                 ("Tạo khách hàng", "bi-person-plus", "Customer", "Create", Array.Empty<string>()) })
@@ -67,9 +66,13 @@
             ("Tổng quan", new[] {
                 ("Dashboard", "bi-grid-1x2", "WarehouseDashboard", "Index", Array.Empty<string>())
             }),
+            ("Danh mục", new[] {
+                ("Sản phẩm", "bi-box-seam", "Product", "Index", Array.Empty<string>())
+            }),
             ("Nhập kho", new[] {
                 ("Phiếu nhập kho", "bi-box-arrow-in-down", "Inbound", "Index", Array.Empty<string>()),
                 ("Nhận hàng trả", "bi-arrow-return-left", "ReturnReceive", "Index", Array.Empty<string>()),
+                ("Đơn trả hàng", "bi-card-checklist", "CustomerReturnOrder", "Index", Array.Empty<string>()),
                 ("Đơn mua cần nhận", "bi-bag-check", "Inbound", "PurchaseOrders", Array.Empty<string>()),
                 ("Chờ xếp kho", "bi-boxes", "Putaway", "Index", Array.Empty<string>())
             }),
@@ -78,7 +81,7 @@
             }),
             ("Vận hành kho", new[] {
                 ("Xuất kho", "bi-box-arrow-up", "Outbound", "Index", Array.Empty<string>()),
-                ("Chuyển kho", "bi-arrow-left-right", "Transfer", "Index", Array.Empty<string>()),
+                ("Chuyển kho", "bi-arrow-left-right", "WarehouseTransfer", "Index", Array.Empty<string>()),
                 ("Kiểm kê", "bi-clipboard-check", "Stocktake", "Index", Array.Empty<string>())
             })
         };
@@ -98,8 +101,11 @@
             var allowedItems = section.Items
                 .Where(i => i.Roles.Length == 0 || i.Roles.Contains(role, StringComparer.OrdinalIgnoreCase))
                 // Keep CEO's scope and include the merged modules available to Manager.
-                .Where(i => !isCeo || (i.Action == "Index" && (i.Controller is "Home" or "Warehouse" or "CeoPurchaseProgress" or "CeoStocktakeAdjustment")))
-                .Where(i => !isManager || (i.Action == "Index" && (i.Controller is "Home" or "Warehouse" or "PurchaseOrder" or "SalesOrder" or "ManagerInbound" or "Outbound" or "Transfer" or "ManagerStocktake")))
+                .Where(i => !isCeo || (i.Action == "Index" &&
+    (i.Controller is "Home" or "Warehouse" or "CeoPurchaseProgress" or "CeoStocktakeAdjustment")))
+.Where(i => !isManager || (i.Action == "Index" &&
+    (i.Controller is "Home" or "Warehouse" or "Product" or "PurchaseOrder" or "SalesOrder"
+        or "ManagerInbound" or "Outbound" or "ManagerTransfer" or "ManagerStocktake")))
                 .ToArray();
             if (allowedItems.Length == 0) { continue; }
             <div class="ewms-nav-section">

@@ -2,7 +2,8 @@ namespace PRN222_EWMS_Web.ViewModels.Returns;
 public record ReturnOrderRow(long Id,string Code,string SalesCode,string Customer,string Status,int Requested,int Received,List<ReturnOutboundOption> Outbounds);
 public record ReturnOutboundOption(long Id,string Code);
 public record ReturnReceiptRow(long Id,string Code,string ReturnCode,string Status,int Scanned,DateTime CreatedAt);
-public record ReturnSerialRow(long Id,string Serial,string Product,string Condition,string? Note,bool Active);
+public record ReturnSerialRow(long Id,string Serial,string Product,string Condition,string? Note,bool Active,byte? ManufacturingMonth,short? ManufacturingYear,string SoldCondition,string? PreviousNote);
+public record ReturnSerialPreview(string Serial,string Product,byte? ManufacturingMonth,short? ManufacturingYear,string SoldCondition,string? PreviousNote);
 public class ReturnReceivePage
 {
  public List<ReturnOrderRow> Orders {get;set;}=[];

@@ -1,0 +1,280 @@
+@model PRN222_EWMS_Web.ViewModels.Outbound.OutboundListViewModel
+@{
+    ViewData["Title"] = "Danh sách phiếu xuất kho";
+    var isStaff = User.IsInRole("WAREHOUSE_STAFF");
+}
+
+<div class="outbound-page">
+    <div class="workspace-heading">
+        <div>
+            <p class="eyebrow">XUẤT KHO</p>
+            <h1>Danh sách phiếu xuất kho</h1>
+            <p class="muted">
+                @(isStaff 
+                    ? "Theo dõi và xử lý các phiếu xuất kho thuộc kho được phân công." 
+                    : "Giám sát tiến độ nhặt hàng và xuất kho trên toàn hệ thống.")
+            </p>
+        </div>
+        @if (Model.CanCreate)
+        {
+            <div class="outbound-toolbar">
+                <a class="workspace-button" asp-action="Create">
+                    <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> Tạo phiếu xuất kho
+                </a>
+            </div>
+        }
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="outbound-notice outbound-notice-success" role="alert">
+            <i class="bi bi-check-circle-fill flex-shrink-0" aria-hidden="true"></i>
+            <span>@TempData["Success"]</span>
+        </div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="outbound-notice outbound-notice-danger" role="alert">
+            <i class="bi bi-exclamation-triangle-fill flex-shrink-0" aria-hidden="true"></i>
+            <span>@TempData["Error"]</span>
+        </div>
+    }
+
+    @* BỘ LỌC *@
+    <section class="workspace-card p-4">
+        <form method="get" asp-action="Index" class="row g-3">
+            <div class="col-md-4 col-lg-3">
+                <label for="search" class="form-label fw-semibold" style="font-size: 13px;">Tìm kiếm</label>
+                <input id="search" name="search" value="@Model.SearchTerm" class="form-control" placeholder="Mã phiếu, mã SO, hoặc khách hàng" maxlength="200" />
+            </div>
+
+            <div class="col-md-4 col-lg-2">
+                <label for="status" class="form-label fw-semibold" style="font-size: 13px;">Trạng thái</label>
+                <select id="status" name="status" class="form-select">
+                    <option value="">Tất cả trạng thái</option>
+                    <option value="PICKING" selected="@(Model.Status == "PICKING")">Đang lấy hàng (PICKING)</option>
+                    <option value="READY" selected="@(Model.Status == "READY")">Sẵn sàng xuất (READY)</option>
+                    <option value="DONE" selected="@(Model.Status == "DONE")">Hoàn tất (DONE)</option>
+                    <option value="DRAFT" selected="@(Model.Status == "DRAFT")">Bản nháp (DRAFT)</option>
+                    <option value="CANCELLED" selected="@(Model.Status == "CANCELLED")">Đã hủy (CANCELLED)</option>
+                </select>
+            </div>
+
+            @if (isStaff)
+            {
+                <div class="col-md-4 col-lg-3">
+                    <label for="AssignedWarehouse" class="form-label fw-semibold" style="font-size: 13px;">Kho phụ trách</label>
+                    <input id="AssignedWarehouse" value="@(Model.Warehouses.FirstOrDefault()?.Name ?? "Kho chi nhánh được phân công")" readonly class="form-control" style="background-color: #f8f9fa;" />
+                </div>
+            }
+            else
+            {
+                <div class="col-md-4 col-lg-3">
+                    <label for="warehouseId" class="form-label fw-semibold" style="font-size: 13px;">Kho xuất</label>
+                    <select id="warehouseId" name="warehouseId" class="form-select">
+                        <option value="">Tất cả các kho</option>
+                        @foreach (var wh in Model.Warehouses)
+                        {
+                            <option value="@wh.Id" selected="@(Model.WarehouseId == wh.Id)">@wh.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            <div class="col-md-3 col-lg-2">
+                <label for="fromDate" class="form-label fw-semibold" style="font-size: 13px;">Từ ngày</label>
+                <input type="date" id="fromDate" name="fromDate" value="@Model.FromDate?.ToString("yyyy-MM-dd")" class="form-control" />
+            </div>
+
+            <div class="col-md-3 col-lg-2">
+                <label for="toDate" class="form-label fw-semibold" style="font-size: 13px;">Đến ngày</label>
+                <input type="date" id="toDate" name="toDate" value="@Model.ToDate?.ToString("yyyy-MM-dd")" class="form-control" />
+            </div>
+
+            <div class="col-12 d-flex gap-2 justify-content-end pt-3 border-top mt-3">
+                <a class="workspace-button sales-button-secondary" asp-action="Index">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Xóa bộ lọc
+                </a>
+                <button class="workspace-button" type="submit">
+                    <i class="bi bi-funnel me-1" aria-hidden="true"></i> Tìm kiếm
+                </button>
+            </div>
+        </form>
+    </section>
+
+    @* BẢNG DANH SÁCH *@
+    <section class="workspace-card p-0" style="overflow: hidden;">
+        <div class="table-wrap">
+            <table class="workspace-table">
+                <thead>
+                    <tr>
+                        <th style="white-space: nowrap; width: 140px;">Mã phiếu xuất</th>
+                        <th style="white-space: nowrap; width: 130px;">Đơn bán hàng</th>
+                        <th>Khách hàng</th>
+                        <th>Kho xuất</th>
+                        <th style="white-space: nowrap; width: 100px; text-align: center;">Số lượng SP</th>
+                        <th style="white-space: nowrap; width: 140px;">Thời gian tạo</th>
+                        <th>Người thực hiện</th>
+                        <th style="white-space: nowrap; width: 140px;">Trạng thái</th>
+                        <th style="white-space: nowrap; width: 160px; text-align: right;">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Items.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="9" class="text-center py-5 muted">
+                                <i class="bi bi-inbox fs-2 d-block mb-2 text-secondary" aria-hidden="true"></i>
+                                Không tìm thấy phiếu xuất kho nào phù hợp với bộ lọc.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in Model.Items)
+                        {
+                            <tr>
+                                <td style="white-space: nowrap;">
+                                    <a class="outbound-code-badge" asp-action="Details" asp-route-id="@item.OutboundId" title="Xem chi tiết phiếu xuất @item.IssueCode">
+                                        @item.IssueCode
+                                    </a>
+                                </td>
+                                <td style="white-space: nowrap;">
+                                    <span class="fw-semibold text-secondary">@item.Socode</span>
+                                </td>
+                                <td>
+                                    <span class="text-dark fw-medium">@item.CustomerName</span>
+                                </td>
+                                <td>@item.WarehouseName</td>
+                                <td style="text-align: center;">
+                                    <span class="outbound-badge outbound-badge-draft">@item.ItemCount</span>
+                                </td>
+                                <td style="white-space: nowrap;">
+                                    <small class="muted">@item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
+                                </td>
+                                <td>@(item.CreatedByName ?? "—")</td>
+                                <td style="white-space: nowrap;">
+                                    @switch (item.Status)
+                                    {
+                                        case "PICKING":
+                                            <span class="outbound-badge outbound-badge-picking">
+                                                <i class="bi bi-clock-history"></i> Đang lấy hàng
+                                            </span>
+                                            break;
+                                        case "READY":
+                                            <span class="outbound-badge outbound-badge-ready">
+                                                <i class="bi bi-box-seam"></i> Sẵn sàng xuất
+                                            </span>
+                                            break;
+                                        case "DONE":
+                                            <span class="outbound-badge outbound-badge-done">
+                                                <i class="bi bi-check-circle-fill"></i> Hoàn tất
+                                            </span>
+                                            break;
+                                        case "DRAFT":
+                                            <span class="outbound-badge outbound-badge-draft">
+                                                <i class="bi bi-file-earmark"></i> Bản nháp
+                                            </span>
+                                            break;
+                                        case "CANCELLED":
+                                            <span class="outbound-badge outbound-badge-cancelled">
+                                                <i class="bi bi-x-circle-fill"></i> Đã hủy
+                                            </span>
+                                            break;
+                                        default:
+                                            <span class="outbound-badge outbound-badge-draft">@item.Status</span>
+                                            break;
+                                    }
+                                </td>
+                                <td style="white-space: nowrap; text-align: right;">
+                                    <div class="d-flex justify-content-end align-items-center gap-1">
+                                        <a class="workspace-button sales-button-small" asp-action="Details" asp-route-id="@item.OutboundId" title="Xem chi tiết phiếu xuất">
+                                            <i class="bi bi-eye me-1" aria-hidden="true"></i> Chi tiết
+                                        </a>
+                                        @if (isStaff)
+                                        {
+                                            if (item.Status == "PICKING")
+                                            {
+                                                <a class="workspace-button sales-button-small" asp-action="Picking" asp-route-id="@item.OutboundId" title="Mở bàn nhặt hàng">
+                                                    <i class="bi bi-box-arrow-in-right me-1"></i> Nhặt hàng
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="workspace-button sales-button-small disabled" disabled title="Phiếu xuất ở trạng thái @item.Status không thể nhặt hàng">
+                                                    <i class="bi bi-box-arrow-in-right me-1"></i> Nhặt hàng
+                                                </button>
+                                            }
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @* PHÂN TRANG *@
+        @if (Model.TotalPages > 1)
+        {
+            <div class="d-flex justify-content-between align-items-center p-3 border-top">
+                <div class="muted" style="font-size: 13px;">
+                    Hiển thị trang <strong>@Model.PageIndex</strong> / <strong>@Model.TotalPages</strong> (Tổng số: <strong>@Model.TotalItems</strong> phiếu)
+                </div>
+                <div class="d-flex gap-1">
+                    @if (Model.PageIndex > 1)
+                    {
+                        <a class="workspace-button sales-button-small sales-button-secondary"
+                           asp-action="Index"
+                           asp-route-page="@(Model.PageIndex - 1)"
+                           asp-route-search="@Model.SearchTerm"
+                           asp-route-status="@Model.Status"
+                           asp-route-warehouseId="@Model.WarehouseId"
+                           asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")"
+                           asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")">
+                            <i class="bi bi-chevron-left me-1"></i> Trước
+                        </a>
+                    }
+                    @for (int p = 1; p <= Model.TotalPages; p++)
+                    {
+                        if (p == Model.PageIndex)
+                        {
+                            <span class="workspace-button sales-button-small">@p</span>
+                        }
+                        else if (p <= 3 || p >= Model.TotalPages - 2 || Math.Abs(p - Model.PageIndex) <= 1)
+                        {
+                            <a class="workspace-button sales-button-small sales-button-secondary"
+                               asp-action="Index"
+                               asp-route-page="@p"
+                               asp-route-search="@Model.SearchTerm"
+                               asp-route-status="@Model.Status"
+                               asp-route-warehouseId="@Model.WarehouseId"
+                               asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")"
+                               asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")">
+                                @p
+                            </a>
+                        }
+                        else if (p == 4 && Model.PageIndex > 4)
+                        {
+                            <span class="px-2 align-self-center muted">...</span>
+                        }
+                    }
+                    @if (Model.PageIndex < Model.TotalPages)
+                    {
+                        <a class="workspace-button sales-button-small sales-button-secondary"
+                           asp-action="Index"
+                           asp-route-page="@(Model.PageIndex + 1)"
+                           asp-route-search="@Model.SearchTerm"
+                           asp-route-status="@Model.Status"
+                           asp-route-warehouseId="@Model.WarehouseId"
+                           asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")"
+                           asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")">
+                            Sau <i class="bi bi-chevron-right ms-1"></i>
+                        </a>
+                    }
+                </div>
+            </div>
+        }
+    </section>
+</div>

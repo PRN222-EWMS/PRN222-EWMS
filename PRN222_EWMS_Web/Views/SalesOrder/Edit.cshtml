@@ -8,17 +8,66 @@
         <div>
             <p class="eyebrow">BÁN HÀNG / CHỈNH SỬA ĐƠN</p>
             <h1>@Model.Code</h1>
-            <p class="muted">Chỉ được phép chỉnh sửa đơn trước khi phiếu xuất kho đầu tiên được tạo và lưu.</p>
+            <p class="muted">Chỉnh sửa thông tin đơn hàng.</p>
         </div>
         <div class="sales-toolbar">
-            <a asp-action="Details" asp-route-id="@Model.Id" class="workspace-button sales-button-secondary">
-                <i class="bi bi-arrow-left me-1"></i> Chi tiết đơn
+            <a asp-action="Index" class="workspace-button sales-button-secondary">
+                <i class="bi bi-arrow-left me-1"></i> Thoát
             </a>
+            @if (Model.CanCancel && (Model.Status == "DRAFT" || Model.Status == "SUBMITTED"))
+            {
+                <button type="button" class="workspace-button sales-button-secondary text-danger border-danger" data-bs-toggle="modal" data-bs-target="#cancelOrderModal">
+                    <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Hủy đơn hàng
+                </button>
+            }
         </div>
     </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success mb-4" role="alert">
+            <i class="bi bi-check-circle-fill me-1" aria-hidden="true"></i>
+            <span>@TempData["Success"]</span>
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger mb-4" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>
+            <span>@TempData["Error"]</span>
+        </div>
+    }
 
     <form method="post" asp-action="Edit" asp-route-id="@Model.Id" id="salesOrderForm">
         @Html.AntiForgeryToken()
         <partial name="_Form" model="Model" />
     </form>
+</div>
+
+@* MODAL XÁC NHẬN HỦY ĐƠN BÁN HÀNG *@
+<div class="modal fade" id="cancelOrderModal" tabindex="-1" aria-labelledby="cancelOrderModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form asp-action="Cancel" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-header">
+                    <h5 class="modal-title text-danger fw-bold" id="cancelOrderModalLabel">
+                        <i class="bi bi-exclamation-triangle me-1"></i> Xác nhận hủy đơn bán hàng
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">Bạn có chắc chắn muốn hủy đơn bán hàng <strong>@Model.Code</strong>?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="workspace-button sales-button-secondary" data-bs-dismiss="modal">Bỏ qua</button>
+                    <button type="submit" class="workspace-button" style="background: #c92a2a; border-color: #c92a2a; color: #ffffff;">
+                        <i class="bi bi-x-circle me-1"></i> Xác nhận hủy đơn
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>

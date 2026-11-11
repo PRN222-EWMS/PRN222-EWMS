@@ -156,7 +156,40 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
     {
         Validate(model);
         return repository.AddCustomerAsync(new Customer
-        { CustomerName = model.CustomerName.Trim(), Address = Clean(model.Address), Phone = Clean(model.Phone) }, actorId);
+        { CustomerName = model.CustomerName.Trim(), Nickname = Clean(model.Nickname), Address = Clean(model.Address), Phone = Clean(model.Phone) }, actorId);
+    }
+
+    public async Task<(bool Success, Customer? Customer, string? ErrorMessage)> QuickCreateCustomerAsync(CustomerFormViewModel model, int actorId)
+    {
+        var name = Clean(model.CustomerName);
+        if (string.IsNullOrWhiteSpace(name))
+            return (false, null, "Vui lòng nhập tên khách hàng.");
+
+        var phone = Clean(model.Phone);
+        if (string.IsNullOrWhiteSpace(phone) || !System.Text.RegularExpressions.Regex.IsMatch(phone, @"^0[0-9]{9}$"))
+            return (false, null, "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0.");
+
+        var address = Clean(model.Address);
+        if (string.IsNullOrWhiteSpace(address))
+            return (false, null, "Vui lòng nhập địa chỉ khách hàng.");
+
+        // Check trùng số điện thoại
+        var isPhoneDuplicate = await repository.Customers
+            .AnyAsync(c => c.Phone != null && c.Phone.Trim() == phone);
+        if (isPhoneDuplicate)
+            return (false, null, $"Số điện thoại {phone} đã được sử dụng bởi một khách hàng khác. Vui lòng kiểm tra lại.");
+
+        var customer = new Customer
+        {
+            CustomerName = name,
+            Nickname = Clean(model.Nickname),
+            Phone = phone,
+            Address = address
+        };
+
+        var id = await repository.AddCustomerAsync(customer, actorId);
+        customer.CustomerId = id;
+        return (true, customer, null);
     }
 
     public async Task<bool> UpdateCustomerAsync(int id, CustomerFormViewModel model, int actorId)
@@ -238,6 +271,7 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
             Note = order.Note,
             Status = order.Status,
             CanEdit = canEdit,
+            CanCancel = canEdit,
             ConcurrencyToken = Convert.ToBase64String(order.RowVersion),
             Warehouses = warehouses,
             Customers = customers,
@@ -401,6 +435,63 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
         return true;
     }
 
+    public async Task<(bool Success, string Message)> CancelOrderAsync(long id, int actorId, string actorRole, string? cancelReason = null)
+    {
+        var order = await repository.FindOrderForEditAsync(id);
+        if (order is null)
+            return (false, "Không tìm thấy đơn bán hàng cần hủy.");
+
+        var isManager = string.Equals(actorRole, "MANAGER", StringComparison.OrdinalIgnoreCase);
+        if (!isManager && order.CreatedByUserId != actorId)
+            return (false, "Bạn không có quyền hủy đơn hàng này. Chỉ người tạo đơn mới được phép hủy.");
+
+        if (order.Status == "CANCELLED")
+            return (false, "Đơn bán hàng này đã ở trạng thái đã hủy.");
+
+        if (order.Status == "CLOSED")
+            return (false, "Đơn bán hàng đã đóng, không thể hủy.");
+
+        if (order.Status == "FULFILLED" || order.Status == "PARTIALLY_FULFILLED")
+            return (false, "Đơn bán hàng đã xuất kho một phần hoặc hoàn tất, không thể hủy.");
+
+        if (order.Status != "DRAFT" && order.Status != "SUBMITTED")
+            return (false, $"Trạng thái đơn hàng ({order.Status}) không cho phép hủy.");
+
+        if (order.Outbounds.Any())
+        {
+            var activePicking = order.Outbounds.Any(o => o.IsActivePicking || o.Status == "PICKING" || o.Status == "READY");
+            if (activePicking)
+                return (false, "Đơn hàng đang có phiếu xuất kho trong phiên nhặt hàng đang hoạt động. Vui lòng yêu cầu thủ kho hủy phiên nhặt hàng trước khi hủy đơn.");
+
+            var doneOutbound = order.Outbounds.Any(o => o.Status == "DONE");
+            if (doneOutbound)
+                return (false, "Đơn hàng đã có hàng thực tế xuất khỏi kho, không thể hủy đơn.");
+
+            return (false, "Đơn hàng đã phát sinh phiếu xuất kho, thông tin đơn đã bị khóa không thể hủy.");
+        }
+
+        order.Status = "CANCELLED";
+        order.ClosedAt = DateTime.UtcNow;
+        order.CloseReason = string.IsNullOrWhiteSpace(cancelReason) ? "Người dùng hủy đơn bán hàng" : cancelReason.Trim();
+        order.HasShortage = false;
+
+        foreach (var line in order.SalesOrderLines)
+        {
+            line.CancelledQuantity = line.RequestedQuantity;
+        }
+
+        foreach (var r in order.Reservations.Where(r => r.Status == "ACTIVE"))
+        {
+            r.Status = "CLOSED";
+            r.ReleasedQuantity = r.ReservedQuantity - r.ConsumedQuantity;
+            r.ClosedAt = DateTime.UtcNow;
+        }
+
+        await repository.SaveChangesWithActorAsync(actorId);
+
+        return (true, "Đơn bán hàng đã được hủy thành công và giải phóng toàn bộ số lượng giữ chỗ trong kho.");
+    }
+
     public Task<List<ProductStockLookupDto>> GetAvailableProductsAsync(int warehouseId) =>
         repository.GetAvailableProductsAsync(warehouseId);
 
@@ -422,7 +513,6 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
                 var reserved = heldBySource.TryGetValue(s.SupplySourceId, out var b) ? b : 0;
                 return new
                 {
-                    Entity = s,
                     s.SupplySourceId,
                     s.ProductId,
                     s.WarehouseId,
@@ -466,8 +556,6 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
                 {
                     var reservation = new Reservation
                     {
-                        SupplySource = src.Entity,
-                        SupplySourceNavigation = src.Entity,
                         SupplySourceId = src.SupplySourceId,
                         Soline = line,
                         SalesOrder = order,
@@ -494,16 +582,12 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
             {
                 hasShortage = true;
 
-                // Theo Phân tích SO Mục 4, Mục 7 & Test Case SO06 (MSG-037):
-                // Khi Gửi đơn (Submit): Bắt buộc đủ nguồn, nếu thiếu nguồn thì từ chối Submit ngay lập tức!
-                // Chỉ cho phép lưu nháp (Draft) khi chưa đủ nguồn theo Test Case SO04.
-                if (isSubmit)
-                {
-                    var prod = await repository.Products.FirstOrDefaultAsync(p => p.ProductId == line.ProductId);
-                    var prodCode = prod?.ProductCode ?? $"ID {line.ProductId}";
-                    var prodName = prod?.ProductName ?? "Sản phẩm";
-                    throw new InvalidOperationException($"Số lượng yêu cầu cho sản phẩm [{prodCode}] {prodName} ({line.RequestedQuantity}) vượt quá số lượng hiện có thể đặt từ kho này (còn khả dụng: {line.RequestedQuantity - needed}) theo quy định MSG-037.");
-                }
+                // Validate khả dụng bắt buộc cho cả Lưu nháp (Draft) và Gửi đơn (Submit)
+                var prod = await repository.Products.FirstOrDefaultAsync(p => p.ProductId == line.ProductId);
+                var prodCode = prod?.ProductCode ?? $"ID {line.ProductId}";
+                var prodName = prod?.ProductName ?? "Sản phẩm";
+                var availableStock = Math.Max(0, line.RequestedQuantity - needed);
+                throw new InvalidOperationException($"Số lượng yêu cầu cho sản phẩm [{prodCode}] {prodName} ({line.RequestedQuantity}) vượt quá số lượng khả dụng hiện có trong kho (còn khả dụng: {availableStock}).");
             }
         }
 

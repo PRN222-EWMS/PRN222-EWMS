@@ -1,0 +1,167 @@
+@model PRN222_EWMS_Web.ViewModels.CustomerReturnOrder.ReturnOrderDetailViewModel
+@{
+    ViewData["Title"] = "Chi tiết đơn trả hàng " + Model.ReturnCode;
+    var vnTime = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
+    var (statusText, statusClass) = GetStatusDisplay(Model.Status);
+}
+
+@functions {
+    public (string Text, string Class) GetStatusDisplay(string status) => status switch
+    {
+        "DRAFT" => ("Bản nháp", "badge bg-secondary-subtle text-secondary border border-secondary"),
+        "OPEN" => ("Đã xác nhận", "badge bg-primary-subtle text-primary border border-primary"),
+        "PARTIALLY_RECEIVED" => ("Đã nhận một phần", "badge bg-warning-subtle text-warning-emphasis border border-warning"),
+        "RECEIVED" => ("Đã nhận đủ", "badge bg-success-subtle text-success border border-success"),
+        "CLOSED" => ("Đã đóng", "badge bg-dark-subtle text-dark border border-dark"),
+        "CANCELLED" => ("Đã hủy", "badge bg-danger-subtle text-danger border border-danger"),
+        _ => (status, "badge bg-light text-dark border")
+    };
+}
+
+<div class="sales-page">
+    <div class="workspace-heading">
+        <div>
+            <p class="eyebrow">BÁN HÀNG / CHI TIẾT ĐƠN TRẢ HÀNG</p>
+            <h1>@Model.ReturnCode</h1>
+            <div class="d-flex align-items-center gap-2 mt-2">
+                <span class="@statusClass">@statusText</span>
+                @if (Model.TotalCancelledQuantity > 0)
+                {
+                    <span class="badge bg-danger-subtle text-danger border border-danger">Có sản phẩm bị hủy (@Model.TotalCancelledQuantity)</span>
+                }
+            </div>
+        </div>
+        <div class="sales-toolbar d-flex align-items-center gap-2">
+            @if (Model.CanEdit)
+            {
+                <a class="workspace-button" asp-action="Edit" asp-route-id="@Model.ReturnOrderId">
+                    <i class="bi bi-pencil-square me-1" aria-hidden="true"></i> Chỉnh sửa đơn
+                </a>
+            }
+            @if (Model.CanReceive)
+            {
+                <a class="workspace-button btn-primary text-white" href="/ReturnReceive?search=@Model.ReturnCode">
+                    <i class="bi bi-box-arrow-in-down me-1" aria-hidden="true"></i> Nhận hàng
+                </a>
+            }
+            <a class="workspace-button sales-button-secondary" asp-action="Index">
+                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Quay lại danh sách
+            </a>
+        </div>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="sales-alert sales-alert-success mb-3" role="status">@TempData["Success"]</div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="sales-warning mb-3" role="alert">@TempData["Error"]</div>
+    }
+
+    <!-- 1. THÔNG TIN CHUNG -->
+    <section class="workspace-card mb-3">
+        <h2 class="mb-3">Thông tin đơn trả hàng</h2>
+        <div class="row g-3">
+            <div class="col-12 col-sm-6 col-md-3">
+                <div class="text-muted small mb-1">Mã đơn trả</div>
+                <div class="fw-bold text-primary fs-6">@Model.ReturnCode</div>
+            </div>
+            <div class="col-12 col-sm-6 col-md-3">
+                <div class="text-muted small mb-1">Trạng thái</div>
+                <div><span class="@statusClass">@statusText</span></div>
+            </div>
+            <div class="col-12 col-sm-6 col-md-3">
+                <div class="text-muted small mb-1">Đơn bán gốc</div>
+                <div class="fw-semibold">@Model.SalesOrderCode</div>
+            </div>
+            <div class="col-12 col-sm-6 col-md-3">
+                <div class="text-muted small mb-1">Khách hàng</div>
+                <div class="fw-semibold">@Model.CustomerName</div>
+            </div>
+
+            <div class="col-12 col-sm-6 col-md-3">
+                <div class="text-muted small mb-1">Kho tiếp nhận</div>
+                <div class="fw-semibold">@Model.WarehouseName</div>
+            </div>
+            <div class="col-12 col-sm-6 col-md-3">
+                <div class="text-muted small mb-1">Người tạo</div>
+                <div class="fw-semibold">@Model.CreatedByName</div>
+            </div>
+            <div class="col-12 col-sm-6 col-md-3">
+                <div class="text-muted small mb-1">Thời điểm tạo</div>
+                <div class="fw-semibold">@TimeZoneInfo.ConvertTimeFromUtc(Model.CreatedAt, vnTime).ToString("dd/MM/yyyy HH:mm")</div>
+            </div>
+            @if (Model.ClosedAt.HasValue)
+            {
+                <div class="col-12 col-sm-6 col-md-3">
+                    <div class="text-muted small mb-1">Thời điểm đóng/hủy</div>
+                    <div class="fw-semibold text-danger">@TimeZoneInfo.ConvertTimeFromUtc(Model.ClosedAt.Value, vnTime).ToString("dd/MM/yyyy HH:mm")</div>
+                </div>
+            }
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Model.Reason))
+        {
+            <div class="mt-4 pt-3 border-top">
+                <div class="text-muted small mb-1">Lý do trả hàng</div>
+                <p class="sales-note mb-0 text-dark">@Model.Reason</p>
+            </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.CloseReason))
+        {
+            <div class="mt-3 pt-3 border-top">
+                <div class="text-muted small mb-1">Lý do đóng / Hủy</div>
+                <p class="sales-note mb-0 text-danger">@Model.CloseReason</p>
+            </div>
+        }
+    </section>
+
+    <!-- 2. DANH SÁCH SẢN PHẨM HOÀN TRẢ -->
+    <section class="workspace-card mb-3">
+        <h2>Sản phẩm hoàn trả (@Model.Lines.Count dòng)</h2>
+        <div class="table-responsive">
+            <table class="workspace-table">
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">#</th>
+                        <th style="width: 15%;">Mã SP</th>
+                        <th style="width: 35%;">Tên sản phẩm</th>
+                        <th style="width: 9%;" class="text-center">ĐVT</th>
+                        <th style="width: 9%;" class="text-end">SL yêu cầu</th>
+                        <th style="width: 9%;" class="text-end">SL hủy</th>
+                        <th style="width: 9%;" class="text-end">SL đã nhận</th>
+                        <th style="width: 9%;" class="text-end">SL còn lại</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Lines.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-3">Không có dòng sản phẩm nào trong đơn trả hàng.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        int index = 1;
+                        foreach (var line in Model.Lines)
+                        {
+                            <tr>
+                                <td>@(index++)</td>
+                                <td class="fw-semibold">@line.ProductCode</td>
+                                <td>@line.ProductName</td>
+                                <td class="text-center">@(line.Unit ?? "Cái")</td>
+                                <td class="text-end fw-semibold">@line.RequestedQuantity</td>
+                                <td class="text-end @(line.CancelledQuantity > 0 ? "text-danger fw-semibold" : "text-muted")">@line.CancelledQuantity</td>
+                                <td class="text-end @(line.ReceivedQuantity > 0 ? "text-success fw-bold" : "text-muted")">@line.ReceivedQuantity</td>
+                                <td class="text-end @(line.RemainingQuantity > 0 ? "text-primary fw-bold" : "text-muted")">@line.RemainingQuantity</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+
+</div>

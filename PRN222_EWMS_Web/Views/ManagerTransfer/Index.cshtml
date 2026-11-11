@@ -1,0 +1,114 @@
+@model PRN222_EWMS_Web.ViewModels.Manager.ManagerTransferListViewModel
+
+@{
+    ViewData["Title"] = "Theo dõi chuyển kho";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="mb-0">Theo dõi chuyển kho</h1>
+    <a asp-controller="Transfer" asp-action="Create" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> Tạo lệnh chuyển kho
+    </a>
+</div>
+
+<section class="workspace-card mb-3" aria-label="Bộ lọc chuyển kho">
+    <form asp-action="Index" method="get" class="row g-3 align-items-end">
+        <div class="col-md-5">
+            <label for="search" class="form-label">Mã lệnh hoặc tên kho</label>
+            <input id="search" name="search" type="search" class="form-control"
+                   value="@Model.Search" placeholder="Nhập mã lệnh, kho nguồn hoặc kho đích" />
+        </div>
+        <div class="col-md-3">
+            <label asp-for="Status" class="form-label">Trạng thái lệnh</label>
+            <select asp-for="Status" class="form-select">
+                <option value="">Tất cả trạng thái</option>
+                @foreach (var status in Model.StatusOptions)
+                {
+                    <option value="@status">@status</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-auto">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-funnel me-1" aria-hidden="true"></i> Tìm</button>
+            <a asp-action="Index" class="btn btn-outline-secondary"><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i> Xóa lọc</a>
+        </div>
+    </form>
+</section>
+
+<section class="workspace-card" aria-label="Danh sách lệnh chuyển kho">
+    @if (Model.Orders.Count == 0)
+    {
+        if (!string.IsNullOrWhiteSpace(Model.Search) || !string.IsNullOrWhiteSpace(Model.Status))
+        {
+            <p>Không tìm thấy lệnh chuyển kho phù hợp.</p>
+        }
+        else
+        {
+            <p>Chưa có lệnh chuyển kho.</p>
+        }
+    }
+    else
+    {
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Danh sách lệnh chuyển kho, có thể cuộn ngang">
+            <table class="workspace-table">
+                <thead>
+                    <tr>
+                        <th>Mã lệnh</th>
+                        <th>Kho nguồn → Kho đích</th>
+                        <th>Trạng thái</th>
+                        <th class="text-end">Còn phải xuất</th>
+                        <th class="text-end">Đã xuất</th>
+                        <th class="text-end">Đang vận chuyển</th>
+                        <th class="text-end">Đã nhận</th>
+                        <th class="text-end" style="white-space: nowrap; width: 140px;">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in Model.Orders)
+                    {
+                        <tr>
+                            <td><a asp-action="Details" asp-route-id="@order.Id">@order.TransferCode</a></td>
+                            <td>@order.FromWarehouse → @order.ToWarehouse</td>
+                            <td>@order.Status</td>
+                            <td class="text-end">@order.Outstanding</td>
+                            <td class="text-end">@order.Dispatched</td>
+                            <td class="text-end">@order.InTransit</td>
+                            <td class="text-end">@order.Received</td>
+                            <td class="text-end" style="white-space: nowrap;">
+                                <a asp-action="Details" asp-route-id="@order.Id" class="workspace-button workspace-button-small" title="Xem chi tiết">
+                                    <i class="bi bi-eye" aria-hidden="true"></i> Chi tiết
+                                </a>
+                                @if (order.Status is "DRAFT" or "RELEASED")
+                                {
+                                    <a asp-controller="Transfer" asp-action="Edit" asp-route-id="@order.Id" class="workspace-button workspace-button-secondary workspace-button-small ms-1" title="Chỉnh sửa lệnh chuyển">
+                                        <i class="bi bi-pencil-square" aria-hidden="true"></i> Sửa
+                                    </a>
+                                }
+                                else
+                                {
+                                    <button type="button" class="workspace-button workspace-button-small ms-1 disabled" disabled style="opacity: 0.5; cursor: not-allowed;" title="Lệnh chuyển ở trạng thái @order.Status không thể chỉnh sửa">
+                                        <i class="bi bi-pencil-square" aria-hidden="true"></i> Sửa
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="d-flex align-items-center gap-3" aria-label="Phân trang lệnh chuyển kho">
+                @if (Model.Page > 1)
+                {
+                    <a asp-action="Index" asp-route-page="@(Model.Page - 1)" asp-route-search="@Model.Search" asp-route-status="@Model.Status">Trước</a>
+                }
+                <span>Trang @Model.Page / @Model.TotalPages</span>
+                @if (Model.Page < Model.TotalPages)
+                {
+                    <a asp-action="Index" asp-route-page="@(Model.Page + 1)" asp-route-search="@Model.Search" asp-route-status="@Model.Status">Sau</a>
+                }
+            </nav>
+        }
+    }
+</section>
