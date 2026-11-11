@@ -40,6 +40,10 @@
             <dd class="mb-0 text-break">@(Model.AssignedTo ?? "Chưa phân công")</dd>
         </div>
         <div>
+            <dt class="small text-muted fw-normal mb-2">Ngày chuyển đi</dt>
+            <dd class="mb-0">@(Model.DispatchDate?.ToString("dd/MM/yyyy") ?? "Chưa có")</dd>
+        </div>
+        <div>
             <dt class="small text-muted fw-normal mb-2">Ngày dự kiến</dt>
             <dd class="mb-0">@(Model.ExpectedDate?.ToString("dd/MM/yyyy") ?? "Chưa có")</dd>
         </div>
