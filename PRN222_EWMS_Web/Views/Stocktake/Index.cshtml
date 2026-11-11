@@ -1,0 +1,30 @@
+@using PRN222_EWMS_Web.ViewModels.Stocktaking
+@model StocktakeExecutionListViewModel
+@{
+    ViewData["Title"] = "Nhiệm vụ kiểm kê";
+    var pages = Math.Max(1, (Model.TotalCount + StocktakeExecutionListViewModel.PageSize - 1) / StocktakeExecutionListViewModel.PageSize);
+}
+<div class="warehouse-list">
+    <header class="workspace-heading"><div><p class="eyebrow">NHÂN VIÊN KHO</p><h1>Nhiệm vụ kiểm kê</h1></div></header>
+    @if (TempData["Success"] is string success) { <div class="workspace-notice" role="status">@success</div> }
+    @if (TempData["Error"] is string error) { <div class="alert alert-danger" role="alert">@error</div> }
+    <section class="workspace-card">
+        <form method="get" asp-action="Index" class="workspace-form mt-0"><div class="row g-3 align-items-end"><div class="col-md-8"><label for="search">Tìm mã kiểm kê</label><input type="search" id="search" name="search" value="@Model.Search" maxlength="100" /></div><div class="col-md-4"><button class="workspace-button" type="submit">Tìm kiếm</button> <a asp-action="Index" class="workspace-link">Xóa bộ lọc</a></div></div></form>
+        <p class="muted mt-3">@Model.TotalCount nhiệm vụ · Trang @Model.Page / @pages</p>
+        <div class="table-wrap"><table class="workspace-table"><thead><tr><th>Mã kiểm kê</th><th>Kho / phạm vi</th><th>Nhiệm vụ</th><th>Ngày kế hoạch</th><th>Trạng thái</th><th class="text-center">Thao tác</th></tr></thead><tbody>
+        @foreach (var item in Model.Items)
+        {
+            <tr><td><strong>@item.Code</strong></td><td>@item.Warehouse<small class="d-block muted text-break">@item.Scope</small></td><td>@(item.IsRecount ? "Đếm lại" : "Đếm lần đầu")</td><td>@StocktakeDisplay.Time(item.PlannedAt)</td><td><span class="role-badge">@StocktakeDisplay.Status(item.Status)</span></td><td class="text-center"><a class="workspace-button sales-button-small" asp-action="Details" asp-route-id="@item.Id" asp-route-recountRequestId="@item.RecountRequestId"><i class="bi bi-eye" aria-hidden="true"></i> @(item.Status == "IN_PROGRESS" ? "Tiếp tục" : item.Status is "DONE" or "SUBMITTED" or "COMPLETED" ? "Xem kết quả" : "Xem nhiệm vụ")</a></td></tr>
+        }
+        @if (Model.Items.Count == 0) { <tr><td colspan="6" class="text-center muted py-4">Chưa có nhiệm vụ phù hợp.</td></tr> }
+        </tbody></table></div>
+        @if (pages > 1)
+        {
+            <nav aria-label="Phân trang nhiệm vụ" class="d-flex gap-2 align-items-center mt-3">
+                @if (Model.Page > 1) { <a class="workspace-button sales-button-secondary" asp-action="Index" asp-route-search="@Model.Search" asp-route-page="@(Model.Page - 1)">Trang trước</a> }
+                <span class="muted">Trang @Model.Page / @pages</span>
+                @if (Model.Page < pages) { <a class="workspace-button sales-button-secondary" asp-action="Index" asp-route-search="@Model.Search" asp-route-page="@(Model.Page + 1)">Trang sau</a> }
+            </nav>
+        }
+    </section>
+</div>
