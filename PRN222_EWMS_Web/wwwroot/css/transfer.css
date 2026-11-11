@@ -67,3 +67,24 @@
     background: #fff5f5;
     border: 1px solid #ffc9c9;
 }
+
+/* Stock Badges (Synchronized with SO) */
+.stock-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.badge-stock {
+    background: #f1f5f9;
+    color: #475569;
+}
+.badge-stock-ok {
+    background: #dcfce7;
+    color: #15803d;
+}
+.badge-stock-zero {
+    background: #fee2e2;
+    color: #b91c1c;
+}

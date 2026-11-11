@@ -582,16 +582,12 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
             {
                 hasShortage = true;
 
-                // Theo Phân tích SO Mục 4, Mục 7 & Test Case SO06 (MSG-037):
-                // Khi Gửi đơn (Submit): Bắt buộc đủ nguồn, nếu thiếu nguồn thì từ chối Submit ngay lập tức!
-                // Chỉ cho phép lưu nháp (Draft) khi chưa đủ nguồn theo Test Case SO04.
-                if (isSubmit)
-                {
-                    var prod = await repository.Products.FirstOrDefaultAsync(p => p.ProductId == line.ProductId);
-                    var prodCode = prod?.ProductCode ?? $"ID {line.ProductId}";
-                    var prodName = prod?.ProductName ?? "Sản phẩm";
-                    throw new InvalidOperationException($"Số lượng yêu cầu cho sản phẩm [{prodCode}] {prodName} ({line.RequestedQuantity}) vượt quá số lượng hiện có thể đặt từ kho này (còn khả dụng: {line.RequestedQuantity - needed}) theo quy định MSG-037.");
-                }
+                // Validate khả dụng bắt buộc cho cả Lưu nháp (Draft) và Gửi đơn (Submit)
+                var prod = await repository.Products.FirstOrDefaultAsync(p => p.ProductId == line.ProductId);
+                var prodCode = prod?.ProductCode ?? $"ID {line.ProductId}";
+                var prodName = prod?.ProductName ?? "Sản phẩm";
+                var availableStock = Math.Max(0, line.RequestedQuantity - needed);
+                throw new InvalidOperationException($"Số lượng yêu cầu cho sản phẩm [{prodCode}] {prodName} ({line.RequestedQuantity}) vượt quá số lượng khả dụng hiện có trong kho (còn khả dụng: {availableStock}).");
             }
         }
 
