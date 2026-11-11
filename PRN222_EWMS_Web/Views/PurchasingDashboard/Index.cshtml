@@ -20,6 +20,21 @@
         </div>
     </div>
 
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="po-alert po-alert-success" role="alert">
+            <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+            <span>@TempData["SuccessMessage"]</span>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="po-alert po-alert-danger" role="alert">
+            <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+            <span>@TempData["ErrorMessage"]</span>
+        </div>
+    }
+
     <!-- 4 KPI Cards -->
     <div class="po-stats">
         <a class="po-stat" asp-controller="PurchaseOrder" asp-action="Index" asp-route-Status="DRAFT">
@@ -66,112 +81,7 @@
         }
         else
         {
-            <div class="table-wrap">
-                <table class="workspace-table">
-                    <thead>
-                        <tr>
-                            <th>Mã đơn (PO)</th>
-                            <th>Nhà cung cấp</th>
-                            <th>Kho tiếp nhận</th>
-                            <th>Người tạo</th>
-                            <th>Ngày đặt / Dự kiến đến</th>
-                            <th>Tiến độ nhận hàng</th>
-                            <th>Trạng thái</th>
-                            <th style="text-align: right;">Thao tác</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var order in Model.RecentOrders)
-                        {
-                            var statusText = order.Status switch
-                            {
-                                "DRAFT" => "Bản nháp",
-                                "CONFIRMED" => "Đã xác nhận",
-                                "PARTIALLY_RECEIVED" => "Đang nhận 1 phần",
-                                "RECEIVED" => "Đã nhận đủ",
-                                "CLOSED" => "Đã đóng",
-                                "CANCELLED" => "Đã hủy",
-                                _ => order.Status
-                            };
-
-                            var statusClass = order.Status switch
-                            {
-                                "DRAFT" => "po-status-draft",
-                                "CONFIRMED" => "po-status-confirmed",
-                                "PARTIALLY_RECEIVED" => "po-status-partially",
-                                "RECEIVED" => "po-status-received",
-                                "CLOSED" => "po-status-closed",
-                                "CANCELLED" => "po-status-cancelled",
-                                _ => "po-status-draft"
-                            };
-
-                            <tr>
-                                <td>
-                                    <a asp-controller="PurchaseOrder" asp-action="Details" asp-route-id="@order.PurchaseOrderId" class="fw-semibold text-primary text-decoration-none">
-                                        @order.Pocode
-                                    </a>
-                                </td>
-                                <td>
-                                    <div>@order.SupplierName</div>
-                                </td>
-                                <td>
-                                    <div>@order.WarehouseName</div>
-                                </td>
-                                <td>
-                                    <div>@order.CreatedByName</div>
-                                </td>
-                                <td>
-                                    <div>@order.OrderDate.ToString("dd/MM/yyyy")</div>
-                                    <div class="muted small">
-                                        Đến: @order.ExpectedArrivalDate.ToString("dd/MM/yyyy")
-                                    </div>
-                                    @if (order.IsOverdue)
-                                    {
-                                        <div class="po-overdue-tag">
-                                            <i class="bi bi-clock-history" aria-hidden="true"></i> Quá hạn giao
-                                        </div>
-                                    }
-                                </td>
-                                <td style="min-width: 180px;">
-                                    <div class="d-flex justify-content-between small text-muted mb-1">
-                                        <span>Đã nhận: <strong>@order.TotalReceivedQuantity</strong>/@order.TotalOrderedQuantity</span>
-                                        <span>@order.ProgressPercent%</span>
-                                    </div>
-                                    <div class="po-progress-wrap">
-                                        <div class="po-progress-bar">
-                                            <div class="po-progress-fill @(order.TotalReceivedQuantity < order.TotalOrderedQuantity ? "partial" : "")" 
-                                                 style="width: @(order.ProgressPercent)%"></div>
-                                        </div>
-                                    </div>
-                                    <div class="small muted mt-1">
-                                        Còn lại: <span class="fw-medium text-dark">@order.TotalRemainingQuantity</span>
-                                        @if (order.TotalClosedQuantity > 0)
-                                        {
-                                            <span class="text-secondary">(Đóng: @order.TotalClosedQuantity)</span>
-                                        }
-                                    </div>
-                                </td>
-                                <td>
-                                    <span class="po-status @statusClass">
-                                        @statusText
-                                    </span>
-                                </td>
-                                <td style="text-align: right; white-space: nowrap;">
-                                    <a class="workspace-button sales-button-small" asp-controller="PurchaseOrder" asp-action="Details" asp-route-id="@order.PurchaseOrderId" title="Xem chi tiết">
-                                        Chi tiết
-                                    </a>
-                                    @if (order.CanEdit)
-                                    {
-                                        <a class="workspace-link p-1 text-secondary" asp-controller="PurchaseOrder" asp-action="Edit" asp-route-id="@order.PurchaseOrderId" title="Chỉnh sửa">
-                                            <i class="bi bi-pencil" aria-hidden="true"></i>
-                                        </a>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
+            <partial name="~/Views/PurchaseOrder/_PoTable.cshtml" model="Model.RecentOrders" />
         }
     </section>
 </div>
