@@ -114,6 +114,17 @@ public class WarehouseTransferRepository(EwmsDbContext db)
                 detail.CanClaimDispatch = owners.Count == 0 || (owners.Count == 1 && owners[0] is null);
             }
 
+            var locationPaths = from location in db.StorageLocations
+                    where location.WarehouseId == warehouseId
+                    let parent = location.ParentLocation
+                    let rowOrZone = parent!.ParentLocation
+                    let zone = rowOrZone!.ParentLocation
+                    let path = 
+                        (zone == null ? "" : zone.LocationName + " → ") +
+                        (rowOrZone == null ? "" : rowOrZone.LocationName + " → ") +
+                        (parent == null ? "" : parent.LocationName + " → ") + location.LocationName
+                    select new { location.LocationId, Path = path };
+
             detail.Documents = await db.TransferDispatches
                 .Where(dispatch => dispatch.TransferOrderId == orderId)
                 .OrderBy(dispatch => dispatch.DispatchId)
@@ -126,7 +137,12 @@ public class WarehouseTransferRepository(EwmsDbContext db)
                         .Select(item => new WarehouseTransferSerial(item.TransferLine.Product.ProductCode,
                             item.SerialItem.SerialNumber, item.DispatchedCondition)
                         {
-                            ItemId = item.DispatchItemId
+                            ItemId = item.DispatchItemId,
+                            LocationId = dispatch.Status == "DONE"
+                                ? db.SerialMovements.Where(m => m.DispatchId == dispatch.DispatchId
+                                    && m.SerialItemId == item.SerialItemId && m.EventType == "TRANSFER_DISPATCH")
+                                    .OrderByDescending(m => m.MovementId).Select(m => m.FromLocationId).FirstOrDefault()
+                                : item.SerialItem.CurrentLocationId
                         })
                         .ToList())
                 {
@@ -136,38 +152,43 @@ public class WarehouseTransferRepository(EwmsDbContext db)
                 })
                 .ToListAsync();
 
+            var pickedLocations = detail.Documents.SelectMany(d => d.Serials)
+                .Where(s => s.LocationId.HasValue).Select(s => s.LocationId!.Value).Distinct().ToArray();
+            if (pickedLocations.Length > 0)
+                detail.PickLocations = await locationPaths.Where(l => pickedLocations.Contains(l.LocationId))
+                    .ToDictionaryAsync(l => l.LocationId, l => l.Path);
+
             if (detail.Documents.Any(doc => doc.CanScan))
             {
                 var active = db.TransferDispatchItems.Where(i => i.IsActive);
                 var open = active.Where(i => i.Dispatch.Status == "DRAFT" || i.Dispatch.IsActivePicking);
+                var remainingLines = db.TransferOrderLines.Where(line => line.TransferOrderId == orderId
+                    && active.Count(i => i.TransferLineId == line.TransferLineId
+                        && (i.Dispatch.Status == "DONE" || i.Dispatch.Status == "DRAFT" || i.Dispatch.IsActivePicking))
+                        < line.RequestedQuantity - line.CancelledQuantity);
                 detail.DispatchSerialOptions = await (
-                    from line in db.TransferOrderLines
+                    from line in remainingLines
                     join serial in db.SerialItems on line.ProductId equals serial.ProductId
-                    where line.TransferOrderId == orderId && serial.CurrentWarehouseId == warehouseId
+                    where serial.CurrentWarehouseId == warehouseId
                         && serial.StockState == "IN_WAREHOUSE" && !serial.IsQuarantined
                         && serial.ItemCondition == detail.ItemCondition && serial.CurrentSupplyState == "PHYSICAL"
                         && serial.CurrentSupplySourceId != null
                         && !db.PickingClaims.Any(c => c.SerialItemId == serial.SerialItemId)
-                    let counted = active.Count(i => i.TransferLineId == line.TransferLineId
-                        && (i.Dispatch.Status == "DONE" || i.Dispatch.Status == "DRAFT" || i.Dispatch.IsActivePicking))
-                    where counted < line.RequestedQuantity - line.CancelledQuantity
                     let reserved = db.Reservations.Where(r => r.TransferLineId == line.TransferLineId
                         && r.SupplySourceId == serial.CurrentSupplySourceId && r.Status == "ACTIVE"
                         && r.SupplyState == "PHYSICAL")
                         .Sum(r => (int?)(r.ReservedQuantity - r.ConsumedQuantity - r.ReleasedQuantity)) ?? 0
                     where reserved > open.Count(i => i.TransferLineId == line.TransferLineId
                         && i.SourceAtDispatchId == serial.CurrentSupplySourceId)
-                    let location = serial.CurrentLocation
-                    let parent = location!.ParentLocation
-                    let rowOrZone = parent!.ParentLocation
-                    let zone = rowOrZone!.ParentLocation
-                    let path = location == null ? "Chưa xác định vị trí" :
-                        (zone == null ? "" : zone.LocationName + " → ") +
-                        (rowOrZone == null ? "" : rowOrZone.LocationName + " → ") +
-                        (parent == null ? "" : parent.LocationName + " → ") + location.LocationName
+                    join spot in locationPaths on serial.CurrentLocationId equals spot.LocationId into spots
+                    from spot in spots.DefaultIfEmpty()
+                    let path = spot.Path ?? "Chưa xác định vị trí"
                     orderby line.Product.ProductCode, path, serial.SerialNumber
                     select new DispatchSerialOption(line.Product.ProductCode, line.Product.ProductName,
-                        path, serial.SerialNumber)).ToListAsync();
+                        path, serial.SerialNumber, serial.ManufacturingMonth, serial.ManufacturingYear,
+                        serial.ItemCondition)).ToListAsync();
+                detail.IsDispatchQuantityCovered = detail.DispatchSerialOptions.Count == 0
+                    && !await remainingLines.AnyAsync();
             }
         }
         else
