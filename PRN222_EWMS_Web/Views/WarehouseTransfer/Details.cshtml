@@ -2,6 +2,11 @@
 @using PRN222_EWMS_Web.ViewModels.Shared
 
 @{
+    static string ConditionText(string? value) => value switch
+    {
+        "GOOD" => "Tốt", "DAMAGED" => "Hư hỏng", null => "Chưa ghi nhận", _ => value
+    };
+
     ViewData["Title"] = $"Lệnh điều chuyển {Model.Code}";
 }
 
@@ -34,7 +39,7 @@
         </div>
         <div>
             <dt class="small text-muted fw-normal mb-2">Tình trạng hàng yêu cầu</dt>
-            <dd class="mb-0">@(Model.ItemCondition switch { "GOOD" => "Tốt", "DAMAGED" => "Hư hỏng", _ => Model.ItemCondition })</dd>
+            <dd class="mb-0">@ConditionText(Model.ItemCondition)</dd>
         </div>
         <div>
             <dt class="small text-muted fw-normal mb-2">Việc của kho</dt>
@@ -132,26 +137,6 @@
     {
         <form asp-action="ScanDispatch" asp-route-id="@Model.Id" method="post">
             <input type="hidden" name="dispatchId" value="@doc.DispatchId" />
-            @if (Model.DispatchSerialOptions.Count > 0)
-            {
-                <label class="form-label" for="serial-options-@doc.DispatchId">Chọn serial theo vị trí</label>
-                <select class="form-select mb-3" id="serial-options-@doc.DispatchId" data-dispatch-options>
-                    <option value="">Chọn serial trong kho</option>
-                    @foreach (var group in Model.DispatchSerialOptions.GroupBy(s => new { s.ProductCode, s.ProductName, s.Location }))
-                    {
-                        <optgroup label="@($"{group.Key.ProductCode} · {group.Key.ProductName} · {group.Key.Location}")">
-                            @foreach (var serial in group)
-                            {
-                                <option value="@serial.SerialNumber">@serial.SerialNumber</option>
-                            }
-                        </optgroup>
-                    }
-                </select>
-            }
-            else
-            {
-                <p class="text-muted">Không còn serial đủ điều kiện để gợi ý cho phiếu này.</p>
-            }
             <partial name="_SerialCapture" model="@(new SerialCaptureViewModel
             {
                 SerialName = "serialNumber",
@@ -160,6 +145,60 @@
             })" />
             <button type="submit" class="btn btn-outline-secondary mt-3"><i class="bi bi-plus-lg" aria-hidden="true"></i> Thêm serial</button>
         </form>
+        <details class="mt-4" open>
+            <summary class="fw-semibold">Gợi ý vị trí và serial để lấy hàng</summary>
+            @if (Model.DispatchSerialOptions.Count == 0)
+            {
+                <p class="text-muted mt-3 mb-0">@(Model.IsDispatchQuantityCovered
+                    ? "Đã chọn đủ số lượng cần xuất cho lệnh này."
+                    : "Lệnh vẫn còn hàng cần lấy, nhưng hiện chưa có serial đủ điều kiện để gợi ý.")</p>
+            }
+            else
+            {
+                <form asp-action="ScanDispatch" asp-route-id="@Model.Id" method="post" class="mt-3">
+                    <input type="hidden" name="dispatchId" value="@doc.DispatchId" />
+                    <div class="table-wrap" tabindex="0" role="region" aria-label="Danh sách serial và vị trí lấy hàng">
+                        <table class="workspace-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">STT</th>
+                                    <th scope="col">Mã serial</th>
+                                    <th scope="col">Sản phẩm</th>
+                                    <th scope="col">Tháng/năm SX</th>
+                                    <th scope="col">Vị trí lấy hàng</th>
+                                    <th scope="col">Tình trạng</th>
+                                    <th scope="col">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (var i = 0; i < Model.DispatchSerialOptions.Count; i++)
+                                {
+                                    var option = Model.DispatchSerialOptions[i];
+                                    <tr>
+                                        <td>@(i + 1)</td>
+                                        <td class="text-nowrap">@option.SerialNumber</td>
+                                        <td>
+                                            <strong>@option.ProductCode</strong>
+                                            <div class="small text-muted">@option.ProductName</div>
+                                        </td>
+                                        <td>@option.ManufacturingDateDisplay</td>
+                                        <td>@option.Location</td>
+                                        <td>@ConditionText(option.ItemCondition)</td>
+                                        <td>
+                                            <button type="submit" name="serialNumber" value="@option.SerialNumber"
+                                                    class="workspace-button workspace-button-small"
+                                                    aria-label="Chọn lấy serial @option.SerialNumber">
+                                                <i class="bi bi-plus-lg" aria-hidden="true"></i> Chọn lấy
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </form>
+            }
+        </details>
     }
     @if (doc.CanScanReceipt)
     {
@@ -194,6 +233,10 @@
                 <tr>
                     <th>Mã sản phẩm</th>
                     <th>Serial</th>
+                    @if (Model.IsSource)
+                    {
+                        <th>Vị trí lấy hàng</th>
+                    }
                     <th>@(Model.IsSource ? "Tình trạng lúc xuất" : "Tình trạng thực nhận")</th>
                     @if (!Model.IsSource)
                     {
@@ -211,7 +254,11 @@
                     <tr>
                         <td>@item.ProductCode</td>
                         <td>@item.SerialNumber</td>
-                        <td>@(item.Condition ?? "Chưa ghi nhận")</td>
+                        @if (Model.IsSource)
+                        {
+                            <td>@(item.LocationId is int id && Model.PickLocations.TryGetValue(id, out var path) ? path : "Chưa xác định vị trí")</td>
+                        }
+                        <td>@ConditionText(item.Condition)</td>
                         @if (!Model.IsSource)
                         {
                             <td>@item.ConditionNote</td>
@@ -255,17 +302,6 @@
     @if (Model.Documents.Any(doc => doc.CanScan || doc.CanScanReceipt))
     {
         <partial name="_SerialCaptureScripts" />
-        <script>
-            document.querySelectorAll('[data-dispatch-options]').forEach(select => {
-                select.addEventListener('change', () => {
-                    if (!select.value) return;
-                    const input = select.form.querySelector('[data-serial-input]');
-                    input.value = select.value;
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    input.focus();
-                    select.selectedIndex = 0;
-                });
-            });
-        </script>
+
     }
 }
