@@ -43,6 +43,8 @@ builder.Services.AddScoped<PRN222_EWMS_Web.Services.WarehouseStaff.IReturnReceiv
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.WarehouseStaff.IPutawayRepository, PRN222_EWMS_Web.Repositories.WarehouseStaff.PutawayRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.WarehouseStaff.IPutawayService, PRN222_EWMS_Web.Services.WarehouseStaff.PutawayService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Warehouse.IOutboundService, PRN222_EWMS_Web.Services.Warehouse.OutboundService>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Warehouse.IOutboundRepository, PRN222_EWMS_Web.Repositories.Warehouse.OutboundRepository>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.Warehouse.IOutboundSupplyService, PRN222_EWMS_Web.Services.Warehouse.OutboundSupplyService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Warehouse.ITransferOrderService, PRN222_EWMS_Web.Services.Warehouse.TransferOrderService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAdminDashboardRepository, AdminDashboardRepository>();
