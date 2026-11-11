@@ -7,7 +7,7 @@
 
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
     <h1 class="mb-0 text-break">Lệnh @Model.Code</h1>
-    <a asp-action="Index" class="btn btn-outline-secondary rounded-pill">
+    <a asp-action="Index" class="btn btn-outline-secondary">
         <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Danh sách điều chuyển
     </a>
 </div>
@@ -27,7 +27,7 @@
             <p class="fw-semibold text-break mb-0">@Model.ToWarehouse</p>
         </div>
     </div>
-    <dl class="d-flex flex-wrap gap-4 border-top pt-3 mt-4 mb-0">
+    <dl class="transfer-order-facts border-top pt-3 mt-4 mb-0">
         <div>
             <dt class="small text-muted fw-normal mb-2">Trạng thái lệnh</dt>
             <dd class="mb-0"><span class="badge bg-light text-dark border rounded-pill px-3 py-2">@Model.Status</span></dd>
@@ -103,13 +103,13 @@
 @if (Model.CanClaimDispatch)
 {
     <form asp-action="ClaimDispatch" asp-route-id="@Model.Id" method="post">
-        <button type="submit" class="btn btn-primary rounded-pill">Nhận việc xuất</button>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-clipboard-check" aria-hidden="true"></i> Nhận việc xuất</button>
     </form>
 }
 @if (Model.CanClaimReceipt)
 {
     <form asp-action="ClaimReceipt" asp-route-id="@Model.Id" method="post">
-        <button type="submit" class="btn btn-primary rounded-pill">Nhận việc nhận hàng</button>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-clipboard-check" aria-hidden="true"></i> Nhận việc nhận hàng</button>
     </form>
 }
 </div>
@@ -158,7 +158,7 @@
                 HelpText = "Quét hoặc tải ảnh tem của máy cần xuất. Đối chiếu mã trước khi thêm vào phiếu.",
                 Hint = "Bạn cũng có thể nhập tay hoặc dùng máy quét USB/Bluetooth."
             })" />
-            <button type="submit" class="btn btn-primary rounded-pill mt-3">Thêm serial</button>
+            <button type="submit" class="btn btn-outline-secondary mt-3"><i class="bi bi-plus-lg" aria-hidden="true"></i> Thêm serial</button>
         </form>
     }
     @if (doc.CanScanReceipt)
@@ -179,7 +179,7 @@
             </select>
             <label class="form-label mt-3" for="note-@doc.ReceiptId">Ghi chú tình trạng</label>
             <input id="note-@doc.ReceiptId" name="conditionNote" class="form-control" maxlength="1000" />
-            <button type="submit" class="btn btn-primary rounded-pill mt-3">Thêm serial nhận</button>
+            <button type="submit" class="btn btn-outline-secondary mt-3"><i class="bi bi-plus-lg" aria-hidden="true"></i> Thêm serial nhận</button>
         </form>
     }
     @if (doc.Serials.Count == 0)
@@ -223,7 +223,7 @@
                                       asp-route-id="@Model.Id" method="post">
                                     <input type="hidden" name="documentId" value="@(doc.DispatchId ?? doc.ReceiptId)" />
                                     <input type="hidden" name="itemId" value="@item.ItemId" />
-                                    <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill text-nowrap"
+                                    <button type="submit" class="btn btn-outline-danger btn-sm text-nowrap"
                                             aria-label="Gỡ serial @item.SerialNumber">Gỡ serial</button>
                                 </form>
                             </td>
@@ -237,14 +237,14 @@
         {
             <form asp-action="CompleteDispatch" asp-route-id="@Model.Id" method="post">
                 <input type="hidden" name="dispatchId" value="@doc.DispatchId" />
-                <button type="submit" class="btn btn-primary rounded-pill mt-4">Hoàn tất xuất</button>
+                <button type="submit" class="btn btn-primary mt-4"><i class="bi bi-check2-circle" aria-hidden="true"></i> Hoàn tất xuất</button>
             </form>
         }
         @if (doc.CanScanReceipt)
         {
             <form asp-action="CompleteReceipt" asp-route-id="@Model.Id" method="post">
                 <input type="hidden" name="receiptId" value="@doc.ReceiptId" />
-                <button type="submit" class="btn btn-primary rounded-pill mt-4">Hoàn tất nhận</button>
+                <button type="submit" class="btn btn-primary mt-4"><i class="bi bi-check2-circle" aria-hidden="true"></i> Hoàn tất nhận</button>
             </form>
         }
     }

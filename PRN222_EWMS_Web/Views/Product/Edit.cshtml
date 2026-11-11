@@ -1,4 +1,4 @@
-﻿@model PRN222_EWMS_Web.ViewModels.Products.ProductEditViewModel
+@model PRN222_EWMS_Web.ViewModels.Products.ProductEditViewModel
 
 @{
     ViewData["Title"] = "Sửa sản phẩm";
@@ -6,12 +6,12 @@
 
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
     <h1 class="mb-0">Sửa sản phẩm</h1>
-    <a asp-action="Index" class="btn btn-outline-secondary rounded-pill ms-auto">
+    <a asp-action="Index" class="btn btn-outline-secondary ms-auto">
         <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Quay lại danh sách
     </a>
 </div>
 
-<form asp-action="Edit"
+<form class="workspace-card" asp-action="Edit"
       asp-route-id="@Model.ProductId"
       method="post">
 
@@ -167,7 +167,7 @@
         <a asp-action="Details"
            asp-route-id="@Model.ProductId"
            class="btn btn-secondary">
-            Hủy
+            <i class="bi bi-x-circle" aria-hidden="true"></i> Hủy
         </a>
     </div>
 </form>
