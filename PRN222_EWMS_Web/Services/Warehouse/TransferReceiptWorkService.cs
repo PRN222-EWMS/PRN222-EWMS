@@ -5,7 +5,7 @@ using PRN222_EWMS_Web.Models;
 
 namespace PRN222_EWMS_Web.Services.WarehouseStaff;
 
-public class TransferReceiptWorkService(EwmsDbContext db)
+public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock)
 {
     private Task<TransferOrder?> LockDestinationOrderAsync(long orderId, int userId) =>
         db.TransferOrders
@@ -147,7 +147,20 @@ public class TransferReceiptWorkService(EwmsDbContext db)
                 return (false, $"Serial {serial.SerialNumber} thiếu tình trạng thực nhận hợp lệ.");
         }
 
-        var now = DateTime.UtcNow;
+        var destination = await db.Warehouses.AsNoTracking()
+            .Where(w => w.WarehouseId == order.ToWarehouseId)
+            .Select(w => new { w.WarehouseType, w.RentalStartDate, w.RentalEndDate }).SingleAsync();
+        var now = clock.GetUtcNow().UtcDateTime;
+        var receivedOn = DateOnly.FromDateTime(now.AddHours(7));
+        if (destination.WarehouseType == "RENTED")
+        {
+            if (destination.RentalStartDate is not DateOnly start || destination.RentalEndDate is not DateOnly end || start > end)
+                return (false, "Kho đích chưa có kỳ thuê hợp lệ; chưa thể hoàn tất nhận hàng.");
+            if (receivedOn < start)
+                return (false, $"Kho đích bắt đầu thuê ngày {start:dd/MM/yyyy}; chưa thể nhận hàng ngày {receivedOn:dd/MM/yyyy}.");
+            if (receivedOn > end)
+                return (false, $"Kho đích đã hết hạn thuê ngày {end:dd/MM/yyyy}; không thể nhận hàng ngày {receivedOn:dd/MM/yyyy}.");
+        }
         foreach (var group in items.GroupBy(i => new { i.DispatchItem.ProductId, Condition = i.ReceivedCondition! }))
         {
             var damaged = group.Key.Condition == "DAMAGED";

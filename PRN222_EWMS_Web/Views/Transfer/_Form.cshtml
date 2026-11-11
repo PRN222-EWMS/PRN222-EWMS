@@ -1,0 +1,68 @@
+@using Microsoft.AspNetCore.Mvc.Rendering
+@model PRN222_EWMS_Web.ViewModels.Transfer.CreateTransferOrderViewModel
+<div asp-validation-summary="All" class="text-danger" role="alert"></div>
+<div class="workspace-card mb-3">
+    <p>Lưu nháp chưa giữ chỗ tồn nguồn. Khi phát hành, hệ thống kiểm tra lại tồn PHYSICAL và sức chứa dự báo tại ngày đến.</p>
+    <div class="row g-3">
+        <div class="col-md-4">
+            <label asp-for="FromWarehouseId" class="form-label">Kho nguồn</label>
+            <select asp-for="FromWarehouseId" asp-items="@(new SelectList(Model.Warehouses, "Id", "Name"))" class="form-select" required><option value="">Chọn kho nguồn</option></select>
+            <span asp-validation-for="FromWarehouseId" class="text-danger"></span>
+        </div>
+        <div class="col-md-4">
+            <label asp-for="ToWarehouseId" class="form-label">Kho đích</label>
+            <select asp-for="ToWarehouseId" asp-items="@(new SelectList(Model.Warehouses, "Id", "Name"))" class="form-select" required><option value="">Chọn kho đích</option></select>
+            <span asp-validation-for="ToWarehouseId" class="text-danger"></span>
+        </div>
+        <div class="col-md-4">
+            <label asp-for="ItemCondition" class="form-label">Tình trạng toàn lệnh</label>
+            <select asp-for="ItemCondition" class="form-select"><option value="GOOD">GOOD — Hàng tốt</option><option value="DAMAGED">DAMAGED — Hàng hỏng</option></select>
+        </div>
+        <div class="col-md-6">
+            <label asp-for="DispatchDate" class="form-label">Ngày dự kiến gửi</label>
+            <input asp-for="DispatchDate" type="date" class="form-control" />
+        </div>
+        <div class="col-md-6">
+            <label asp-for="ExpectedDate" class="form-label">Ngày dự kiến đến (ETA)</label>
+            <input asp-for="ExpectedDate" type="date" class="form-control" />
+            <small class="text-muted">Hai ngày bắt buộc khi phát hành. Quá ETA mà chưa có phiếu gửi/nhận, lệnh tự hủy.</small>
+        </div>
+        <div class="col-12">
+            <label asp-for="Note" class="form-label">Ghi chú</label>
+            <textarea asp-for="Note" class="form-control" maxlength="1000" rows="2"></textarea>
+        </div>
+    </div>
+</div>
+<div class="workspace-card">
+    <h2 class="h5">Sản phẩm chuyển</h2>
+    <p class="text-muted">Tồn có thể giữ chỗ đã trừ cam kết khác và loại hàng cách ly. Khi sửa, số này bao gồm giữ chỗ của chính lệnh.</p>
+    <div class="table-responsive">
+        <table class="table align-middle"><thead><tr><th>Sản phẩm</th><th style="width:150px">Số lượng</th><th style="width:180px">Có thể giữ chỗ</th><th></th></tr></thead>
+            <tbody id="transfer-lines">
+            @for (var i = 0; i < Model.Lines.Count; i++)
+            {
+                <tr>
+                    <td><input asp-for="Lines[i].TransferLineId" type="hidden" />
+                        <select asp-for="Lines[i].ProductId" class="form-select transfer-product" required>
+                            <option value="">Chọn sản phẩm</option>
+                            @foreach (var p in Model.Products) { <option value="@p.ProductId">@p.ProductCode — @p.ProductName (@p.Unit)</option> }
+                        </select>
+                    </td>
+                    <td><input asp-for="Lines[i].Quantity" class="form-control transfer-quantity" type="number" min="1" max="1000000" step="1" required /></td>
+                    <td class="transfer-available">@Model.Lines[i].AvailableQuantity.ToString("N0")</td>
+                    <td><button type="button" class="btn btn-outline-danger transfer-remove" aria-label="Xóa dòng sản phẩm">Xóa</button></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+    @if (Model.CanEdit) { <button type="button" id="transfer-add" class="btn btn-outline-secondary">Thêm sản phẩm</button> }
+</div>
+<div id="transfer-feedback" class="mt-3" role="status" aria-live="polite">
+    @if (Model.Assessment.CurrentCapacity != null) { <p>@Model.Assessment.CurrentCapacity</p> }
+    @if (Model.Assessment.ForecastCapacity != null) { <p>@Model.Assessment.ForecastCapacity</p> }
+    @foreach (var message in Model.Assessment.Warnings.Concat(Model.Assessment.Errors).Distinct()
+        .Where(m => m != Model.Assessment.CurrentCapacity && m != Model.Assessment.ForecastCapacity))
+    { <div class="alert alert-warning">@message</div> }
+</div>
+<script type="application/json" id="transfer-products">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Products, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)))</script>

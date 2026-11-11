@@ -1,15 +1,306 @@
+using System.Data;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Models;
-using PRN222_EWMS_Web.Services.Purchasing;
 using PRN222_EWMS_Web.ViewModels.Transfer;
 
 namespace PRN222_EWMS_Web.Services.Warehouse;
 
-public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine capacityEngine) : ITransferOrderService
+public class TransferOrderService(EwmsDbContext db, TransferStockService stock, TransferCapacityService capacity,
+    TransferExpiryService expiry, TimeProvider clock, ILogger<TransferOrderService> logger) : ITransferOrderService
 {
-    // =========================================================================
-    // 1. DANH SÁCH LỆNH CHUYỂN KHO (THEO QUY TẮC CÔ LẬP KHO - SECTION 4)
-    // =========================================================================
+    public Task<List<ProductLookupDto>> GetAvailableProductsAsync(int warehouseId, string itemCondition = "GOOD", long? transferOrderId = null) =>
+        stock.GetProductsAsync(warehouseId, itemCondition, transferOrderId);
+
+    public async Task PopulateFormAsync(CreateTransferOrderViewModel model, long? orderId = null)
+    {
+        model.Warehouses = await db.Warehouses.AsNoTracking().Where(w => w.Status == "ACTIVE")
+            .OrderBy(w => w.WarehouseName).Select(w => new LookupItemDto { Id = w.WarehouseId, Name = w.WarehouseName }).ToListAsync();
+        model.Products = await stock.GetProductsAsync(model.FromWarehouseId, model.ItemCondition, orderId);
+        foreach (var line in model.Lines) line.AvailableQuantity = model.Products.FirstOrDefault(p => p.ProductId == line.ProductId)?.UnreservedQuantity ?? 0;
+    }
+
+    public async Task<CreateTransferOrderViewModel> GetCreateFormAsync()
+    {
+        var model = new CreateTransferOrderViewModel { Lines = [new() { Quantity = 1 }] };
+        await PopulateFormAsync(model);
+        return model;
+    }
+
+    public async Task<EditTransferOrderViewModel?> GetEditFormAsync(long id, int userId)
+    {
+        await expiry.CancelIfExpiredAsync(id);
+        var o = await db.TransferOrders.AsNoTracking().Include(t => t.TransferOrderLines).SingleOrDefaultAsync(t => t.TransferOrderId == id);
+        if (o == null) return null;
+        bool children = await TransferDataAccess.HasDocumentsAsync(db, id);
+        bool editable = o.Status is "DRAFT" or "RELEASED" && !children;
+        var model = new EditTransferOrderViewModel
+        {
+            TransferOrderId = id, TransferCode = o.TransferCode, Status = o.Status, RowVersion = o.RowVersion,
+            RowVersionBase64 = Convert.ToBase64String(o.RowVersion), FromWarehouseId = o.FromWarehouseId, ToWarehouseId = o.ToWarehouseId,
+            ItemCondition = o.ItemCondition, DispatchDate = o.DispatchDate, ExpectedDate = o.ExpectedDate, Note = o.Note,
+            IsRelease = o.Status == "RELEASED", CanEdit = editable, CanCancel = editable,
+            LockReason = children ? "Lệnh đã có phiếu gửi/nhận nên đã khóa toàn bộ chỉnh sửa. Muốn thêm hàng, hãy tạo lệnh khác."
+                : editable ? null : o.CloseReason ?? $"Lệnh ở trạng thái {o.Status}, không thể chỉnh sửa.",
+            Lines = o.TransferOrderLines.Where(l => !editable || l.RequestedQuantity > l.CancelledQuantity)
+                .OrderBy(l => l.TransferLineId).Select(l => new CreateTransferOrderLineInput
+                { TransferLineId = l.TransferLineId, ProductId = l.ProductId, Quantity = l.RequestedQuantity - (editable ? l.CancelledQuantity : 0) }).ToList()
+        };
+        await PopulateFormAsync(model, id);
+        // Keep historical products visible in the locked form even after deactivation.
+        var missingIds = model.Lines.Select(l => l.ProductId).Except(model.Products.Select(p => p.ProductId)).ToArray();
+        model.Products.AddRange(await db.Products.AsNoTracking().Where(p => missingIds.Contains(p.ProductId))
+            .Select(p => new ProductLookupDto { ProductId = p.ProductId, ProductCode = p.ProductCode, ProductName = p.ProductName, Unit = p.Unit }).ToListAsync());
+        if (editable) model.Assessment = await AssessAsync(model, id, o.Status == "RELEASED");
+        return model;
+    }
+
+    public async Task<TransferAssessment> AssessAsync(CreateTransferOrderViewModel model, long? orderId = null, bool forceRelease = false)
+    {
+        bool release = forceRelease || model.IsRelease;
+        var result = new TransferAssessment { Errors = TransferPolicy.Validate(model, TransferPolicy.Today(clock), release) };
+        var warehouses = await db.Warehouses.AsNoTracking().Where(w => w.WarehouseId == model.FromWarehouseId || w.WarehouseId == model.ToWarehouseId).ToListAsync();
+        if (warehouses.Count != 2 || warehouses.Any(w => w.Status != "ACTIVE")) result.Errors.Add("Kho nguồn và kho đích phải tồn tại và đang hoạt động.");
+        var destination = warehouses.FirstOrDefault(w => w.WarehouseId == model.ToWarehouseId);
+        if (destination?.WarehouseType == "RENTED")
+        {
+            string? rentalError = destination.RentalStartDate == null || destination.RentalEndDate == null ? "Kho đích chưa có kỳ thuê hợp lệ."
+                : model.ExpectedDate is DateOnly eta && (eta < destination.RentalStartDate || eta > destination.RentalEndDate)
+                    ? "Ngày dự kiến đến phải nằm trong kỳ thuê của kho đích (được nhận đúng ngày hết hạn)." : null;
+            if (rentalError != null) { if (release) result.Errors.Add(rentalError); else result.Warnings.Add(rentalError); }
+        }
+        if (result.Errors.Count > 0) return result;
+        var ids = model.Lines.Select(l => l.ProductId).ToArray();
+        var validProducts = await db.Products.AsNoTracking().Where(p => ids.Contains(p.ProductId) && p.Status == "ACTIVE")
+            .Select(p => new { p.ProductId, p.ProductCode, p.ProductName }).ToListAsync();
+        if (validProducts.Count != ids.Length) { result.Errors.Add("Có sản phẩm không tồn tại hoặc đã ngừng hoạt động. Hãy chọn lại sản phẩm."); return result; }
+        var sources = await stock.GetSourcesAsync(model.FromWarehouseId, model.ItemCondition, orderId);
+        foreach (var line in model.Lines)
+        {
+            long available = sources.Where(s => s.ProductId == line.ProductId).Sum(s => s.FreeQuantity);
+            line.AvailableQuantity = available;
+            if (line.Quantity > available)
+            {
+                var product = validProducts.Single(p => p.ProductId == line.ProductId);
+                string message = $"{product.ProductCode} — {product.ProductName}: yêu cầu {line.Quantity:N0}, tồn PHYSICAL có thể giữ chỗ {available:N0}.";
+                if (release) result.Errors.Add(message); else result.Warnings.Add(message);
+            }
+        }
+        var capacityResult = new TransferAssessment();
+        await capacity.EvaluateAsync(model, capacityResult, orderId);
+        result.CurrentCapacity = capacityResult.CurrentCapacity;
+        result.ForecastCapacity = capacityResult.ForecastCapacity;
+        result.Warnings.AddRange(capacityResult.Warnings);
+        if (release) result.Errors.AddRange(capacityResult.Errors); else result.Warnings.AddRange(capacityResult.Errors);
+        if (!release && (model.DispatchDate == null || model.ExpectedDate == null)) result.Warnings.Add("Bản nháp chưa có đủ hai ngày dự kiến; cần bổ sung khi phát hành.");
+        return result;
+    }
+
+    // All checks and reservations share a serializable transaction. Lock order matches staff dispatch actions.
+    private async Task LockWarehousesAsync(int from, int to)
+    {
+        foreach (var id in new[] { from, to }.Distinct().Order())
+        {
+            await db.Warehouses.FromSqlInterpolated($"SELECT * FROM dbo.Warehouse WITH (UPDLOCK,HOLDLOCK) WHERE WarehouseID={id}").AsNoTracking().ToListAsync();
+            await db.SupplySources.FromSqlInterpolated($"SELECT * FROM dbo.SupplySource WITH (UPDLOCK,HOLDLOCK) WHERE WarehouseID={id} AND SupplyState='PHYSICAL'").AsNoTracking().ToListAsync();
+        }
+    }
+
+    private async Task ReserveAsync(TransferOrder order, IEnumerable<TransferOrderLine> lines)
+    {
+        var heldByLine = await db.Reservations.AsNoTracking().Where(r => r.TransferOrderId == order.TransferOrderId && r.Status == "ACTIVE")
+            .GroupBy(r => r.TransferLineId!.Value)
+            .Select(g => new { LineId = g.Key, Quantity = g.Sum(r => (long)r.ReservedQuantity - r.ConsumedQuantity - r.ReleasedQuantity) })
+            .ToDictionaryAsync(g => g.LineId, g => g.Quantity);
+        var sources = await stock.GetSourcesAsync(order.FromWarehouseId, order.ItemCondition);
+        var remaining = sources.ToDictionary(s => s.SourceId, s => s.FreeQuantity);
+        foreach (var line in lines.Where(l => l.RequestedQuantity > l.CancelledQuantity))
+        {
+            long needed = line.RequestedQuantity - line.CancelledQuantity - heldByLine.GetValueOrDefault(line.TransferLineId);
+            if (needed < 0) throw new DbUpdateConcurrencyException("Giữ chỗ vượt số lượng của dòng hàng.");
+            if (needed == 0) continue;
+            foreach (var s in sources.Where(s => s.ProductId == line.ProductId))
+            {
+                int take = (int)Math.Min(needed, remaining[s.SourceId]);
+                if (take <= 0) continue;
+                db.Reservations.Add(new Reservation
+                {
+                    SupplySourceId = s.SourceId, TransferLineId = line.TransferLineId, TransferOrderId = order.TransferOrderId,
+                    ProductId = line.ProductId, WarehouseId = order.FromWarehouseId, ItemCondition = order.ItemCondition,
+                    SupplyState = "PHYSICAL", ReservedQuantity = take, Status = "ACTIVE", CreatedAt = clock.GetUtcNow().UtcDateTime
+                });
+                remaining[s.SourceId] -= take;
+                needed -= take;
+                if (needed == 0) break;
+            }
+            if (needed != 0) throw new DbUpdateConcurrencyException("Tồn nguồn đã thay đổi. Hãy kiểm tra lại.");
+        }
+        await db.SaveChangesAsync();
+    }
+
+    public async Task<(bool Success, string? Error, long TransferOrderId)> CreateTransferOrderAsync(CreateTransferOrderViewModel model, int userId)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        try
+        {
+            await LockWarehousesAsync(model.FromWarehouseId, model.ToWarehouseId);
+            model.Assessment = await AssessAsync(model);
+            if (model.Assessment.Errors.Count > 0) return (false, string.Join(" ", model.Assessment.Errors), 0);
+            await TransferDataAccess.SetActorAsync(db, userId, "Create transfer");
+            var order = new TransferOrder
+            {
+                // Unique even when two managers create at the same time; no MAX(code) race.
+                TransferCode = $"TR-{TransferPolicy.Today(clock):yyyyMMdd}-{Guid.NewGuid():N}"[..37],
+                FromWarehouseId = model.FromWarehouseId, ToWarehouseId = model.ToWarehouseId, ItemCondition = model.ItemCondition,
+                DispatchDate = model.DispatchDate, ExpectedDate = model.ExpectedDate, Note = model.Note?.Trim(),
+                CreatedByUserId = userId, CreatedAt = clock.GetUtcNow().UtcDateTime, Status = model.IsRelease ? "RELEASED" : "DRAFT",
+                TransferOrderLines = model.Lines.Select(l => new TransferOrderLine { ProductId = l.ProductId, RequestedQuantity = l.Quantity }).ToList()
+            };
+            db.TransferOrders.Add(order);
+            await db.SaveChangesAsync();
+            if (model.IsRelease) await ReserveAsync(order, order.TransferOrderLines);
+            await TransferDataAccess.SetActorAsync(db, null, null);
+            await tx.CommitAsync();
+            return (true, null, order.TransferOrderId);
+        }
+        catch (Exception ex) when (ex is DbUpdateException or SqlException)
+        {
+            logger.LogWarning(ex, "Could not create transfer order.");
+            return (false, "Dữ liệu vừa thay đổi hoặc không đáp ứng ràng buộc CSDL. Hãy tải lại và kiểm tra tồn kho trước khi lưu.", 0);
+        }
+        finally
+        {
+            await TransferDataAccess.TryClearActorAsync(db, logger);
+            db.ChangeTracker.Clear();
+        }
+    }
+
+    public async Task<(bool Success, string? Error)> UpdateTransferOrderAsync(EditTransferOrderViewModel model, int userId)
+    {
+        if (await expiry.CancelIfExpiredAsync(model.TransferOrderId)) return (false, "Lệnh đã quá ETA và được tự động hủy. Hãy tạo lệnh khác.");
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        try
+        {
+            var order = await TransferDataAccess.LockOrderAsync(db, model.TransferOrderId);
+            if (order == null) return (false, "Lệnh chuyển kho không tồn tại.");
+            if (await expiry.CancelLockedAsync(order)) { await tx.CommitAsync(); return (false, TransferPolicy.ExpiryReason); }
+            if (order.Status is not ("DRAFT" or "RELEASED") || await TransferDataAccess.HasDocumentsAsync(db, order.TransferOrderId))
+                return (false, "Lệnh đã có phiếu gửi/nhận hoặc đã kết thúc; toàn bộ chỉnh sửa bị khóa.");
+            byte[] postedVersion;
+            try { postedVersion = Convert.FromBase64String(model.RowVersionBase64 ?? ""); }
+            catch (FormatException) { return (false, "Phiên bản dữ liệu không hợp lệ. Hãy tải lại trang."); }
+            if (!order.RowVersion.SequenceEqual(postedVersion)) return (false, "Lệnh vừa được người khác cập nhật. Hãy tải lại trang để xem dữ liệu mới.");
+            if (await db.DemandAllocations.AnyAsync(a => a.TransferOrderId == order.TransferOrderId)
+                || await db.Reservations.AnyAsync(r => r.TransferOrderId == order.TransferOrderId && r.ConsumedQuantity > 0))
+                return (false, "Lệnh đã có dữ liệu phân bổ/tiêu thụ hàng; không thể sửa thủ công.");
+            bool release = order.Status == "RELEASED" || model.IsRelease;
+            await LockWarehousesAsync(model.FromWarehouseId, model.ToWarehouseId);
+            model.Assessment = await AssessAsync(model, order.TransferOrderId, release);
+            if (model.Assessment.Errors.Count > 0) return (false, string.Join(" ", model.Assessment.Errors));
+            bool sourceChanged = order.FromWarehouseId != model.FromWarehouseId || order.ItemCondition != model.ItemCondition;
+            await TransferDataAccess.SetActorAsync(db, userId, sourceChanged
+                ? "Edit transfer source; replace unused holds, preserving history in AuditLog"
+                : "Edit transfer; adjust only changed demand and reservation balances");
+            if (sourceChanged)
+            {
+                var error = await TransferDataAccess.RemoveUnusedHoldsAsync(db, order.TransferOrderId);
+                if (error != null) return (false, error);
+            }
+            var oldLines = await db.TransferOrderLines.Where(l => l.TransferOrderId == order.TransferOrderId).ToListAsync();
+            var holds = await db.Reservations.Where(r => r.TransferOrderId == order.TransferOrderId && r.Status == "ACTIVE").ToListAsync();
+            var quantities = model.Lines.ToDictionary(l => l.ProductId, l => l.Quantity);
+            var now = clock.GetUtcNow().UtcDateTime;
+            foreach (var line in oldLines)
+            {
+                int target = quantities.Remove(line.ProductId, out int qty) ? qty : 0;
+                long excess = holds.Where(r => r.TransferLineId == line.TransferLineId)
+                    .Sum(r => (long)r.ReservedQuantity - r.ConsumedQuantity - r.ReleasedQuantity) - (release ? target : 0);
+                foreach (var hold in holds.Where(r => r.TransferLineId == line.TransferLineId).OrderByDescending(r => r.ReservationId))
+                {
+                    if (excess <= 0) break;
+                    int take = (int)Math.Min(excess, hold.ReservedQuantity - hold.ConsumedQuantity - hold.ReleasedQuantity);
+                    TransferDataAccess.ReleaseQuantity(hold, take, now);
+                    excess -= take;
+                }
+                // Product is part of a composite FK: retain its key and reuse it if re-added later.
+                if (target > 0) { line.RequestedQuantity = target; line.CancelledQuantity = 0; }
+                else line.CancelledQuantity = line.RequestedQuantity;
+            }
+            foreach (var (productId, qty) in quantities)
+                db.TransferOrderLines.Add(new TransferOrderLine { TransferOrderId = order.TransferOrderId, ProductId = productId, RequestedQuantity = qty });
+            await db.SaveChangesAsync();
+            // FromWarehouse/condition are alternate keys used by dispatch items. EF cannot mutate them.
+            // SQL remains parameterized, row-version checked and inside the same locked transaction.
+            string status = release ? "RELEASED" : "DRAFT";
+            var changed = await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE dbo.TransferOrder SET FromWarehouseID={model.FromWarehouseId}, ToWarehouseID={model.ToWarehouseId}, ItemCondition={model.ItemCondition}, DispatchDate={model.DispatchDate}, ExpectedDate={model.ExpectedDate}, Note={model.Note}, Status={status} WHERE TransferOrderID={order.TransferOrderId} AND RowVersion={postedVersion}");
+            if (changed != 1) throw new DbUpdateConcurrencyException();
+            db.ChangeTracker.Clear();
+            order = (await db.TransferOrders.SingleAsync(o => o.TransferOrderId == model.TransferOrderId));
+            var updatedLines = await db.TransferOrderLines.Where(l => l.TransferOrderId == order.TransferOrderId).ToListAsync();
+            if (release) await ReserveAsync(order, updatedLines);
+            await TransferDataAccess.SetActorAsync(db, null, null);
+            await tx.CommitAsync();
+            return (true, null);
+        }
+        catch (Exception ex) when (ex is DbUpdateException or SqlException)
+        {
+            logger.LogWarning(ex, "Could not edit transfer {TransferOrderId}.", model.TransferOrderId);
+            return (false, "Không thể lưu do dữ liệu vừa thay đổi hoặc ràng buộc CSDL. Hãy tải lại trang; các giữ chỗ cũ được giữ nguyên nếu giao dịch thất bại.");
+        }
+        finally { await TransferDataAccess.TryClearActorAsync(db, logger); db.ChangeTracker.Clear(); }
+    }
+
+    public async Task<(bool Success, string? Error)> CancelTransferOrderAsync(long id, int userId)
+    {
+        var order = await db.TransferOrders
+            .Include(t => t.TransferOrderLines)
+            .Include(t => t.Reservations)
+            .FirstOrDefaultAsync(t => t.TransferOrderId == id);
+
+        if (order == null)
+            return (false, "Không tìm thấy lệnh chuyển kho.");
+
+        if (order.Status == "COMPLETED" || order.Status == "CANCELLED" || order.Status == "CLOSED")
+            return (false, $"Lệnh chuyển kho đã ở trạng thái '{order.Status}', không thể hủy.");
+
+        if (order.Status != "DRAFT" && order.Status != "RELEASED")
+            return (false, "Chỉ có thể hủy lệnh chuyển kho ở trạng thái Bản nháp (DRAFT) hoặc Đã phát hành (RELEASED).");
+
+        bool hasDispatch = await db.TransferDispatches.AnyAsync(d => d.TransferOrderId == id);
+        bool hasReceipt = await db.TransferReceipts.AnyAsync(r => r.TransferOrderId == id);
+        if (hasDispatch || hasReceipt)
+            return (false, "Lệnh chuyển kho đã phát sinh phiếu xuất chuyển hoặc nhận hàng, không thể hủy.");
+
+        await using var tx = await db.Database.BeginTransactionAsync();
+        try
+        {
+            order.Status = "CANCELLED";
+            order.ClosedAt = DateTime.UtcNow;
+            order.CloseReason = "Đã hủy bởi Quản lý kho";
+
+            foreach (var line in order.TransferOrderLines)
+            {
+                line.CancelledQuantity = line.RequestedQuantity;
+            }
+
+            var activeReservations = order.Reservations.Where(r => r.Status == "ACTIVE").ToList();
+            if (activeReservations.Count > 0)
+            {
+                db.Reservations.RemoveRange(activeReservations);
+            }
+
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            return (true, null);
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync();
+            return (false, $"Lỗi khi hủy lệnh chuyển kho: {ex.Message}");
+        }
+    }
+
     public async Task<TransferListViewModel> GetListAsync(
         int userId,
         string role,
@@ -219,730 +510,4 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
         };
     }
 
-    // =========================================================================
-    // 3. CHỨC NĂNG 37: TẠO LỆNH CHUYỂN KHO (MANAGER)
-    // =========================================================================
-    public async Task<List<ProductLookupDto>> GetAvailableProductsAsync(int warehouseId, string itemCondition = "GOOD")
-    {
-        if (warehouseId <= 0) return [];
-
-        var heldBySource = await db.Reservations
-            .Where(r => r.Status == "ACTIVE" && r.WarehouseId == warehouseId && r.ItemCondition == itemCondition)
-            .GroupBy(r => r.SupplySourceId)
-            .Select(g => new { SupplySourceId = g.Key, ReservedBalance = g.Sum(r => (long)r.ReservedQuantity - r.ConsumedQuantity - r.ReleasedQuantity) })
-            .ToDictionaryAsync(x => x.SupplySourceId, x => x.ReservedBalance);
-
-        var sources = await db.SupplySources
-            .Where(s => s.WarehouseId == warehouseId && s.ItemCondition == itemCondition && s.SupplyState == "PHYSICAL")
-            .Select(s => new { s.SupplySourceId, s.ProductId, s.EligibleQuantity })
-            .ToListAsync();
-
-        var lookup = sources
-            .Select(s =>
-            {
-                var reserved = heldBySource.TryGetValue(s.SupplySourceId, out var b) ? b : 0;
-                return new { s.ProductId, Unreserved = Math.Max(0, (long)s.EligibleQuantity - reserved) };
-            })
-            .GroupBy(x => x.ProductId)
-            .ToDictionary(g => g.Key, g => g.Sum(x => x.Unreserved));
-
-        var products = await db.Products
-            .AsNoTracking()
-            .Where(p => p.Status == "ACTIVE")
-            .OrderBy(p => p.ProductCode)
-            .Select(p => new ProductLookupDto
-            {
-                ProductId = p.ProductId,
-                ProductCode = p.ProductCode,
-                ProductName = p.ProductName,
-                Unit = p.Unit,
-                CategoryId = p.CategoryId,
-                BrandId = p.BrandId,
-                UnreservedQuantity = 0
-            })
-            .ToListAsync();
-
-        foreach (var p in products)
-        {
-            if (lookup.TryGetValue(p.ProductId, out var unreserved))
-            {
-                p.UnreservedQuantity = unreserved;
-            }
-        }
-
-        return products;
-    }
-
-    public async Task<CreateTransferOrderViewModel> GetCreateFormAsync()
-    {
-        var warehouses = await db.Warehouses
-            .AsNoTracking()
-            .Where(w => w.Status == "ACTIVE")
-            .Select(w => new LookupItemDto { Id = w.WarehouseId, Name = w.WarehouseName })
-            .ToListAsync();
-
-        var defaultFromWhId = warehouses.Count > 0 ? warehouses[0].Id : 0;
-        var products = defaultFromWhId > 0
-            ? await GetAvailableProductsAsync(defaultFromWhId, "GOOD")
-            : await db.Products
-                .AsNoTracking()
-                .Where(p => p.Status == "ACTIVE")
-                .Select(p => new ProductLookupDto
-                {
-                    ProductId = p.ProductId,
-                    ProductCode = p.ProductCode,
-                    ProductName = p.ProductName,
-                    Unit = p.Unit,
-                    CategoryId = p.CategoryId,
-                    BrandId = p.BrandId,
-                    UnreservedQuantity = 0
-                })
-                .ToListAsync();
-
-        var today = DateOnly.FromDateTime(DateTime.Today);
-        return new CreateTransferOrderViewModel
-        {
-            Warehouses = warehouses,
-            FromWarehouseId = defaultFromWhId,
-            Products = products,
-            StaffUsers = [],
-            DispatchDate = today,
-            ExpectedDate = today.AddDays(3),
-            Lines = [new CreateTransferOrderLineInput { ProductId = 0, Quantity = 1 }]
-        };
-    }
-
-    public async Task<(bool Success, string? Error, long TransferOrderId)> CreateTransferOrderAsync(
-        CreateTransferOrderViewModel model,
-        int userId)
-    {
-        // 1. Validation kho nguồn và kho đích
-        if (model.FromWarehouseId == model.ToWarehouseId)
-        {
-            return (false, "Vui lòng chọn hai kho khác nhau hợp lệ.", 0);
-        }
-
-        var fromWh = await db.Warehouses.FindAsync(model.FromWarehouseId);
-        var toWh = await db.Warehouses.FindAsync(model.ToWarehouseId);
-        if (fromWh == null || fromWh.Status != "ACTIVE" || toWh == null || toWh.Status != "ACTIVE")
-        {
-            return (false, "Một trong hai kho được chọn không tồn tại hoặc đã ngừng hoạt động.", 0);
-        }
-
-        // 2. Validation Condition
-        if (model.ItemCondition != "GOOD" && model.ItemCondition != "DAMAGED")
-        {
-            return (false, "Tình trạng hàng phải là GOOD hoặc DAMAGED.", 0);
-        }
-
-        // 3. Validation ETA & DispatchDate
-        if (model.DispatchDate.HasValue && model.DispatchDate.Value < DateOnly.FromDateTime(DateTime.Today))
-        {
-            return (false, "Ngày chuyển đi không được nhỏ hơn ngày hiện tại.", 0);
-        }
-
-        if (model.DispatchDate.HasValue && model.ExpectedDate.HasValue && model.ExpectedDate.Value < model.DispatchDate.Value)
-        {
-            return (false, "Ngày dự kiến nhận phải bằng hoặc sau ngày chuyển đi.", 0);
-        }
-
-        if (model.ExpectedDate.HasValue && model.ExpectedDate.Value < DateOnly.FromDateTime(DateTime.Today))
-        {
-            return (false, "Ngày dự kiến chuyển đến (ETA) không được nhỏ hơn ngày hiện tại.", 0);
-        }
-
-        // 4. Validation dòng sản phẩm
-        var validLines = model.Lines.Where(l => l.ProductId > 0 && l.Quantity > 0).ToList();
-        if (validLines.Count == 0)
-        {
-            return (false, "Lệnh chuyển kho phải có ít nhất một dòng sản phẩm với số lượng lớn hơn 0.", 0);
-        }
-
-        // Gộp các dòng trùng sản phẩm để tính đúng tổng số lượng
-        var groupedLines = validLines
-            .GroupBy(l => l.ProductId)
-            .Select(g => new { ProductId = g.Key, Quantity = g.Sum(x => x.Quantity) })
-            .ToList();
-
-        // 5. Kiểm tra sức chứa kho đích (BẮT BUỘC KHI SAVE DRAFT VÀ RELEASE - SECTION 6)
-        if (model.ItemCondition == "GOOD")
-        {
-            var capCheck = await capacityEngine.ValidatePurchaseOrderLinesCapacityAsync(
-                model.ToWarehouseId,
-                groupedLines.Select(l => (l.ProductId, l.Quantity)));
-
-            if (!capCheck.IsValid)
-            {
-                return (false, capCheck.ErrorMessage ?? "Kho đích không còn đủ sức chứa phù hợp cho toàn bộ sản phẩm chuyển đến vào ngày dự kiến.", 0);
-            }
-        }
-        else // DAMAGED
-        {
-            // Kiểm tra kho đích có Zone/Vị trí lưu trữ hàng lỗi DAMAGED không
-            bool hasDefectiveZone = await db.StorageLocations
-                .AsNoTracking()
-                .AnyAsync(l => l.WarehouseId == model.ToWarehouseId
-                    && (l.ZoneType == "DEFECTIVE" || l.ConditionPolicy == "DEFECTIVE_ONLY" || l.ConditionPolicy == "DAMAGED")
-                    && l.Status == "ACTIVE");
-
-            if (!hasDefectiveZone)
-            {
-                return (false, "Kho đích chưa được thiết lập khu vực lưu trữ tương thích cho loại hàng hóa và tình trạng này.", 0);
-            }
-        }
-
-        // 6. Kiểm tra tồn vật lý khả dụng tại kho nguồn (Validate bắt buộc cho cả Lưu nháp và Phát hành)
-        foreach (var line in groupedLines)
-        {
-            // Tồn vật lý trong kho có tình trạng phù hợp
-            int physicalCount = await db.SerialItems
-                .AsNoTracking()
-                .Where(s => s.CurrentWarehouseId == model.FromWarehouseId
-                    && s.ProductId == line.ProductId
-                    && s.ItemCondition == model.ItemCondition
-                    && s.StockState == "IN_WAREHOUSE"
-                    && !s.IsQuarantined)
-                .CountAsync();
-
-            // Trừ các serial đang bị claim
-            int claimedCount = await db.PickingClaims
-                .AsNoTracking()
-                .Where(c => db.SerialItems.Any(s => s.SerialItemId == c.SerialItemId
-                    && s.CurrentWarehouseId == model.FromWarehouseId
-                    && s.ProductId == line.ProductId
-                    && s.ItemCondition == model.ItemCondition))
-                .CountAsync();
-
-            // Trừ các Reservation ACTIVE
-            int reservedCount = await db.Reservations
-                .AsNoTracking()
-                .Where(r => r.WarehouseId == model.FromWarehouseId
-                    && r.ProductId == line.ProductId
-                    && r.ItemCondition == model.ItemCondition
-                    && r.SupplyState == "PHYSICAL"
-                    && r.Status == "ACTIVE")
-                .SumAsync(r => (int?)(r.ReservedQuantity - r.ConsumedQuantity - r.ReleasedQuantity)) ?? 0;
-
-            int availablePhysical = physicalCount - claimedCount - reservedCount;
-            if (availablePhysical < line.Quantity)
-            {
-                var prod = await db.Products.FindAsync(line.ProductId);
-                var prodName = prod != null ? $"[{prod.ProductCode}] {prod.ProductName}" : $"Sản phẩm ID {line.ProductId}";
-                return (false, $"Số lượng yêu cầu ({line.Quantity}) vượt quá tồn kho khả dụng ({availablePhysical}) của sản phẩm {prodName}.", 0);
-            }
-        }
-
-        // 7. Sinh mã lệnh TR-yyyy-XXX
-        var currentYear = DateTime.UtcNow.Year;
-        var prefix = $"TR-{currentYear}-";
-        var lastCode = await db.TransferOrders
-            .Where(t => t.TransferCode.StartsWith(prefix))
-            .OrderByDescending(t => t.TransferCode)
-            .Select(t => t.TransferCode)
-            .FirstOrDefaultAsync();
-
-        int nextSeq = 1;
-        if (lastCode != null && lastCode.Length > prefix.Length && int.TryParse(lastCode[prefix.Length..], out int parsed))
-        {
-            nextSeq = parsed + 1;
-        }
-        string transferCode = $"{prefix}{nextSeq:D3}";
-
-        // 8. Lưu trong transaction nguyên tử
-        await using var tx = await db.Database.BeginTransactionAsync();
-        try
-        {
-            var transferOrder = new TransferOrder
-            {
-                TransferCode = transferCode,
-                FromWarehouseId = model.FromWarehouseId,
-                ToWarehouseId = model.ToWarehouseId,
-                ItemCondition = model.ItemCondition,
-                Status = model.IsRelease ? "RELEASED" : "DRAFT",
-                DispatchDate = model.DispatchDate ?? DateOnly.FromDateTime(DateTime.Today),
-                ExpectedDate = model.ExpectedDate,
-                CreatedByUserId = userId,
-                AssignedToUserId = null, // Để trống để nhân viên tại kho nguồn/kho đích tự do tiếp nhận
-                CreatedAt = DateTime.UtcNow,
-                Note = model.Note
-            };
-
-            db.TransferOrders.Add(transferOrder);
-            await db.SaveChangesAsync();
-
-            var createdLines = new List<TransferOrderLine>();
-            foreach (var line in groupedLines)
-            {
-                var orderLine = new TransferOrderLine
-                {
-                    TransferOrderId = transferOrder.TransferOrderId,
-                    ProductId = line.ProductId,
-                    RequestedQuantity = line.Quantity,
-                    CancelledQuantity = 0
-                };
-                db.TransferOrderLines.Add(orderLine);
-                createdLines.Add(orderLine);
-            }
-            await db.SaveChangesAsync();
-
-            // Nếu RELEASE: Tạo Reservation vật lý cho từng dòng (CK_Reservation_DemandContext)
-            if (model.IsRelease)
-            {
-                foreach (var line in createdLines)
-                {
-                    // Tìm nguồn cung PHYSICAL phù hợp
-                    var supplySource = await db.SupplySources
-                        .FirstOrDefaultAsync(s => s.ProductId == line.ProductId
-                            && s.WarehouseId == model.FromWarehouseId
-                            && s.ItemCondition == model.ItemCondition
-                            && s.SupplyState == "PHYSICAL");
-
-                    if (supplySource == null)
-                    {
-                        // Tạo hoặc dùng nguồn cung physical mặc định
-                        supplySource = new SupplySource
-                        {
-                            ProductId = line.ProductId,
-                            WarehouseId = model.FromWarehouseId,
-                            ItemCondition = model.ItemCondition,
-                            SourceType = "INBOUND",
-                            SupplyState = "PHYSICAL",
-                            EligibleQuantity = line.RequestedQuantity,
-                            RemainingQuantity = line.RequestedQuantity,
-                            CreatedAt = DateTime.UtcNow
-                        };
-                        db.SupplySources.Add(supplySource);
-                        await db.SaveChangesAsync();
-                    }
-
-                    var reservation = new Reservation
-                    {
-                        SupplySourceId = supplySource.SupplySourceId,
-                        TransferOrderId = transferOrder.TransferOrderId,
-                        TransferLineId = line.TransferLineId,
-                        SolineId = null,
-                        SalesOrderId = null,
-                        ReservedQuantity = line.RequestedQuantity,
-                        ConsumedQuantity = 0,
-                        ReleasedQuantity = 0,
-                        Status = "ACTIVE",
-                        CreatedAt = DateTime.UtcNow,
-                        ProductId = line.ProductId,
-                        WarehouseId = model.FromWarehouseId,
-                        ItemCondition = model.ItemCondition,
-                        SupplyState = "PHYSICAL"
-                    };
-                    db.Reservations.Add(reservation);
-                }
-                await db.SaveChangesAsync();
-            }
-
-            await tx.CommitAsync();
-            return (true, null, transferOrder.TransferOrderId);
-        }
-        catch (Exception ex)
-        {
-            await tx.RollbackAsync();
-            return (false, $"Lỗi hệ thống khi tạo lệnh chuyển kho: {ex.Message}", 0);
-        }
-    }
-
-    // =========================================================================
-    // 4. CHỨC NĂNG 36: CHỈNH SỬA LỆNH CHUYỂN KHO (MANAGER)
-    // =========================================================================
-    public async Task<EditTransferOrderViewModel?> GetEditFormAsync(long id, int userId)
-    {
-        var order = await db.TransferOrders
-            .AsNoTracking()
-            .Include(t => t.FromWarehouse)
-            .Include(t => t.ToWarehouse)
-            .Include(t => t.TransferOrderLines)
-                .ThenInclude(l => l.Product)
-            .Include(t => t.TransferDispatches)
-            .Include(t => t.TransferDispatchItems)
-            .FirstOrDefaultAsync(t => t.TransferOrderId == id);
-
-        if (order == null) return null;
-
-        // Trạng thái đã đóng: không xem/sửa được
-        if (order.Status == "COMPLETED" || order.Status == "CLOSED")
-            return null;
-
-        bool hasDispatch = await db.TransferDispatches.AnyAsync(d => d.TransferOrderId == id);
-        bool hasReceipt = await db.TransferReceipts.AnyAsync(r => r.TransferOrderId == id);
-        bool isSourceFrozen = hasDispatch || hasReceipt;
-        bool canCancel = (order.Status == "DRAFT" || order.Status == "RELEASED") && !isSourceFrozen;
-
-        var warehouses = await db.Warehouses
-            .AsNoTracking()
-            .Where(w => w.Status == "ACTIVE")
-            .Select(w => new LookupItemDto { Id = w.WarehouseId, Name = w.WarehouseName })
-            .ToListAsync();
-
-        var products = await GetAvailableProductsAsync(order.FromWarehouseId, order.ItemCondition);
-        var stockDict = products.ToDictionary(p => p.ProductId, p => p.UnreservedQuantity);
-
-        var dispatchItems = await db.TransferDispatchItems
-            .AsNoTracking()
-            .Where(di => di.Dispatch.TransferOrderId == id && di.IsActive)
-            .ToListAsync();
-
-        var lines = order.TransferOrderLines.Select(l =>
-        {
-            int dispatched = dispatchItems.Count(di => di.TransferLineId == l.TransferLineId);
-            stockDict.TryGetValue(l.ProductId, out var unreserved);
-            return new EditTransferOrderLineInput
-            {
-                TransferLineId = l.TransferLineId,
-                ProductId = l.ProductId,
-                ProductCode = l.Product.ProductCode,
-                ProductName = l.Product.ProductName,
-                Quantity = l.RequestedQuantity,
-                AvailableQuantity = unreserved,
-                MinQuantityAllowed = dispatched
-            };
-        }).ToList();
-
-        return new EditTransferOrderViewModel
-        {
-            TransferOrderId = order.TransferOrderId,
-            TransferCode = order.TransferCode,
-            Status = order.Status,
-            RowVersion = order.RowVersion,
-            RowVersionBase64 = Convert.ToBase64String(order.RowVersion),
-            FromWarehouseId = order.FromWarehouseId,
-            FromWarehouseName = order.FromWarehouse.WarehouseName,
-            ToWarehouseId = order.ToWarehouseId,
-            ToWarehouseName = order.ToWarehouse.WarehouseName,
-            ItemCondition = order.ItemCondition,
-            DispatchDate = order.DispatchDate ?? DateOnly.FromDateTime(order.CreatedAt.Date),
-            ExpectedDate = order.ExpectedDate,
-            AssignedToUserId = order.AssignedToUserId,
-            Note = order.Note,
-            IsSourceContextFrozen = isSourceFrozen,
-            CanCancel = canCancel,
-            Lines = lines,
-            Warehouses = warehouses,
-            Products = products,
-            StaffUsers = []
-        };
-    }
-
-    public async Task<(bool Success, string? Error)> UpdateTransferOrderAsync(
-        EditTransferOrderViewModel model,
-        int userId)
-    {
-        var order = await db.TransferOrders
-            .Include(t => t.TransferOrderLines)
-            .Include(t => t.Reservations)
-            .FirstOrDefaultAsync(t => t.TransferOrderId == model.TransferOrderId);
-
-        if (order == null)
-            return (false, "Không tìm thấy lệnh chuyển kho.");
-
-        // Kiểm tra terminal states
-        if (order.Status == "COMPLETED" || order.Status == "CANCELLED" || order.Status == "CLOSED")
-            return (false, $"Lệnh chuyển kho đã ở trạng thái '{order.Status}', không thể chỉnh sửa.");
-
-        // Concurrency Check (Section 7.2)
-        var currentVersionBase64 = Convert.ToBase64String(order.RowVersion);
-        if (!string.Equals(currentVersionBase64, model.RowVersionBase64, StringComparison.Ordinal))
-        {
-            return (false, "Dữ liệu lệnh chuyển kho này đã bị thay đổi bởi người khác trong lúc bạn thao tác. Vui lòng tải lại trang trước khi lưu.");
-        }
-
-        bool hasDispatch = await db.TransferDispatches.AnyAsync(d => d.TransferOrderId == model.TransferOrderId);
-        bool hasReceipt = await db.TransferReceipts.AnyAsync(r => r.TransferOrderId == model.TransferOrderId);
-        bool isSourceFrozen = hasDispatch || hasReceipt;
-
-        // Nếu Source Context bị đóng băng (TR_TransferOrder_SourceContextFrozen), không được đổi kho hoặc condition
-        if (isSourceFrozen)
-        {
-            if (order.FromWarehouseId != model.FromWarehouseId || order.ToWarehouseId != model.ToWarehouseId || order.ItemCondition != model.ItemCondition)
-            {
-                return (false, "Không thể thay đổi kho nguồn, kho đích hoặc tình trạng hàng khi lệnh chuyển đã phát sinh phiếu xuất hoặc nhận hàng.");
-            }
-        }
-        else
-        {
-            if (model.FromWarehouseId == model.ToWarehouseId)
-            {
-                return (false, "Vui lòng chọn hai kho khác nhau hợp lệ.");
-            }
-            order.FromWarehouseId = model.FromWarehouseId;
-            order.ToWarehouseId = model.ToWarehouseId;
-            order.ItemCondition = model.ItemCondition;
-        }
-
-        // Validate Dates
-        if (model.DispatchDate.HasValue && model.ExpectedDate.HasValue && model.ExpectedDate.Value < model.DispatchDate.Value)
-        {
-            return (false, "Ngày dự kiến nhận phải bằng hoặc sau ngày chuyển đi.");
-        }
-
-        if (model.ExpectedDate.HasValue && model.ExpectedDate.Value < DateOnly.FromDateTime(DateTime.Today))
-        {
-            return (false, "Ngày dự kiến chuyển đến (ETA) không được nhỏ hơn ngày hiện tại.");
-        }
-
-        // Validate Lines
-        var validLines = model.Lines.Where(l => l.ProductId > 0 && l.Quantity > 0).ToList();
-        if (validLines.Count == 0)
-        {
-            return (false, "Lệnh chuyển kho phải có ít nhất một dòng sản phẩm với số lượng lớn hơn 0.");
-        }
-
-        var groupedLines = validLines
-            .GroupBy(l => l.ProductId)
-            .Select(g => new { ProductId = g.Key, Quantity = g.Sum(x => x.Quantity) })
-            .ToList();
-
-        // Kiểm tra không được giảm số lượng thấp hơn số đã Dispatch
-        var dispatchItems = await db.TransferDispatchItems
-            .AsNoTracking()
-            .Where(di => di.Dispatch.TransferOrderId == model.TransferOrderId && di.IsActive)
-            .ToListAsync();
-
-        foreach (var l in validLines.Where(l => l.TransferLineId > 0))
-        {
-            int dispatched = dispatchItems.Count(di => di.TransferLineId == l.TransferLineId);
-            if (l.Quantity < dispatched)
-            {
-                return (false, $"Số lượng không được thấp hơn số lượng đã xuất chuyển ({dispatched}).");
-            }
-        }
-
-        // Validate capacity đích
-        if (order.ItemCondition == "GOOD")
-        {
-            var capCheck = await capacityEngine.ValidatePurchaseOrderLinesCapacityAsync(
-                order.ToWarehouseId,
-                groupedLines.Select(l => (l.ProductId, l.Quantity)));
-
-            if (!capCheck.IsValid)
-            {
-                return (false, capCheck.ErrorMessage ?? "Kho đích không còn đủ sức chứa phù hợp cho toàn bộ sản phẩm chuyển đến vào ngày dự kiến.");
-            }
-        }
-
-        // Kiểm tra tồn vật lý khả dụng tại kho nguồn (Validate bắt buộc cho cả Lưu nháp và Phát hành)
-        foreach (var line in groupedLines)
-        {
-            int physicalCount = await db.SerialItems
-                .AsNoTracking()
-                .Where(s => s.CurrentWarehouseId == order.FromWarehouseId
-                    && s.ProductId == line.ProductId
-                    && s.ItemCondition == order.ItemCondition
-                    && s.StockState == "IN_WAREHOUSE"
-                    && !s.IsQuarantined)
-                .CountAsync();
-
-            int claimedCount = await db.PickingClaims
-                .AsNoTracking()
-                .Where(c => db.SerialItems.Any(s => s.SerialItemId == c.SerialItemId
-                    && s.CurrentWarehouseId == order.FromWarehouseId
-                    && s.ProductId == line.ProductId
-                    && s.ItemCondition == order.ItemCondition))
-                .CountAsync();
-
-            // Trừ Reservation của các lệnh KHÁC
-            int reservedCountOther = await db.Reservations
-                .AsNoTracking()
-                .Where(r => r.WarehouseId == order.FromWarehouseId
-                    && r.ProductId == line.ProductId
-                    && r.ItemCondition == order.ItemCondition
-                    && r.SupplyState == "PHYSICAL"
-                    && r.Status == "ACTIVE"
-                    && r.TransferOrderId != model.TransferOrderId)
-                .SumAsync(r => (int?)(r.ReservedQuantity - r.ConsumedQuantity - r.ReleasedQuantity)) ?? 0;
-
-            int availablePhysical = physicalCount - claimedCount - reservedCountOther;
-            if (availablePhysical < line.Quantity)
-            {
-                var prod = await db.Products.FindAsync(line.ProductId);
-                var prodName = prod != null ? $"[{prod.ProductCode}] {prod.ProductName}" : $"Sản phẩm ID {line.ProductId}";
-                return (false, $"Số lượng yêu cầu ({line.Quantity}) vượt quá tồn kho khả dụng ({availablePhysical}) của sản phẩm {prodName}.");
-            }
-        }
-
-        // Thực hiện cập nhật trong transaction nguyên tử
-        await using var tx = await db.Database.BeginTransactionAsync();
-        try
-        {
-            order.DispatchDate = model.DispatchDate;
-            order.ExpectedDate = model.ExpectedDate;
-            order.AssignedToUserId = null; // Để trống để nhân viên tại kho nguồn/kho đích tự do tiếp nhận
-            order.Note = model.Note;
-
-            if (order.Status == "DRAFT" && model.IsRelease)
-            {
-                order.Status = "RELEASED";
-            }
-
-            // Cập nhật các dòng hàng
-            // Xóa các dòng đã bỏ đi
-            var lineIdsInModel = validLines.Where(l => l.TransferLineId > 0).Select(l => l.TransferLineId).ToHashSet();
-            var linesToRemove = order.TransferOrderLines.Where(l => !lineIdsInModel.Contains(l.TransferLineId)).ToList();
-            foreach (var lr in linesToRemove)
-            {
-                // Xóa reservations liên quan
-                var resToRemove = order.Reservations.Where(r => r.TransferLineId == lr.TransferLineId).ToList();
-                db.Reservations.RemoveRange(resToRemove);
-                db.TransferOrderLines.Remove(lr);
-            }
-
-            // Sửa dòng cũ hoặc thêm dòng mới
-            foreach (var inputLine in validLines)
-            {
-                if (inputLine.TransferLineId > 0)
-                {
-                    var existingLine = order.TransferOrderLines.FirstOrDefault(l => l.TransferLineId == inputLine.TransferLineId);
-                    if (existingLine != null)
-                    {
-                        existingLine.ProductId = inputLine.ProductId;
-                        existingLine.RequestedQuantity = inputLine.Quantity;
-
-                        // Cập nhật reservation nếu đã Released
-                        if (order.Status == "RELEASED")
-                        {
-                            var res = order.Reservations.FirstOrDefault(r => r.TransferLineId == existingLine.TransferLineId && r.Status == "ACTIVE");
-                            if (res != null)
-                            {
-                                res.ReservedQuantity = inputLine.Quantity;
-                                res.ProductId = inputLine.ProductId;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    var newLine = new TransferOrderLine
-                    {
-                        TransferOrderId = order.TransferOrderId,
-                        ProductId = inputLine.ProductId,
-                        RequestedQuantity = inputLine.Quantity,
-                        CancelledQuantity = 0
-                    };
-                    db.TransferOrderLines.Add(newLine);
-                }
-            }
-            await db.SaveChangesAsync();
-
-            // Nếu lệnh mới chuyển sang RELEASED, tạo Reservation cho các dòng chưa có
-            if (order.Status == "RELEASED")
-            {
-                foreach (var line in order.TransferOrderLines)
-                {
-                    bool hasRes = await db.Reservations.AnyAsync(r => r.TransferLineId == line.TransferLineId && r.Status == "ACTIVE");
-                    if (!hasRes)
-                    {
-                        var supplySource = await db.SupplySources
-                            .FirstOrDefaultAsync(s => s.ProductId == line.ProductId
-                                && s.WarehouseId == order.FromWarehouseId
-                                && s.ItemCondition == order.ItemCondition
-                                && s.SupplyState == "PHYSICAL");
-
-                        if (supplySource == null)
-                        {
-                            supplySource = new SupplySource
-                            {
-                                ProductId = line.ProductId,
-                                WarehouseId = order.FromWarehouseId,
-                                ItemCondition = order.ItemCondition,
-                                SourceType = "INBOUND",
-                                SupplyState = "PHYSICAL",
-                                EligibleQuantity = line.RequestedQuantity,
-                                RemainingQuantity = line.RequestedQuantity,
-                                CreatedAt = DateTime.UtcNow
-                            };
-                            db.SupplySources.Add(supplySource);
-                            await db.SaveChangesAsync();
-                        }
-
-                        var reservation = new Reservation
-                        {
-                            SupplySourceId = supplySource.SupplySourceId,
-                            TransferOrderId = order.TransferOrderId,
-                            TransferLineId = line.TransferLineId,
-                            SolineId = null,
-                            SalesOrderId = null,
-                            ReservedQuantity = line.RequestedQuantity,
-                            ConsumedQuantity = 0,
-                            ReleasedQuantity = 0,
-                            Status = "ACTIVE",
-                            CreatedAt = DateTime.UtcNow,
-                            ProductId = line.ProductId,
-                            WarehouseId = order.FromWarehouseId,
-                            ItemCondition = order.ItemCondition,
-                            SupplyState = "PHYSICAL"
-                        };
-                        db.Reservations.Add(reservation);
-                    }
-                }
-                await db.SaveChangesAsync();
-            }
-
-            await tx.CommitAsync();
-            return (true, null);
-        }
-        catch (Exception ex)
-        {
-            await tx.RollbackAsync();
-            return (false, $"Lỗi hệ thống khi cập nhật: {ex.Message}");
-        }
-    }
-
-    // =========================================================================
-    // 5. HỦY LỆNH CHUYỂN KHO (MANAGER ONLY)
-    // =========================================================================
-    public async Task<(bool Success, string? Error)> CancelTransferOrderAsync(long id, int userId)
-    {
-        var order = await db.TransferOrders
-            .Include(t => t.TransferOrderLines)
-            .Include(t => t.Reservations)
-            .FirstOrDefaultAsync(t => t.TransferOrderId == id);
-
-        if (order == null)
-            return (false, "Không tìm thấy lệnh chuyển kho.");
-
-        if (order.Status == "COMPLETED" || order.Status == "CANCELLED" || order.Status == "CLOSED")
-            return (false, $"Lệnh chuyển kho đã ở trạng thái '{order.Status}', không thể hủy.");
-
-        if (order.Status != "DRAFT" && order.Status != "RELEASED")
-            return (false, "Chỉ có thể hủy lệnh chuyển kho ở trạng thái Bản nháp (DRAFT) hoặc Đã phát hành (RELEASED).");
-
-        bool hasDispatch = await db.TransferDispatches.AnyAsync(d => d.TransferOrderId == id);
-        bool hasReceipt = await db.TransferReceipts.AnyAsync(r => r.TransferOrderId == id);
-        if (hasDispatch || hasReceipt)
-            return (false, "Lệnh chuyển kho đã phát sinh phiếu xuất chuyển hoặc nhận hàng, không thể hủy.");
-
-        await using var tx = await db.Database.BeginTransactionAsync();
-        try
-        {
-            order.Status = "CANCELLED";
-            order.ClosedAt = DateTime.UtcNow;
-            order.CloseReason = "Đã hủy bởi Quản lý kho";
-
-            foreach (var line in order.TransferOrderLines)
-            {
-                line.CancelledQuantity = line.RequestedQuantity;
-            }
-
-            var activeReservations = order.Reservations.Where(r => r.Status == "ACTIVE").ToList();
-            if (activeReservations.Count > 0)
-            {
-                db.Reservations.RemoveRange(activeReservations);
-            }
-
-            await db.SaveChangesAsync();
-            await tx.CommitAsync();
-
-            return (true, null);
-        }
-        catch (Exception ex)
-        {
-            await tx.RollbackAsync();
-            return (false, $"Lỗi khi hủy lệnh chuyển kho: {ex.Message}");
-        }
-    }
 }
