@@ -1,0 +1,94 @@
+﻿@using PRN222_EWMS_Web.ViewModels.Stocktaking
+@model PRN222_EWMS_Web.ViewModels.Ceo.CeoStocktakeAdjustmentDetailsViewModel
+@{
+ ViewData["Title"] = "Chi tiết yêu cầu điều chỉnh";
+ string Condition(string? value) => value switch { "GOOD" => "Tốt", "DAMAGED" => "Hỏng", _ => "—" };
+ string Location(int? id) {
+  if (!id.HasValue) return "Chờ xếp kệ";
+  var parts = new List<string>(); var seen = new HashSet<int>(); var current = id;
+  while (current.HasValue && seen.Add(current.Value)) { var node = Model.Locations.FirstOrDefault(l => l.LocationId == current); if (node is null) break; parts.Insert(0,node.LocationName); current=node.ParentLocationId; }
+  return parts.Count == 0 ? "Vị trí #" + id : string.Join(" / ",parts);
+ }
+ string Change(string type) => type switch { "ADD" => "Tăng tồn (+1)", "REMOVE" => "Ghi nhận mất (-1)", "LOCATION" => "Đổi vị trí", "CONDITION" => "Đổi tình trạng", "COMBINED" => "Đổi tình trạng và vị trí", _ => type };
+}
+<div class="warehouse-list">
+<header class="workspace-heading"><div><p class="eyebrow">CEO · ĐIỀU CHỈNH KIỂM KÊ</p><h1>@Model.Request.Stocktake.StocktakeCode</h1><p class="muted">@Model.Request.Stocktake.Warehouse.WarehouseName</p></div><a asp-action="Index" class="workspace-button sales-button-secondary">Danh sách yêu cầu</a></header>
+@if (TempData["Success"] is string success) { <div class="workspace-notice" role="status">@success</div> }
+@if (TempData["Error"] is string error) { <div class="alert alert-danger" role="alert">@error</div> }
+<div asp-validation-summary="All" class="text-danger" role="alert"></div>
+<section class="workspace-card"><h2>Thông tin yêu cầu</h2>
+<dl class="warehouse-info-grid"><div><dt>Mã yêu cầu</dt><dd>@Model.Request.AdjustmentCode</dd></div><div><dt>Manager tạo yêu cầu</dt><dd>@Model.Request.SubmittedByUser.FullName</dd></div><div><dt>Tạo yêu cầu lúc</dt><dd>@StocktakeDisplay.Time(Model.Request.CreatedAt)</dd></div><div><dt>Gửi CEO lúc</dt><dd>@StocktakeDisplay.Time(Model.Request.SubmittedAt)</dd></div><div><dt>Trạng thái</dt><dd>@(Model.Request.Status == "SUBMITTED" ? "Chờ duyệt" : StocktakeDisplay.Status(Model.Request.Status))</dd></div></dl>
+<p class="muted">Thời gian hiển thị theo giờ Việt Nam.</p><p><strong>Người tạo đợt kiểm kê:</strong> @Model.Request.Stocktake.CreatedByUser?.FullName · @StocktakeDisplay.Time(Model.Request.Stocktake.CreatedAt)</p><p><strong>Lý do:</strong> @Model.Request.Reason</p>
+@if (Model.Request.DecidedAt.HasValue) { <p><strong>Người xét duyệt:</strong> @Model.Request.DecidedByUser?.FullName · @StocktakeDisplay.Time(Model.Request.DecidedAt)</p><p><strong>Ý kiến CEO:</strong> @(Model.Request.DecisionNote ?? "—")</p> }
+@if (Model.Request.AppliedAt.HasValue) { <p><strong>Đã áp dụng:</strong> @StocktakeDisplay.Time(Model.Request.AppliedAt)</p> }
+</section>
+<section class="workspace-card"><h2>Chênh lệch đề nghị xử lý</h2>
+<div class="d-flex flex-wrap gap-2 my-3">
+    <span class="role-badge">@Model.Lines.Count serial</span>
+    @foreach (var group in Model.Lines.GroupBy(l => l.Observation.DifferenceType)) {
+        <span class="role-badge">@StocktakeDisplay.Difference(group.Key): @group.Count()</span>
+    }
+</div>
+<div class="table-wrap"><table class="workspace-table"><thead><tr><th>Serial / sản phẩm</th><th>Sổ kho ban đầu</th><th>Kết quả gửi xét duyệt</th><th>Chênh lệch</th><th>Đề nghị xử lý</th></tr></thead><tbody>
+@foreach (var line in Model.Lines) {
+ var o = line.Observation;
+ <tr>
+    <td><strong>@line.ScannedSerial</strong><small class="d-block muted">@line.Product?.ProductName</small></td>
+    <td>@o.ExpectedQuantity chiếc<small class="d-block muted">@(o.ExpectedQuantity == 1 ? Condition(o.ExpectedCondition) + " · " + Location(o.ExpectedLocationId) : "Chưa có trong sổ kho")</small></td>
+    <td>@o.ActualQuantity chiếc<small class="d-block muted">@(o.ActualQuantity == 1 ? Condition(o.ActualCondition) + " · " + Location(o.ActualLocationId) : "Không tìm thấy")</small>
+        <small class="d-block">@(o.RoundNumber == 1 ? "Đếm lần đầu" : "Đếm lại · vòng " + o.RoundNumber)</small>
+        @if (o.ScannedAt.HasValue) {
+            <small class="d-block">Người quét: @(o.ScannedByUser?.FullName ?? "Chưa có thông tin")</small>
+            <small class="d-block muted">@StocktakeDisplay.Time(o.ScannedAt)</small>
+        } else { <small class="d-block muted">Không có lượt quét serial này.</small> }
+    </td>
+    <td><span class="role-badge">@StocktakeDisplay.Difference(o.DifferenceType)</span></td>
+    <td>@Change(line.AdjustmentType)</td>
+ </tr>
+ <tr><td colspan="5">
+    <h3 class="h6 mt-2">Các lần đếm — @line.ScannedSerial</h3>
+    <div class="table-wrap"><table class="workspace-table"><thead><tr><th>Lần đếm</th><th>Người quét</th><th>Quét lúc</th><th>Kết quả thực tế</th><th>Chênh lệch</th><th>Ghi chú</th></tr></thead><tbody>
+    @foreach (var history in Model.History.Where(h => h.ScannedSerial == line.ScannedSerial && h.RoundNumber <= o.RoundNumber).OrderBy(h => h.RoundNumber)) {
+        <tr>
+            <td>@(history.RoundNumber == 1 ? "Lần đầu" : "Đếm lại · vòng " + history.RoundNumber)@(history.ObservationId == o.ObservationId ? " (gửi xét duyệt)" : "")</td>
+            <td>@(history.ScannedAt.HasValue ? history.ScannedByUser?.FullName ?? "Chưa có thông tin" : "Không quét thấy serial")</td>
+            <td>@StocktakeDisplay.Time(history.ScannedAt)</td>
+            <td>@history.ActualQuantity chiếc<small class="d-block muted">@(history.ActualQuantity == 1 ? Condition(history.ActualCondition) + " · " + Location(history.ActualLocationId) : "Không ghi nhận")</small></td>
+            <td>@StocktakeDisplay.Difference(history.DifferenceType)</td><td class="text-break">@(string.IsNullOrWhiteSpace(history.Note) ? "—" : history.Note)</td>
+        </tr>
+    }
+    </tbody></table></div>
+ </td></tr>
+}
+</tbody></table></div></section>
+@if (Model.CanDecide) {
+var canApprove = Model.Lines.Count > 0 && Model.Lines.All(line => line.AdjustmentType == "REMOVE");
+<section class="workspace-card"><h2>Xét duyệt</h2><p class="muted">Duyệt sẽ áp dụng thay đổi tồn kho. Từ chối giữ nguyên tồn kho.</p>
+<form method="post" class="workspace-form mt-0" id="decision-form">@Html.AntiForgeryToken()<input type="hidden" name="Id" value="@Model.Request.AdjustmentId" /><input type="hidden" name="Version" value="@Model.Version" />
+<div><label for="DecisionNote">Ý kiến CEO <span class="muted">(bắt buộc khi từ chối)</span></label><textarea id="DecisionNote" name="DecisionNote" maxlength="1000" rows="3" class="form-control">@(ViewData.ModelState.TryGetValue("DecisionNote", out var state) ? state.AttemptedValue : "")</textarea></div>
+@if (!canApprove) { <p class="muted">Chỉ duyệt giảm tồn cho hàng thiếu. Hãy từ chối phiếu này để Manager xử lý theo nghiệp vụ tương ứng.</p> }
+<div class="d-flex flex-wrap gap-2">
+    @if (canApprove) { <button asp-action="Approve" class="workspace-button" type="submit" data-decision="approve">Duyệt và áp dụng</button> }
+    <button asp-action="Reject" class="btn btn-outline-danger" type="submit" data-decision="reject">Từ chối</button>
+</div>
+</form></section>
+}
+</div>
+@section Scripts {
+<script>
+(() => {
+ const form = document.getElementById('decision-form'); if (!form) return;
+ let busy = false;
+ form.querySelectorAll('[data-decision]').forEach(button => button.addEventListener('click', () => document.getElementById('DecisionNote').setCustomValidity('')));
+ form.addEventListener('submit', event => {
+  const reject = event.submitter?.dataset.decision === 'reject';
+  const note = document.getElementById('DecisionNote');
+  note.setCustomValidity(reject && !note.value.trim() ? 'Nhập lý do từ chối.' : '');
+  if (busy || !form.reportValidity() || !confirm(reject ? 'Xác nhận từ chối yêu cầu này?' : 'Duyệt và áp dụng các thay đổi tồn kho này?')) { event.preventDefault(); return; }
+  busy = true;
+ });
+ document.getElementById('DecisionNote').addEventListener('input', event => event.target.setCustomValidity(''));
+ window.addEventListener('pageshow', () => { busy = false; });
+})();
+</script>
+}

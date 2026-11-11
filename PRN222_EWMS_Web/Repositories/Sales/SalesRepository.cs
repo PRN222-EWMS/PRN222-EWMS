@@ -108,10 +108,16 @@ public class SalesRepository(EwmsDbContext db) : ISalesRepository
     public async Task<List<ProductStockLookupDto>> GetAvailableProductsAsync(int warehouseId)
     {
         var heldBySource = await db.Reservations
-            .Where(r => r.Status == "ACTIVE" && r.WarehouseId == warehouseId)
+            .Where(r => r.Status == "ACTIVE" && r.WarehouseId == warehouseId && r.TransferOrderId != null)
             .GroupBy(r => r.SupplySourceId)
             .Select(g => new { SupplySourceId = g.Key, ReservedBalance = g.Sum(r => (long)r.ReservedQuantity - r.ConsumedQuantity - r.ReleasedQuantity) })
             .ToDictionaryAsync(x => x.SupplySourceId, x => x.ReservedBalance);
+
+        var claimsBySource = await db.PickingClaims.Where(c => c.SerialItem.CurrentWarehouseId == warehouseId
+                && c.SerialItem.CurrentSupplySourceId != null)
+            .GroupBy(c => c.SerialItem.CurrentSupplySourceId!.Value)
+            .Select(g => new { SourceId = g.Key, Sales = g.Count(c => c.OutboundId != null), Transfer = g.Count(c => c.DispatchId != null) })
+            .ToDictionaryAsync(g => g.SourceId);
 
         var sources = await db.SupplySources
             .Where(s => s.WarehouseId == warehouseId && s.ItemCondition == "GOOD")
@@ -121,7 +127,9 @@ public class SalesRepository(EwmsDbContext db) : ISalesRepository
         var lookup = sources
             .Select(s =>
             {
-                var reserved = heldBySource.TryGetValue(s.SupplySourceId, out var b) ? b : 0;
+                var transferHeld = heldBySource.TryGetValue(s.SupplySourceId, out var b) ? b : 0;
+                claimsBySource.TryGetValue(s.SupplySourceId, out var claims);
+                var reserved = Math.Max(transferHeld, claims?.Transfer ?? 0) + (claims?.Sales ?? 0);
                 return new { s.ProductId, Unreserved = Math.Max(0, (long)s.EligibleQuantity - reserved) };
             })
             .GroupBy(x => x.ProductId)

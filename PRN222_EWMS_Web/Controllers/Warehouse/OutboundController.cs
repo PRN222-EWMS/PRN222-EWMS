@@ -18,7 +18,7 @@ public class OutboundController : Controller
         _logger = logger;
     }
 
-    private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+    private int CurrentUserId => int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : 0;
     private string CurrentUserRole => User.IsInRole("MANAGER") ? "MANAGER" : "WAREHOUSE_STAFF";
 
     // =========================================================================
@@ -87,9 +87,9 @@ public class OutboundController : Controller
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize(Roles = "WAREHOUSE_STAFF")]
-    public async Task<IActionResult> StartPicking(long salesOrderId)
+    public async Task<IActionResult> StartPicking(long salesOrderId, string? requestToken)
     {
-        var result = await _outboundService.StartPickingSessionAsync(salesOrderId, CurrentUserId);
+        var result = await _outboundService.StartPickingSessionAsync(salesOrderId, CurrentUserId, requestToken);
 
         if (!result.Success)
         {
@@ -97,7 +97,7 @@ public class OutboundController : Controller
             return RedirectToAction(nameof(Create), new { soId = salesOrderId });
         }
 
-        TempData["Success"] = "Đã khởi tạo phiên lấy hàng thành công!";
+        TempData["Success"] = "Đã mở phiếu xuất kho.";
         return RedirectToAction(nameof(Picking), new { id = result.OutboundId });
     }
 
@@ -113,15 +113,18 @@ public class OutboundController : Controller
             return RedirectToAction(nameof(Index));
         }
 
+        if (model.Status is "DONE" or "CANCELLED")
+            return RedirectToAction(nameof(Details), new { id });
+
         return View(model);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize(Roles = "WAREHOUSE_STAFF")]
-    public async Task<IActionResult> ScanSerial(long outboundId, string serialNumber)
+    public async Task<IActionResult> ScanSerial(long outboundId, string serialNumber, string? version)
     {
-        var result = await _outboundService.ScanSerialAsync(outboundId, serialNumber, CurrentUserId);
+        var result = await _outboundService.ScanSerialAsync(outboundId, serialNumber, CurrentUserId, version ?? "");
 
         if (!result.Success)
         {
@@ -138,9 +141,9 @@ public class OutboundController : Controller
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize(Roles = "WAREHOUSE_STAFF")]
-    public async Task<IActionResult> RemoveSerial(long outboundId, long serialItemId)
+    public async Task<IActionResult> RemoveSerial(long outboundId, long serialItemId, string? version)
     {
-        var result = await _outboundService.RemoveSerialAsync(outboundId, serialItemId, CurrentUserId);
+        var result = await _outboundService.RemoveSerialAsync(outboundId, serialItemId, CurrentUserId, version ?? "");
 
         if (!result.Success)
         {
@@ -148,7 +151,7 @@ public class OutboundController : Controller
         }
         else
         {
-            TempData["Success"] = "Đã gỡ bỏ thiết bị và giải phóng Picking Claim thành công.";
+            TempData["Success"] = "Đã bỏ chọn serial.";
         }
 
         return RedirectToAction(nameof(Picking), new { id = outboundId });
@@ -157,9 +160,9 @@ public class OutboundController : Controller
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize(Roles = "WAREHOUSE_STAFF")]
-    public async Task<IActionResult> MarkReady(long outboundId)
+    public async Task<IActionResult> Complete(long outboundId, string? version)
     {
-        var result = await _outboundService.MarkReadyAsync(outboundId, CurrentUserId);
+        var result = await _outboundService.CompleteAsync(outboundId, CurrentUserId, version ?? "");
 
         if (!result.Success)
         {
@@ -167,16 +170,16 @@ public class OutboundController : Controller
             return RedirectToAction(nameof(Picking), new { id = outboundId });
         }
 
-        TempData["Success"] = "Phiếu xuất kho đã được chuyển sang trạng thái SẴN SÀNG (READY)!";
+        TempData["Success"] = "Đã hoàn tất phiếu xuất và ghi nhận xuất kho.";
         return RedirectToAction(nameof(Details), new { id = outboundId });
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize(Roles = "WAREHOUSE_STAFF")]
-    public async Task<IActionResult> CancelPicking(long outboundId)
+    public async Task<IActionResult> CancelPicking(long outboundId, string? version)
     {
-        var result = await _outboundService.CancelPickingAsync(outboundId, CurrentUserId);
+        var result = await _outboundService.CancelPickingAsync(outboundId, CurrentUserId, version ?? "");
 
         if (!result.Success)
         {

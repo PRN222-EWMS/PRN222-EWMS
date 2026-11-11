@@ -217,7 +217,7 @@
                         <th scope="col">Người tạo</th>
                         <th scope="col" style="white-space: nowrap;">Mặt hàng / Số lượng</th>
                         <th scope="col" class="text-center" style="white-space: nowrap; width: 130px;">Trạng thái</th>
-                        <th scope="col" class="text-end" style="white-space: nowrap; width: 130px;">Thao tác</th>
+                        <th scope="col" class="text-end" style="white-space: nowrap; min-width: 220px;">Thao tác</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -245,8 +245,8 @@
                             </td>
                             <td class="text-end text-nowrap">
                                 <div class="d-inline-flex align-items-center justify-content-end gap-1">
-                                    <a class="return-action-btn return-action-active text-secondary" asp-action="Details" asp-route-id="@order.Id" title="Chi tiết" aria-label="Chi tiết">
-                                        <i class="bi bi-eye" aria-hidden="true"></i>
+                                    <a class="workspace-button sales-button-small" asp-action="Details" asp-route-id="@order.Id" title="Chi tiết" aria-label="Chi tiết">
+                                        <i class="bi bi-eye me-1" aria-hidden="true"></i> Chi tiết
                                     </a>
                                     @if (Model.IsWarehouseStaff)
                                     {
@@ -270,14 +270,14 @@
                                     {
                                         @if (order.CanEdit)
                                         {
-                                            <a class="return-action-btn return-action-active" asp-action="Edit" asp-route-id="@order.Id" title="Chỉnh sửa" aria-label="Chỉnh sửa">
-                                                <i class="bi bi-pencil" aria-hidden="true"></i>
+                                            <a class="workspace-button sales-button-secondary sales-button-small" asp-action="Edit" asp-route-id="@order.Id" title="Chỉnh sửa" aria-label="Chỉnh sửa">
+                                                <i class="bi bi-pencil-square me-1" aria-hidden="true"></i> Sửa
                                             </a>
                                         }
                                         else
                                         {
-                                            <button type="button" class="return-action-btn return-action-disabled" disabled title="Chỉnh sửa" aria-label="Chỉnh sửa">
-                                                <i class="bi bi-pencil" aria-hidden="true"></i>
+                                            <button type="button" class="workspace-button sales-button-small" disabled title="Chỉnh sửa" aria-label="Chỉnh sửa">
+                                                <i class="bi bi-pencil-square me-1" aria-hidden="true"></i> Sửa
                                             </button>
                                         }
                                         @if (order.CanCancel)
@@ -286,28 +286,28 @@
                                             {
                                                 <form method="post" asp-action="Cancel" asp-route-id="@order.Id" class="d-inline m-0 p-0">
                                                     @Html.AntiForgeryToken()
-                                                    <button type="submit" class="return-action-btn return-action-active text-danger" title="Hủy" aria-label="Hủy">
-                                                        <i class="bi bi-x-circle text-danger" aria-hidden="true"></i>
+                                                    <button type="submit" class="workspace-button sales-button-secondary sales-button-small text-danger" style="border-color: #fca5a5;" title="Hủy" aria-label="Hủy">
+                                                        <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Hủy
                                                     </button>
                                                 </form>
                                             }
                                             else
                                             {
-                                                <button type="button" class="return-action-btn return-action-active text-danger" 
+                                                <button type="button" class="workspace-button sales-button-secondary sales-button-small text-danger" style="border-color: #fca5a5;"
                                                         data-bs-toggle="modal" 
                                                         data-bs-target="#indexCancelModal" 
                                                         data-return-id="@order.Id" 
                                                         data-return-code="@order.ReturnCode" 
                                                         title="Hủy" 
                                                         aria-label="Hủy">
-                                                    <i class="bi bi-x-circle text-danger" aria-hidden="true"></i>
+                                                    <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Hủy
                                                 </button>
                                             }
                                         }
                                         else
                                         {
-                                            <button type="button" class="return-action-btn return-action-disabled" disabled title="Hủy" aria-label="Hủy">
-                                                <i class="bi bi-x-circle" aria-hidden="true"></i>
+                                            <button type="button" class="workspace-button sales-button-small" disabled title="Hủy" aria-label="Hủy">
+                                                <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Hủy
                                             </button>
                                         }
                                     }

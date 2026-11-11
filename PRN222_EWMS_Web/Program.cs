@@ -43,6 +43,8 @@ builder.Services.AddScoped<PRN222_EWMS_Web.Services.WarehouseStaff.IReturnReceiv
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.WarehouseStaff.IPutawayRepository, PRN222_EWMS_Web.Repositories.WarehouseStaff.PutawayRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.WarehouseStaff.IPutawayService, PRN222_EWMS_Web.Services.WarehouseStaff.PutawayService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Warehouse.IOutboundService, PRN222_EWMS_Web.Services.Warehouse.OutboundService>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Warehouse.IOutboundRepository, PRN222_EWMS_Web.Repositories.Warehouse.OutboundRepository>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.Warehouse.IOutboundSupplyService, PRN222_EWMS_Web.Services.Warehouse.OutboundSupplyService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Warehouse.ITransferOrderService, PRN222_EWMS_Web.Services.Warehouse.TransferOrderService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<TransferStockService>();
@@ -56,6 +58,7 @@ builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Ceo.ICeoPurchaseProgressRepository, PRN222_EWMS_Web.Repositories.Ceo.CeoPurchaseProgressRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Ceo.ICeoPurchaseProgressService, PRN222_EWMS_Web.Services.Ceo.CeoPurchaseProgressService>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.Ceo.ICeoStocktakeAdjustmentService, PRN222_EWMS_Web.Services.Ceo.CeoStocktakeAdjustmentService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Manager.IManagerInboundRepository, PRN222_EWMS_Web.Repositories.Manager.ManagerInboundRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Manager.IManagerInboundService, PRN222_EWMS_Web.Services.Manager.ManagerInboundService>();
 builder.Services.AddScoped<
@@ -67,6 +70,10 @@ builder.Services.AddScoped<
     PRN222_EWMS_Web.Services.Manager.ManagerTransferService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Manager.IManagerStocktakeRepository, PRN222_EWMS_Web.Repositories.Manager.ManagerStocktakeRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Manager.IManagerStocktakeService, PRN222_EWMS_Web.Services.Manager.ManagerStocktakeService>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Stocktaking.IStocktakeRepository, PRN222_EWMS_Web.Repositories.Stocktaking.StocktakeRepository>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.Stocktaking.IStocktakeExecutionService, PRN222_EWMS_Web.Services.Stocktaking.StocktakeExecutionService>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.Stocktaking.IStocktakeReviewService, PRN222_EWMS_Web.Services.Stocktaking.StocktakeReviewService>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.Stocktaking.IStocktakeHandlingService, PRN222_EWMS_Web.Services.Stocktaking.StocktakeHandlingService>();
 builder.Services.AddScoped<IWarehouseRepository, WarehouseRepository>();
 builder.Services.AddScoped<IWarehouseService, WarehouseService>();
 builder.Services.AddScoped<IAccountService, AccountService>();

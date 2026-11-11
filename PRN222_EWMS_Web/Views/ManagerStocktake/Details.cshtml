@@ -12,7 +12,7 @@
 <div class="warehouse-list">
     <header class="workspace-heading">
         <div><p class="eyebrow">CHI TIẾT ĐỢT KIỂM KÊ</p><h1>@Model.Code</h1><p class="muted mb-0">@Model.WarehouseName · <span class="role-badge">@ManagerStocktakeLabels.Status(Model.Status)</span></p></div>
-        <div class="warehouse-heading-actions"><a asp-action="Index" class="workspace-link">Danh sách</a>@if (Model.CanEdit) { <a asp-action="Edit" asp-route-id="@Model.Id" class="workspace-button">Sửa kế hoạch</a> }@if (Model.CanDelete) { <a asp-action="Delete" asp-route-id="@Model.Id" class="btn btn-outline-danger">Xóa đợt</a> }</div>
+        <div class="warehouse-heading-actions"><a asp-action="Index" class="workspace-link">Danh sách</a><a asp-controller="StocktakeReview" asp-action="Details" asp-route-id="@Model.Id" class="workspace-button">Rà soát kết quả</a>@if (Model.CanEdit) { <a asp-action="Edit" asp-route-id="@Model.Id" class="workspace-button">Sửa kế hoạch</a> }@if (Model.CanDelete) { <a asp-action="Delete" asp-route-id="@Model.Id" class="btn btn-outline-danger">Xóa đợt</a> }</div>
     </header>
     @foreach (var warning in Model.Warnings) { <div class="alert alert-warning mb-0" role="alert">@warning</div> }
     <section class="workspace-card">

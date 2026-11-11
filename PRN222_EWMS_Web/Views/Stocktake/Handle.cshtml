@@ -1,0 +1,88 @@
+@using PRN222_EWMS_Web.ViewModels.Stocktaking
+@model StocktakeHandlingViewModel
+@{
+    ViewData["Title"] = "Xử lý vị trí " + Model.Handling.ScannedSerial;
+    string Location(int? id)
+    {
+        if (!id.HasValue) return "Hàng chờ xếp kệ";
+        var parts = new List<string>(); var seen = new HashSet<int>(); var current = id;
+        while (current.HasValue && seen.Add(current.Value)) { var node = Model.Locations.FirstOrDefault(l => l.LocationId == current); if (node is null) break; parts.Insert(0, node.LocationName); current = node.ParentLocationId; }
+        return parts.Count == 0 ? "Vị trí #" + id : string.Join(" / ", parts);
+    }
+    string Entered(string name, string fallback = "") => ViewData.ModelState.TryGetValue(name, out var state) ? state.AttemptedValue ?? fallback : fallback;
+    var suggested = Model.Suggestions.FirstOrDefault();
+    var selectedTarget = Entered("TargetLocationId", suggested?.Id.ToString() ?? "");
+}
+<style>
+    #stocktake-move-form .stocktake-target-radio {
+        appearance: auto;
+        accent-color: var(--workspace-blue);
+        width: 18px;
+        height: 18px;
+        min-height: 0;
+        padding: 0;
+        margin: 3px 0 0;
+    }
+    #stocktake-move-form .stocktake-target:has(.stocktake-target-radio:checked) {
+        background: #eff6ff;
+        border-color: var(--workspace-blue) !important;
+    }
+    .stocktake-target-selected { display: none; }
+    .stocktake-target-radio:checked + span .stocktake-target-selected { display: inline; }
+</style>
+<div class="warehouse-list">
+    <header class="workspace-heading"><div><p class="eyebrow">XỬ LÝ HÀNG KIỂM KÊ</p><h1>@Model.Handling.ScannedSerial</h1><p class="muted">@Model.ProductName · @Model.Plan.StocktakeCode</p></div><a asp-action="Count" asp-route-id="@Model.Plan.StocktakeId" asp-route-recountRequestId="@Model.RecountRequestId" class="workspace-button sales-button-secondary">Quay lại kiểm đếm</a></header>
+    @if (TempData["Success"] is string success) { <div class="workspace-notice" role="status">@success</div> }
+    @if (TempData["Error"] is string error) { <div class="alert alert-danger" role="alert">@error</div> }
+    <div asp-validation-summary="All" class="text-danger" role="alert"></div>
+    <section class="workspace-card"><h2>Thông tin phát hiện</h2>
+        <dl class="warehouse-info-grid">
+            <div><dt>Nơi phát hiện</dt><dd>@Location(Model.Handling.FoundLocationId)</dd></div>
+            <div><dt>Vị trí trong sổ kho</dt><dd>@Location(Model.Handling.OriginalLocationId)</dd></div>
+            <div><dt>Tình trạng thực tế</dt><dd>@(Model.Handling.ActualCondition == "DAMAGED" ? "Hỏng" : "Tốt")</dd></div>
+            <div><dt>Trạng thái xử lý</dt><dd>@(Model.Handling.Status == "MOVED" ? "Đã chuyển" : Model.Handling.Status == "CANCELLED" ? "Đã sửa ghi nhận" : "Chờ chuyển")</dd></div>
+        </dl>
+        @if (!string.IsNullOrWhiteSpace(Model.Message)) { <div class="alert alert-info mb-0" role="status">@Model.Message</div> }
+        @if (Model.Handling.Status == "MOVED") { <p class="mb-0"><strong>Đã chuyển đến:</strong> @Location(Model.Handling.TargetLocationId) · @StocktakeDisplay.Time(Model.Handling.MovedAt)</p> }
+    </section>
+    @if (Model.CanMove && Model.Suggestions.Count > 0)
+    {
+        <section class="workspace-card"><h2>@(Model.Handling.ActualCondition == "DAMAGED" ? "Chuyển đến vị trí hàng hỏng" : "Chuyển về vị trí hợp lệ")</h2>
+            <form asp-action="Move" method="post" class="workspace-form mt-0" id="stocktake-move-form">@Html.AntiForgeryToken()
+                <input type="hidden" name="Id" value="@Model.Plan.StocktakeId" /><input type="hidden" name="Version" value="@Model.Version" />
+                <input type="hidden" name="HandlingId" value="@Model.Handling.HandlingId" /><input type="hidden" name="HandlingVersion" value="@Model.HandlingVersion" />
+                <input type="hidden" name="RecountRequestId" value="@Model.RecountRequestId" />
+                <fieldset class="border-0 p-0"><legend class="fs-6">Vị trí được phép chọn <span class="text-danger">*</span></legend>
+                    @foreach (var target in Model.Suggestions)
+                    {
+                        <label class="stocktake-target d-flex align-items-start gap-3 border rounded p-3 mb-2" for="target-@target.Id">
+                            <input type="radio" id="target-@target.Id" name="TargetLocationId" value="@target.Id" checked="@(selectedTarget == target.Id.ToString())" required class="stocktake-target-radio flex-shrink-0" />
+                            <span><strong>@target.Path</strong>
+                                <span class="stocktake-target-selected ms-2 text-primary">Đã chọn</span>
+                                @if (target.Id == Model.Handling.OriginalLocationId) { <span class="role-badge ms-2">Vị trí ban đầu</span> }
+                                else if (target.Id == suggested?.Id) { <span class="role-badge ms-2">Đề xuất</span> }
+                                <small class="d-block muted">Còn @target.RemainingCapacity.ToString("0.###") @target.CapacityUnit@if (target.RemainingWeightKg.HasValue) { <span> · @target.RemainingWeightKg.Value.ToString("0.###") kg tải trọng</span> }</small>
+                            </span>
+                        </label>
+                    }
+                </fieldset>
+                <label class="checkbox-row"><input type="checkbox" name="Confirmed" value="true" required /> Tôi đã chuyển đúng serial đến vị trí đã chọn.</label>
+                <div class="d-flex gap-2 flex-wrap"><button type="submit" class="workspace-button">Xác nhận đã chuyển</button><a asp-action="Count" asp-route-id="@Model.Plan.StocktakeId" asp-route-recountRequestId="@Model.RecountRequestId" class="workspace-link">Để xử lý sau</a></div>
+            </form>
+        </section>
+    }
+    else if (Model.CanMove) { <div class="alert alert-warning" role="alert">Chưa có vị trí phù hợp để chuyển hàng. Báo Manager bố trí vị trí hợp lệ.</div> }
+</div>
+@section Scripts {
+<script>
+(() => {
+ const form = document.getElementById('stocktake-move-form'); if (!form) return;
+ let busy = false;
+ form.addEventListener('submit', event => {
+  if (busy || !form.reportValidity() || !confirm('Xác nhận đúng serial đã được chuyển đến vị trí đã chọn?')) { event.preventDefault(); return; }
+  busy = true;
+ });
+ window.addEventListener('pageshow', () => { busy = false; });
+})();
+</script>
+}

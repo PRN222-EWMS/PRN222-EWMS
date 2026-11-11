@@ -6,7 +6,7 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="mb-0">Theo dõi chuyển kho</h1>
-    <a asp-controller="Transfer" asp-action="Create" class="btn btn-primary rounded-pill">
+    <a asp-controller="Transfer" asp-action="Create" class="btn btn-primary">
         <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> Tạo lệnh chuyển kho
     </a>
 </div>
@@ -29,8 +29,8 @@
             </select>
         </div>
         <div class="col-md-auto">
-            <button type="submit" class="btn btn-primary rounded-pill"><i class="bi bi-funnel me-1" aria-hidden="true"></i> Tìm</button>
-            <a asp-action="Index" class="btn btn-outline-secondary rounded-pill"><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i> Xóa lọc</a>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-funnel me-1" aria-hidden="true"></i> Tìm</button>
+            <a asp-action="Index" class="btn btn-outline-secondary"><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i> Xóa lọc</a>
         </div>
     </form>
 </section>
@@ -75,19 +75,19 @@
                             <td class="text-end">@order.InTransit</td>
                             <td class="text-end">@order.Received</td>
                             <td class="text-end" style="white-space: nowrap;">
-                                <a asp-action="Details" asp-route-id="@order.Id" class="btn btn-outline-secondary btn-sm" title="Xem chi tiết">
-                                    Chi tiết
+                                <a asp-action="Details" asp-route-id="@order.Id" class="workspace-button workspace-button-small" title="Xem chi tiết">
+                                    <i class="bi bi-eye" aria-hidden="true"></i> Chi tiết
                                 </a>
                                 @if (order.Status is "DRAFT" or "RELEASED")
                                 {
-                                    <a asp-controller="Transfer" asp-action="Edit" asp-route-id="@order.Id" class="btn btn-outline-primary btn-sm ms-1" title="Chỉnh sửa lệnh chuyển">
-                                        Sửa
+                                    <a asp-controller="Transfer" asp-action="Edit" asp-route-id="@order.Id" class="workspace-button workspace-button-secondary workspace-button-small ms-1" title="Chỉnh sửa lệnh chuyển">
+                                        <i class="bi bi-pencil-square" aria-hidden="true"></i> Sửa
                                     </a>
                                 }
                                 else
                                 {
-                                    <button type="button" class="btn btn-outline-secondary btn-sm ms-1 disabled" disabled style="opacity: 0.5; cursor: not-allowed;" title="Lệnh chuyển ở trạng thái @order.Status không thể chỉnh sửa">
-                                        Sửa
+                                    <button type="button" class="workspace-button workspace-button-small ms-1 disabled" disabled style="opacity: 0.5; cursor: not-allowed;" title="Lệnh chuyển ở trạng thái @order.Status không thể chỉnh sửa">
+                                        <i class="bi bi-pencil-square" aria-hidden="true"></i> Sửa
                                     </button>
                                 }
                             </td>

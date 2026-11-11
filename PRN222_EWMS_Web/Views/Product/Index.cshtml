@@ -9,13 +9,13 @@
     <div class="d-flex flex-wrap gap-2 ms-auto">
         @if (User.IsInRole("PURCHASING_STAFF"))
         {
-            <a asp-action="Create" class="btn btn-primary rounded-pill">Thêm sản phẩm</a>
+            <a asp-action="Create" class="btn btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Thêm sản phẩm</a>
         }
         @if (User.IsInRole("MANAGER"))
         {
             <a asp-controller="ManagerDashboard"
                asp-action="Dashboard"
-               class="btn btn-outline-secondary rounded-pill">
+               class="btn btn-outline-secondary">
                 ← Về tổng quan
             </a>
         }
@@ -46,8 +46,8 @@
         </select>
     </div>
     <div class="col-lg-auto d-flex flex-wrap gap-2">
-        <button type="submit" class="btn btn-primary rounded-pill px-4">Tìm kiếm</button>
-        <a asp-action="Index" class="btn btn-outline-secondary rounded-pill px-4">
+        <button type="submit" class="btn btn-primary px-4"><i class="bi bi-search" aria-hidden="true"></i> Tìm kiếm</button>
+        <a asp-action="Index" class="btn btn-outline-secondary px-4">
             <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i> Xóa lọc
         </a>
     </div>
@@ -105,10 +105,10 @@
                         })
                     </td>
                     <td class="text-nowrap">
-                        <a asp-action="Details" asp-route-id="@product.ProductId">Chi tiết</a>
+                        <a asp-action="Details" asp-route-id="@product.ProductId" class="workspace-button workspace-button-small"><i class="bi bi-eye" aria-hidden="true"></i> Chi tiết</a>
                         @if (User.IsInRole("PURCHASING_STAFF"))
                         {
-                            <a asp-action="Edit" asp-route-id="@product.ProductId" class="ms-3">Sửa</a>
+                            <a asp-action="Edit" asp-route-id="@product.ProductId" class="workspace-button workspace-button-small workspace-button-secondary ms-1"><i class="bi bi-pencil-square" aria-hidden="true"></i> Sửa</a>
                         }
                     </td>
                 </tr>

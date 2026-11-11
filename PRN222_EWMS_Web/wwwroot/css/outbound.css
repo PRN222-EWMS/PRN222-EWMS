@@ -5,10 +5,29 @@
 .outbound-page {
     display: grid;
     gap: 24px;
+    min-width: 0;
 }
 
 .outbound-page .workspace-heading {
     margin-bottom: 0;
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+
+.outbound-page .workspace-heading > div:first-child {
+    flex: 1 1 20rem;
+    min-width: 0;
+}
+
+.outbound-page .workspace-heading h1 {
+    font-size: clamp(1.5rem, 2.4vw, 2.25rem);
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+
+.outbound-page .workspace-heading p,
+.outbound-page details li {
+    overflow-wrap: anywhere;
 }
 
 .outbound-page .workspace-card {
@@ -16,6 +35,50 @@
     background: #ffffff;
     border: 1px solid var(--workspace-line, #e6e6e6);
     border-radius: 12px;
+    min-width: 0;
+}
+
+.outbound-page .table-wrap,
+.outbound-page .row > * {
+    min-width: 0;
+}
+
+.outbound-page .workspace-table {
+    min-width: 46rem;
+}
+
+.outbound-page .workspace-table th {
+    line-height: 1.45;
+    vertical-align: middle;
+}
+
+.outbound-page .workspace-table td {
+    vertical-align: middle;
+    overflow-wrap: anywhere;
+}
+
+.outbound-page .outbound-receipts-table {
+    min-width: 62rem;
+}
+
+.outbound-page .outbound-selected-table {
+    min-width: 34rem;
+}
+
+.outbound-page #suggestedSerialsTable {
+    min-width: 64rem;
+}
+
+.outbound-page .form-control,
+.outbound-page .form-select {
+    min-height: 44px;
+    border-color: #d4d3d1;
+}
+
+.outbound-page .form-control:focus,
+.outbound-page .form-select:focus {
+    border-color: var(--workspace-blue, #0075de);
+    box-shadow: 0 0 0 3px rgba(0, 117, 222, .12);
 }
 
 .outbound-toolbar {
@@ -23,6 +86,94 @@
     gap: 12px;
     align-items: center;
     flex-wrap: wrap;
+    max-width: 100%;
+}
+
+.outbound-toolbar > form {
+    margin: 0;
+}
+
+.outbound-toolbar .workspace-button {
+    white-space: nowrap;
+}
+
+.outbound-page [data-outbound-order] .outbound-info-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.outbound-page [data-outbound-order] .outbound-info-grid dd {
+    font-size: 1.25rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.outbound-page [data-outbound-order] > div > div {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.outbound-page [data-outbound-order] .workspace-button {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.outbound-page .outbound-progress-section dt {
+    min-height: 2.5em;
+    line-height: 1.35;
+}
+
+.outbound-page .outbound-progress-section dd {
+    font-variant-numeric: tabular-nums;
+}
+
+.outbound-page .outbound-code-badge {
+    display: inline-block;
+    max-width: 18rem;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+}
+
+.outbound-page .outbound-location-chip {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.outbound-location-chip i {
+    flex-shrink: 0;
+}
+
+@media (max-width: 1199.98px) {
+    .outbound-work-grid > div {
+        width: 100%;
+    }
+    .outbound-page [data-outbound-order] .outbound-info-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .outbound-page .workspace-heading > div:first-child {
+        flex: initial;
+        width: 100%;
+    }
+    .outbound-toolbar {
+        width: 100%;
+        gap: 8px;
+        align-items: stretch;
+    }
+    .outbound-toolbar > * {
+        flex: 1 1 10rem;
+    }
+    .outbound-toolbar > form .workspace-button {
+        width: 100%;
+    }
+    .outbound-page .workspace-table th,
+    .outbound-page .workspace-table td {
+        padding: 12px;
+    }
 }
 
 /* Badge styles - Notion Sticker Palette */
@@ -246,6 +397,10 @@
 .outbound-modal .modal-header {
     border-bottom: 1px solid var(--workspace-line, #e6e6e6);
     padding: 20px 24px;
+}
+.outbound-modal .modal-title {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 .outbound-modal .modal-body {
     padding: 24px;

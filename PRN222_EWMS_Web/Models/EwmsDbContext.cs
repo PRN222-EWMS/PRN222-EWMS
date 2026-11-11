@@ -13,6 +13,8 @@ public partial class EwmsDbContext : DbContext
 
     public virtual DbSet<AuditLog> AuditLogs { get; set; }
 
+    public virtual DbSet<StocktakeRecountRequest> StocktakeRecountRequests { get; set; }
+
     public virtual DbSet<Brand> Brands { get; set; }
 
     public virtual DbSet<Category> Categories { get; set; }
@@ -2944,6 +2946,39 @@ public partial class EwmsDbContext : DbContext
                 .HasForeignKey(d => d.ZoneLocationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_ZoneStorageRule_ZoneLocationID");
+        });
+
+        modelBuilder.Entity<StocktakeRecountRequest>(entity =>
+        {
+            entity.ToTable("StocktakeRecountRequest", table =>
+            {
+                table.HasTrigger("TR_StocktakeRecountRequest_Links");
+                table.HasTrigger("TR_StocktakeRecountRequest_Audit");
+            });
+            entity.HasKey(e => e.RecountRequestId);
+            entity.Property(e => e.RecountRequestId).HasColumnName("RecountRequestID");
+            entity.Property(e => e.StocktakeId).HasColumnName("StocktakeID");
+            entity.Property(e => e.SourceRoundId).HasColumnName("SourceRoundID");
+            entity.Property(e => e.ResultRoundId).HasColumnName("ResultRoundID");
+            entity.Property(e => e.ProductId).HasColumnName("ProductID");
+            entity.Property(e => e.LocationId).HasColumnName("LocationID");
+            entity.Property(e => e.RequestedByUserId).HasColumnName("RequestedByUserID");
+            entity.Property(e => e.AssignedToUserId).HasColumnName("AssignedToUserID");
+            entity.Property(e => e.ScopeKind).HasMaxLength(16).IsUnicode(false);
+            entity.Property(e => e.Status).HasMaxLength(16).IsUnicode(false).HasDefaultValue("REQUESTED");
+            entity.Property(e => e.Reason).HasMaxLength(1000);
+            entity.Property(e => e.RowVersion).IsRowVersion();
+            entity.Property(e => e.RequestedAt).HasPrecision(3).HasDefaultValueSql("SYSUTCDATETIME()");
+            entity.Property(e => e.StartedAt).HasPrecision(3);
+            entity.Property(e => e.SubmittedAt).HasPrecision(3);
+            entity.Property(e => e.CancelledAt).HasPrecision(3);
+            entity.HasOne<Stocktake>().WithMany().HasForeignKey(e => e.StocktakeId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<StocktakeRound>().WithMany().HasForeignKey(e => e.SourceRoundId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<StocktakeRound>().WithMany().HasForeignKey(e => e.ResultRoundId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<Product>().WithMany().HasForeignKey(e => e.ProductId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<StorageLocation>().WithMany().HasForeignKey(e => e.LocationId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.RequestedByUserId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.AssignedToUserId).OnDelete(DeleteBehavior.NoAction);
         });
 
         // DB49 tables with triggers cannot use EF's direct OUTPUT clause.

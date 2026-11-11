@@ -1,0 +1,118 @@
+﻿@using PRN222_EWMS_Web.ViewModels.Stocktaking
+@model StocktakeReviewViewModel
+@{
+    ViewData["Title"] = "Yêu cầu đếm lại " + Model.Plan.StocktakeCode;
+    string Entered(string name, string fallback = "") => ViewData.ModelState.TryGetValue(name, out var state) ? state.AttemptedValue ?? fallback : fallback;
+}
+<style>
+    #recount-tree .recount-area-choice {
+        border-radius: 6px;
+        padding-inline: 8px;
+        cursor: pointer;
+    }
+    #recount-tree .recount-area-radio {
+        appearance: auto;
+        accent-color: var(--workspace-blue);
+        width: 18px;
+        height: 18px;
+        min-height: 0;
+        padding: 0;
+        margin: 0;
+        flex-shrink: 0;
+    }
+    #recount-tree .recount-area-choice:has(.recount-area-radio:checked) {
+        background: #eff6ff;
+    }
+</style>
+<div class="warehouse-list">
+    <header class="workspace-heading"><div><p class="eyebrow">MANAGER · ĐẾM LẠI</p><h1>Yêu cầu đếm lại</h1><p class="muted">@Model.Plan.StocktakeCode</p></div><a asp-action="Details" asp-route-id="@Model.Plan.StocktakeId" class="workspace-button sales-button-secondary">Quay lại rà soát</a></header>
+    @if (TempData["Error"] is string error) { <div class="alert alert-danger" role="alert">@error</div> }
+    <section class="workspace-card"><h2>Chọn sản phẩm và phạm vi</h2><p class="muted">Đếm lại toàn bộ sản phẩm đã chọn trong khu vực, gồm các vị trí con.</p>
+        <div asp-validation-summary="All" class="text-danger" role="alert"></div>
+        <form asp-action="CreateRecount" method="post" class="workspace-form mt-0">@Html.AntiForgeryToken()<input type="hidden" name="Id" value="@Model.Plan.StocktakeId" /><input type="hidden" name="Version" value="@Model.Version" />
+            <div class="row g-3"><div class="col-12"><label for="ProductId">Sản phẩm/model có chênh lệch <span class="text-danger">*</span></label><select id="ProductId" name="ProductId" required><option value="">Chọn sản phẩm</option>@foreach (var product in Model.Products.Where(p => Model.RecountChoices.Any(c => c.ProductId == p.ProductId)).OrderBy(p => p.ProductName)) { <option value="@product.ProductId" selected="@(Entered("ProductId") == product.ProductId.ToString())">@product.ProductCode — @product.ProductName (@product.Model)</option> }</select></div>
+            <div class="col-12">
+                <input type="hidden" id="ScopeKind" name="ScopeKind" value="@Entered("ScopeKind", "LOCATION")" />
+                <input type="hidden" id="LocationId" name="LocationId" value="@Entered("LocationId")" />
+                <fieldset class="border-0 p-0"><legend class="fs-6">Khu vực cần kiểm lại <span class="text-danger">*</span></legend>
+                    <div id="recount-tree" class="border rounded p-3 overflow-auto" style="max-height:360px"></div>
+                </fieldset>
+            </div>
+            <div class="col-12"><label for="AssignedToUserId">Nhân viên đếm lại <span class="text-danger">*</span></label><select id="AssignedToUserId" name="AssignedToUserId" required><option value="">Chọn một nhân viên khác người đếm trước</option>@foreach (var staff in Model.Staff.OrderBy(s => s.FullName)) { <option value="@staff.UserId" selected="@(Entered("AssignedToUserId") == staff.UserId.ToString())">@staff.FullName</option> }</select></div>
+            <div class="col-12"><label for="Reason">Lý do yêu cầu đếm lại <span class="text-danger">*</span></label><textarea style="width:100%" id="Reason" name="Reason" rows="4" maxlength="1000" required>@Entered("Reason")</textarea></div></div>
+            <p id="recount-summary" class="mb-0" hidden></p><p id="recount-help" class="muted" role="status" aria-live="polite"></p><div class="d-flex gap-2 mt-3"><button id="create-recount" class="workspace-button" type="submit">Tạo yêu cầu đếm lại</button><a asp-action="Details" asp-route-id="@Model.Plan.StocktakeId" class="workspace-button sales-button-secondary">Hủy</a></div>
+        </form>
+    </section>
+</div>
+@section Scripts {
+    <script>
+    (() => {
+        const choices = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RecountChoices));
+        const nodes = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Locations.Select(l => new { id = l.LocationId, parent = l.ParentLocationId, name = l.LocationName })));
+        const product = document.getElementById('ProductId'), scope = document.getElementById('ScopeKind');
+        const location = document.getElementById('LocationId'), staff = document.getElementById('AssignedToUserId');
+        const tree = document.getElementById('recount-tree'), button = document.getElementById('create-recount');
+        const help = document.getElementById('recount-help'), summary = document.getElementById('recount-summary');
+        const people = Array.from(staff.options).filter(o => o.value).map(o => ({ id: o.value, name: o.textContent }));
+        function match() { return choices.find(c => String(c.ProductId) === product.value && c.ScopeKind === scope.value && (c.LocationId === null ? location.value === '' : String(c.LocationId) === location.value)); }
+        function updateStaff() {
+            const choice = match(), previous = staff.value;
+            staff.replaceChildren(new Option('Chọn nhân viên', ''));
+            people.filter(p => choice?.StaffIds.includes(Number(p.id))).forEach(p => staff.add(new Option(p.name, p.id)));
+            if (choice?.StaffIds.includes(Number(previous))) staff.value = previous;
+            staff.disabled = !choice || !choice.StaffIds.length;
+            help.textContent = !choices.length ? 'Không có chênh lệch đủ điều kiện đếm lại.' : choice && !choice.StaffIds.length ? 'Không có nhân viên khác đủ điều kiện đếm lại khu vực này.' : '';
+            updateSummary();
+        }
+        function updateSummary() {
+            const choice = match(); button.disabled = !choice || !staff.value;
+            summary.hidden = !choice;
+            const place = choice?.ScopeKind === 'AWAITING_PUTAWAY' ? 'Hàng chờ xếp kệ' : nodes.find(n => String(n.id) === location.value)?.name;
+            summary.textContent = choice ? product.selectedOptions[0].textContent + ' · ' + place + (staff.value ? ' · ' + staff.selectedOptions[0].textContent : '') : '';
+        }
+        function render() {
+            const relevant = choices.filter(c => String(c.ProductId) === product.value);
+            tree.replaceChildren();
+            const available = new Set(relevant.filter(c => c.LocationId !== null).map(c => c.LocationId));
+            const visible = new Set(available);
+            for (const id of available) {
+                let node = nodes.find(n => n.id === id), seen = new Set();
+                while (node && !seen.has(node.id)) { seen.add(node.id); visible.add(node.id); node = nodes.find(n => n.id === node.parent); }
+            }
+            function addChoice(container, label, kind, id) {
+                const row = document.createElement('label'); row.className = 'recount-area-choice d-flex align-items-center gap-2 mb-0 py-2';
+                const radio = document.createElement('input'); radio.type = 'radio'; radio.name = 'recount-area'; radio.required = true;
+                radio.className = 'recount-area-radio';
+                radio.checked = scope.value === kind && location.value === (id === null ? '' : String(id));
+                radio.addEventListener('change', () => { scope.value = kind; location.value = id === null ? '' : String(id); updateStaff(); });
+                const text = document.createElement('span'); text.textContent = label;
+                row.append(radio, text); container.append(row);
+            }
+            function branch(node, container, seen) {
+                if (seen.has(node.id)) return;
+                const next = new Set(seen); next.add(node.id);
+                const children = nodes.filter(n => n.parent === node.id && visible.has(n.id));
+                const box = document.createElement(children.length ? 'details' : 'div');
+                if (children.length) box.open = true;
+                const title = children.length ? document.createElement('summary') : box;
+                if (available.has(node.id)) addChoice(title, node.name, 'LOCATION', node.id);
+                else { const text = document.createElement('span'); text.textContent = node.name; title.append(text); }
+                if (children.length) {
+                    box.append(title); const nested = document.createElement('div'); nested.className = 'ms-3 ps-3 border-start';
+                    children.forEach(child => branch(child, nested, next)); box.append(nested);
+                }
+                container.append(box);
+            }
+            nodes.filter(n => visible.has(n.id) && !visible.has(n.parent)).forEach(n => branch(n, tree, new Set()));
+            if (relevant.some(c => c.ScopeKind === 'AWAITING_PUTAWAY')) addChoice(tree, 'Hàng chờ xếp kệ', 'AWAITING_PUTAWAY', null);
+            if (!relevant.length) tree.textContent = product.value ? 'Không có khu vực đủ điều kiện.' : 'Chọn sản phẩm trước.';
+            if (!match()) { scope.value = ''; location.value = ''; }
+            updateStaff();
+        }
+        product.addEventListener('change', () => { scope.value = ''; location.value = ''; render(); });
+        staff.addEventListener('change', updateSummary);
+        button.form.addEventListener('submit', event => { if (!match() || !staff.value) { event.preventDefault(); help.textContent = 'Chọn khu vực và nhân viên đếm lại.'; } });
+        render();
+    })();
+    </script>
+}
