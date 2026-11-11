@@ -337,17 +337,14 @@ public class PurchaseOrderService(
                 return (false, "Số lượng đặt hàng của mỗi sản phẩm phải là số nguyên dương lớn hơn 0.", 0);
         }
 
-        // Kiểm tra sức chứa vật lý kho khi xác nhận đơn ngay (confirmNow = true)
-        if (confirmNow)
-        {
-            var (isValidCapacity, capacityError) = await capacityEngine.ValidatePurchaseOrderLinesCapacityAsync(
-                model.WarehouseId,
-                model.Lines.Select(l => (l.ProductId, l.OrderedQuantity)),
-                excludePoId: null);
+        // Kiểm tra sức chứa vật lý kho tiếp nhận (Validate bắt buộc cho cả Lưu nháp và Xác nhận đơn)
+        var (isValidCapacity, capacityError) = await capacityEngine.ValidatePurchaseOrderLinesCapacityAsync(
+            model.WarehouseId,
+            model.Lines.Select(l => (l.ProductId, l.OrderedQuantity)),
+            excludePoId: null);
 
-            if (!isValidCapacity)
-                return (false, capacityError ?? "Sức chứa kho tiếp nhận không đủ để xác nhận đơn mua hàng.", 0);
-        }
+        if (!isValidCapacity)
+            return (false, capacityError ?? "Sức chứa kho tiếp nhận không đủ để lưu đơn mua hàng.", 0);
 
         // Kiểm tra mã đơn mua (POCode) nếu người dùng nhập
         string poCode;
@@ -526,11 +523,26 @@ public class PurchaseOrderService(
         if (duplicateProduct != null)
             return (false, "Mỗi sản phẩm chỉ được xuất hiện một lần trên đơn mua hàng.");
 
+        foreach (var line in model.Lines)
+        {
+            if (line.OrderedQuantity <= 0)
+                return (false, "Số lượng đặt hàng của mỗi sản phẩm phải là số nguyên dương lớn hơn 0.");
+        }
+
         using var transaction = await repo.BeginTransactionAsync();
         try
         {
             if (po.Status == "DRAFT")
             {
+                // Kiểm tra sức chứa kho tiếp nhận khi cập nhật đơn nháp (Validate bắt buộc cho DRAFT)
+                var (isValidCapacity, capacityError) = await capacityEngine.ValidatePurchaseOrderLinesCapacityAsync(
+                    model.WarehouseId,
+                    model.Lines.Select(l => (l.ProductId, l.OrderedQuantity)),
+                    excludePoId: po.PurchaseOrderId);
+
+                if (!isValidCapacity)
+                    return (false, capacityError ?? "Sức chứa kho tiếp nhận không đủ để lưu cập nhật đơn mua hàng.");
+
                 // Khi Draft: Được sửa toàn diện
                 po.SupplierId = model.SupplierId;
                 po.WarehouseId = model.WarehouseId;

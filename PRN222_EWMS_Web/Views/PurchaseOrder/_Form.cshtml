@@ -342,6 +342,7 @@
 
             linesTbody.appendChild(newRow);
             recalcTotal();
+            triggerCapacityCheck(newRow);
         });
 
         // Xóa dòng & thay đổi sản phẩm/số lượng
@@ -403,8 +404,19 @@
             const qty = parseInt(qtyInput.value) || 0;
             const warehouseId = warehouseSelect ? parseInt(warehouseSelect.value) : 0;
 
-            if (!warehouseId || !productId || qty <= 0) {
+            if (qty <= 0) {
+                hintDiv.innerHTML = '<span class="text-danger fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>Số lượng phải > 0</span>';
+                qtyInput.classList.add('is-invalid');
+                row.dataset.capacityError = 'true';
+                row.dataset.errorMessage = 'Số lượng đặt hàng của mỗi sản phẩm phải là số nguyên dương lớn hơn 0.';
+                return;
+            }
+
+            if (!warehouseId || !productId) {
                 hintDiv.innerHTML = '';
+                qtyInput.classList.remove('is-invalid');
+                delete row.dataset.capacityError;
+                delete row.dataset.errorMessage;
                 return;
             }
 
@@ -427,10 +439,19 @@
                     const data = await res.json();
                     if (!data.hasValidZone) {
                         hintDiv.innerHTML = '<span class="text-danger fw-semibold"><i class="bi bi-x-circle me-1"></i>Ngành hàng không hợp lệ tại kho này (MSG-015)</span>';
+                        qtyInput.classList.add('is-invalid');
+                        row.dataset.capacityError = 'true';
+                        row.dataset.errorMessage = 'Ngành hàng không hợp lệ tại kho tiếp nhận này (MSG-015).';
                     } else if (qty > data.maxOrderQuantity) {
                         hintDiv.innerHTML = `<span class="text-danger fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>Vượt sức chứa! Tối đa: <strong>${data.maxOrderQuantity}</strong> (Kệ: ${data.rackTierCapacity}, Sàn: ${data.floorSlotCapacity})</span>`;
+                        qtyInput.classList.add('is-invalid');
+                        row.dataset.capacityError = 'true';
+                        row.dataset.errorMessage = `Số lượng đặt (${qty}) vượt quá sức chứa tối đa (${data.maxOrderQuantity}) của kho tiếp nhận.`;
                     } else {
                         hintDiv.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>Khả dụng: <strong>${data.maxOrderQuantity}</strong> chiếc (Kệ: ${data.rackTierCapacity}, Sàn: ${data.floorSlotCapacity})</span>`;
+                        qtyInput.classList.remove('is-invalid');
+                        delete row.dataset.capacityError;
+                        delete row.dataset.errorMessage;
                     }
                 } catch {
                     hintDiv.innerHTML = '';
@@ -487,6 +508,35 @@
                 if (rows.length === 0) {
                     e.preventDefault();
                     alert('Đơn mua hàng phải có ít nhất một dòng sản phẩm. Vui lòng bấm "Thêm sản phẩm" trước khi lưu.');
+                    return false;
+                }
+
+                // Kiểm tra số lượng hợp lệ và sức chứa kho (bắt buộc cho cả Lưu bản nháp và Xác nhận đơn)
+                let hasCapacityError = false;
+                let capacityErrorMsg = '';
+                let firstInvalidInput = null;
+
+                rows.forEach((row) => {
+                    const qtyInput = row.querySelector('.qty-input');
+                    const qty = parseInt(qtyInput ? qtyInput.value : 0) || 0;
+                    if (qty <= 0) {
+                        hasCapacityError = true;
+                        if (!capacityErrorMsg) capacityErrorMsg = 'Số lượng đặt hàng của mỗi sản phẩm phải là số nguyên dương lớn hơn 0.';
+                        if (!firstInvalidInput && qtyInput) firstInvalidInput = qtyInput;
+                        if (qtyInput) qtyInput.classList.add('is-invalid');
+                    } else if (row.dataset.capacityError === 'true') {
+                        hasCapacityError = true;
+                        if (!capacityErrorMsg) {
+                            capacityErrorMsg = row.dataset.errorMessage || 'Số lượng đặt hàng cho một số sản phẩm vượt quá sức chứa tối đa của kho tiếp nhận.';
+                        }
+                        if (!firstInvalidInput && qtyInput) firstInvalidInput = qtyInput;
+                    }
+                });
+
+                if (hasCapacityError) {
+                    e.preventDefault();
+                    alert(capacityErrorMsg || 'Vui lòng kiểm tra lại sức chứa kho và số lượng đặt hàng trước khi lưu đơn.');
+                    if (firstInvalidInput) firstInvalidInput.focus();
                     return false;
                 }
 

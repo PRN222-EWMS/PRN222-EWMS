@@ -12,29 +12,31 @@
         </div>
         <div class="transfer-toolbar">
             <a class="workspace-button sales-button-secondary" asp-controller="ManagerTransfer" asp-action="Index">
-                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Thoát
+                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Danh sách lệnh
             </a>
         </div>
     </div>
 
     @if (TempData["Error"] != null)
     {
-        <div class="alert alert-danger mb-3" role="alert">
+        <div class="alert alert-danger mb-4" role="alert">
             <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>
             <span>@TempData["Error"]</span>
         </div>
     }
 
+    <div asp-validation-summary="All" class="sales-warning mb-4" role="alert" style="@(ViewData.ModelState.IsValid ? "display:none;" : "")"></div>
+
     <form asp-action="Create" method="post" id="createTransferForm">
         @Html.AntiForgeryToken()
         <input type="hidden" name="IsRelease" id="isReleaseInput" value="false" />
 
-        @* THÔNG TIN LỆNH CHUYỂN *@
-        <section class="workspace-card">
-            <h2 class="h5 fw-bold mb-3 border-bottom pb-2">Thông tin lệnh chuyển</h2>
-            <div class="row g-3">
-                <div class="col-md-6 col-lg-3">
-                    <label class="form-label fw-semibold" style="font-size: 13px;">
+        <div class="transfer-form-grid">
+            <!-- CỘT 1: THÔNG TIN ĐIỀU CHUYỂN -->
+            <div class="workspace-card">
+                <h2 class="h5 mb-3">1. Thông tin điều chuyển</h2>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">
                         Kho nguồn <span class="text-danger">*</span>
                     </label>
                     <select class="form-select" name="FromWarehouseId" id="fromWarehouseSelect" required>
@@ -46,8 +48,8 @@
                     </select>
                 </div>
 
-                <div class="col-md-6 col-lg-3">
-                    <label class="form-label fw-semibold" style="font-size: 13px;">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">
                         Kho đích <span class="text-danger">*</span>
                     </label>
                     <select class="form-select" name="ToWarehouseId" id="toWarehouseSelect" required>
@@ -59,100 +61,169 @@
                     </select>
                 </div>
 
-                <div class="col-md-6 col-lg-3">
-                    <label class="form-label fw-semibold" style="font-size: 13px;">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">
                         Tình trạng hàng hóa <span class="text-danger">*</span>
                     </label>
-                    <select class="form-select" name="ItemCondition" required>
+                    <select class="form-select" name="ItemCondition" id="itemConditionSelect" required>
                         <option value="GOOD" selected="@(Model.ItemCondition == "GOOD")">Hàng tốt</option>
                         <option value="DAMAGED" selected="@(Model.ItemCondition == "DAMAGED")">Hàng lỗi</option>
                     </select>
                 </div>
+            </div>
 
-                <div class="col-md-6 col-lg-3">
-                    <label class="form-label fw-semibold" style="font-size: 13px;">
-                        Ngày dự kiến đến
-                    </label>
-                    <input type="date"
-                           class="form-control"
-                           name="ExpectedDate"
-                           value="@Model.ExpectedDate?.ToString("yyyy-MM-dd")"
-                           min="@DateTime.UtcNow.ToString("yyyy-MM-dd")" />
+            <!-- CỘT 2: MỐC THỜI GIAN & GHI CHÚ -->
+            <div class="workspace-card">
+                <h2 class="h5 mb-3">2. Mốc thời gian & ghi chú</h2>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Mã lệnh chuyển</label>
+                    <input type="text" class="form-control" value="Tự động sinh (TR-YYYY-XXX)" readonly style="background:#f6f5f4;" />
                 </div>
 
-                <div class="col-12">
-                    <label class="form-label fw-semibold" style="font-size: 13px;">Ghi chú</label>
-                    <input type="text" class="form-control" name="Note" value="@Model.Note" placeholder="Ghi chú thêm về chuyến chuyển hàng..." maxlength="1000" />
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">
+                            Ngày chuyển đi <span class="text-danger">*</span>
+                        </label>
+                        <input type="date"
+                               class="form-control"
+                               name="DispatchDate"
+                               id="dispatchDateInput"
+                               value="@(Model.DispatchDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd"))"
+                               min="@DateTime.Today.ToString("yyyy-MM-dd")"
+                               required />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">
+                            Ngày dự kiến nhận <span class="text-danger">*</span>
+                        </label>
+                        <input type="date"
+                               class="form-control"
+                               name="ExpectedDate"
+                               id="expectedDateInput"
+                               value="@(Model.ExpectedDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.AddDays(3).ToString("yyyy-MM-dd"))"
+                               min="@(Model.DispatchDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd"))"
+                               required />
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Ghi chú điều chuyển</label>
+                    <textarea class="form-control" name="Note" rows="2" maxlength="1000" placeholder="Ghi chú thêm về chuyến chuyển hàng...">@Model.Note</textarea>
                 </div>
             </div>
-        </section>
+        </div>
 
-        @* DANH SÁCH MẶT HÀNG *@
-        <section class="workspace-card">
-            <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-                <h2 class="h5 fw-bold mb-0">Danh sách sản phẩm</h2>
-                <button type="button" class="workspace-button sales-button-secondary" style="min-height: 34px; padding: 4px 14px; font-size: 13px;" id="btnAddLine">
-                    <i class="bi bi-plus-lg me-1"></i> Thêm sản phẩm
+        <!-- KHỐI SẢN PHẨM CHUYỂN KHO -->
+        <section class="workspace-card mt-4">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <div>
+                    <h2 class="h5 mb-0">3. Danh sách sản phẩm chuyển kho <span class="text-danger">*</span></h2>
+                </div>
+                <button type="button" class="workspace-button sales-button-small" id="btnAddLine">
+                    <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> Thêm sản phẩm
                 </button>
             </div>
 
-            <div class="table-responsive">
-                <table class="table table-bordered align-middle" id="linesTable" style="font-size: 14px;">
-                    <thead class="table-light">
+            <div class="table-wrap">
+                <table class="workspace-table transfer-lines-table" id="linesTable">
+                    <thead>
                         <tr>
+                            <th style="width: 50px;">STT</th>
                             <th style="min-width: 280px;">Sản phẩm <span class="text-danger">*</span></th>
-                            <th style="width: 180px;" class="text-center">Số lượng <span class="text-danger">*</span></th>
-                            <th style="width: 80px;" class="text-center">Thao tác</th>
+                            <th style="width: 90px;">ĐVT</th>
+                            <th style="width: 170px;">Tồn khả dụng</th>
+                            <th style="width: 160px; text-align: right;">Số lượng yêu cầu <span class="text-danger">*</span></th>
+                            <th style="width: 70px; text-align: center;">Xóa</th>
                         </tr>
                     </thead>
                     <tbody id="linesTableBody">
                         @for (int i = 0; i < (Model.Lines.Count > 0 ? Model.Lines.Count : 1); i++)
                         {
                             var line = Model.Lines.Count > i ? Model.Lines[i] : new PRN222_EWMS_Web.ViewModels.Transfer.CreateTransferOrderLineInput { Quantity = 1 };
+                            var selectedProduct = Model.Products.FirstOrDefault(p => p.ProductId == line.ProductId);
+                            var unreserved = selectedProduct?.UnreservedQuantity ?? line.AvailableQuantity;
                             <tr class="line-row">
+                                <td class="row-num text-muted fw-semibold">@(i + 1)</td>
                                 <td>
                                     <select class="form-select line-product-select" name="Lines[@i].ProductId" required>
                                         <option value="">-- Chọn sản phẩm --</option>
                                         @foreach (var p in Model.Products)
                                         {
-                                            <option value="@p.ProductId" selected="@(line.ProductId == p.ProductId)">
-                                                @p.ProductCode - @p.ProductName
+                                            <option value="@p.ProductId"
+                                                    data-unit="@p.Unit"
+                                                    data-code="@p.ProductCode"
+                                                    data-unreserved="@p.UnreservedQuantity"
+                                                    selected="@(line.ProductId == p.ProductId)">
+                                                [@p.ProductCode] @p.ProductName
                                             </option>
                                         }
                                     </select>
                                 </td>
                                 <td>
+                                    <span class="unit-label text-muted">@(selectedProduct?.Unit ?? "—")</span>
+                                </td>
+                                <td>
+                                    @if (selectedProduct != null)
+                                    {
+                                        if (unreserved > 0)
+                                        {
+                                            <span class="stock-badge badge-stock-ok">Khả dụng: <strong>@unreserved</strong></span>
+                                        }
+                                        else
+                                        {
+                                            <span class="stock-badge badge-stock-zero">Khả dụng: <strong>0</strong> (Thiếu nguồn)</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="stock-badge badge-stock">Khả dụng: <strong>—</strong></span>
+                                    }
+                                </td>
+                                <td>
                                     <input type="number"
-                                           class="form-control text-center"
+                                           class="form-control text-end qty-input"
                                            name="Lines[@i].Quantity"
                                            value="@(line.Quantity > 0 ? line.Quantity : 1)"
                                            min="1"
+                                           max="1000000"
+                                           data-available="@unreserved"
                                            required />
+                                    <div class="qty-error-msg text-danger mt-1" style="font-size: 11.5px; display: none;"></div>
                                 </td>
-                                <td class="text-center">
-                                    <button type="button" class="btn btn-outline-danger btn-sm btn-remove-line" title="Xóa">
-                                        <i class="bi bi-trash"></i>
+                                <td style="text-align: center;">
+                                    <button type="button" class="btn-remove-line sales-danger-icon" title="Xóa dòng">
+                                        <i class="bi bi-trash" aria-hidden="true"></i>
                                     </button>
                                 </td>
                             </tr>
                         }
                     </tbody>
+                    <tfoot>
+                        <tr style="background: #fafaf9; font-weight: 600;">
+                            <td colspan="4" class="text-end pe-3">Tổng số lượng yêu cầu:</td>
+                            <td class="text-end" id="totalQtyDisplay">0</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
                 </table>
+            </div>
+
+            <div id="noLinesWarning" class="sales-muted-small text-danger mt-2" style="display:none;">
+                <i class="bi bi-exclamation-circle me-1"></i> Lệnh chuyển kho phải có ít nhất 1 dòng sản phẩm yêu cầu.
             </div>
         </section>
 
-        @* THANH NÚT HÀNH ĐỘNG *@
-        <section class="workspace-card">
-            <div class="d-flex justify-content-end align-items-center gap-2">
-                <a class="workspace-button sales-button-secondary" asp-controller="ManagerTransfer" asp-action="Index">Thoát</a>
-                <button type="button" class="workspace-button sales-button-secondary" id="btnSaveDraft">
-                    <i class="bi bi-file-earmark me-1" aria-hidden="true"></i> Lưu bản nháp
-                </button>
-                <button type="button" class="workspace-button" id="btnRelease" style="background: #0e733b; border-color: #0e733b;">
-                    <i class="bi bi-check-circle me-1" aria-hidden="true"></i> Lưu & Phát hành
-                </button>
-            </div>
-        </section>
+        <!-- THANH NÚT THAO TÁC -->
+        <div class="transfer-form-actions d-flex justify-content-end align-items-center gap-2 mt-4">
+            <a class="workspace-button sales-button-secondary" asp-controller="ManagerTransfer" asp-action="Index">Thoát</a>
+            <button type="button" class="workspace-button sales-button-secondary" id="btnSaveDraft">
+                <i class="bi bi-file-earmark me-1" aria-hidden="true"></i> Lưu bản nháp
+            </button>
+            <button type="button" class="workspace-button" id="btnRelease" style="background: #0e733b; border-color: #0e733b;">
+                <i class="bi bi-check-circle me-1" aria-hidden="true"></i> Lưu & Phát hành
+            </button>
+        </div>
     </form>
 </div>
 
@@ -164,51 +235,346 @@
         const isReleaseInput = document.getElementById('isReleaseInput');
         const fromWhSelect = document.getElementById('fromWarehouseSelect');
         const toWhSelect = document.getElementById('toWarehouseSelect');
+        const itemConditionSelect = document.getElementById('itemConditionSelect');
+        const dispatchDateInput = document.getElementById('dispatchDateInput');
+        const expectedDateInput = document.getElementById('expectedDateInput');
+        const totalQtyDisplay = document.getElementById('totalQtyDisplay');
+        const noLinesWarning = document.getElementById('noLinesWarning');
+
+        // Danh sách sản phẩm hiện tại cùng số lượng khả dụng
+        let currentProducts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Products.Select(p => new {
+            productId = p.ProductId,
+            productCode = p.ProductCode,
+            productName = p.ProductName,
+            unit = p.Unit,
+            unreservedQuantity = p.UnreservedQuantity
+        })));
+
+        // Tự động đồng bộ min ngày nhận khi ngày chuyển đi thay đổi
+        if (dispatchDateInput && expectedDateInput) {
+            dispatchDateInput.addEventListener('change', function () {
+                expectedDateInput.min = this.value;
+                if (expectedDateInput.value && expectedDateInput.value < this.value) {
+                    expectedDateInput.value = this.value;
+                }
+            });
+        }
+
+        // Tải lại tồn khả dụng khi đổi kho nguồn hoặc tình trạng hàng
+        async function fetchAvailableStock() {
+            const whId = fromWhSelect.value;
+            const cond = itemConditionSelect ? itemConditionSelect.value : 'GOOD';
+            if (!whId) {
+                currentProducts.forEach(p => p.unreservedQuantity = 0);
+                refreshAllProductDropdowns();
+                return;
+            }
+
+            try {
+                const response = await fetch(`/Transfer/GetAvailableProducts?warehouseId=${whId}&itemCondition=${encodeURIComponent(cond)}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    currentProducts = data.map(p => ({
+                        productId: p.productId ?? p.ProductId,
+                        productCode: p.productCode ?? p.ProductCode ?? '',
+                        productName: p.productName ?? p.ProductName ?? '',
+                        unit: p.unit ?? p.Unit ?? '—',
+                        unreservedQuantity: p.unreservedQuantity ?? p.UnreservedQuantity ?? 0
+                    }));
+                    refreshAllProductDropdowns();
+                }
+            } catch (err) {
+                console.error('Lỗi khi tải tồn kho sản phẩm:', err);
+            }
+        }
+
+        if (fromWhSelect) fromWhSelect.addEventListener('change', fetchAvailableStock);
+        if (itemConditionSelect) itemConditionSelect.addEventListener('change', fetchAvailableStock);
+
+        function refreshAllProductDropdowns() {
+            const selects = tableBody.querySelectorAll('.line-product-select');
+            selects.forEach(select => {
+                const currentVal = select.value;
+                select.innerHTML = '<option value="">-- Chọn sản phẩm --</option>';
+                currentProducts.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.productId;
+                    opt.textContent = `[${p.productCode}] ${p.productName}`;
+                    opt.dataset.unit = p.unit;
+                    opt.dataset.code = p.productCode;
+                    opt.dataset.unreserved = p.unreservedQuantity;
+                    if (p.productId == currentVal) {
+                        opt.selected = true;
+                    }
+                    select.appendChild(opt);
+                });
+                updateLineDetails(select);
+            });
+            recalcTotal();
+        }
+
+        function updateLineDetails(select) {
+            const row = select.closest('tr');
+            if (!row) return;
+            const unitLabel = row.querySelector('.unit-label');
+            const stockBadge = row.querySelector('.stock-badge');
+            const selectedOpt = select.options[select.selectedIndex];
+            const qtyInput = row.querySelector('.qty-input');
+
+            if (selectedOpt && selectedOpt.value) {
+                const unit = selectedOpt.dataset.unit || '—';
+                const unreserved = parseInt(selectedOpt.dataset.unreserved) || 0;
+                if (unitLabel) unitLabel.textContent = unit;
+                if (qtyInput) {
+                    qtyInput.dataset.available = unreserved;
+                    validateRowQty(row);
+                }
+                if (stockBadge) {
+                    if (unreserved > 0) {
+                        stockBadge.className = 'stock-badge badge-stock-ok';
+                        stockBadge.innerHTML = `Khả dụng: <strong>${unreserved}</strong>`;
+                    } else {
+                        stockBadge.className = 'stock-badge badge-stock-zero';
+                        stockBadge.innerHTML = `Khả dụng: <strong>0</strong> (Thiếu nguồn)`;
+                    }
+                }
+            } else {
+                if (unitLabel) unitLabel.textContent = '—';
+                if (qtyInput) {
+                    qtyInput.dataset.available = 0;
+                    validateRowQty(row);
+                }
+                if (stockBadge) {
+                    stockBadge.className = 'stock-badge badge-stock';
+                    stockBadge.innerHTML = 'Khả dụng: <strong>—</strong>';
+                }
+            }
+        }
+
+        function validateRowQty(row) {
+            const qtyInput = row.querySelector('.qty-input');
+            if (!qtyInput) return true;
+
+            const select = row.querySelector('.line-product-select') || row.querySelector('select');
+            let unreserved = 0;
+            if (select && select.selectedIndex >= 0) {
+                const opt = select.options[select.selectedIndex];
+                unreserved = parseInt(opt?.dataset?.unreserved) || 0;
+            } else if (qtyInput.dataset.available !== undefined && qtyInput.dataset.available !== '') {
+                unreserved = parseInt(qtyInput.dataset.available) || 0;
+            }
+
+            const qty = parseInt(qtyInput.value) || 0;
+            let errSpan = row.querySelector('.qty-error-msg');
+            if (!errSpan) {
+                errSpan = document.createElement('div');
+                errSpan.className = 'qty-error-msg text-danger mt-1';
+                errSpan.style.fontSize = '11.5px';
+                qtyInput.parentNode.appendChild(errSpan);
+            }
+
+            if (qty > unreserved) {
+                qtyInput.classList.add('is-invalid');
+                errSpan.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i>Vượt quá khả dụng (${unreserved})`;
+                errSpan.style.display = 'block';
+                return false;
+            } else if (qty <= 0) {
+                qtyInput.classList.add('is-invalid');
+                errSpan.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i>Số lượng phải > 0`;
+                errSpan.style.display = 'block';
+                return false;
+            } else {
+                qtyInput.classList.remove('is-invalid');
+                errSpan.textContent = '';
+                errSpan.style.display = 'none';
+                return true;
+            }
+        }
+
+        function validateAllLines() {
+            let isValid = true;
+            let firstErrorMsg = '';
+            let firstInvalidInput = null;
+
+            const rows = tableBody.querySelectorAll('.line-row');
+            if (rows.length === 0) {
+                alert('Lệnh chuyển kho phải có ít nhất một dòng sản phẩm yêu cầu.');
+                return false;
+            }
+
+            rows.forEach(row => {
+                const select = row.querySelector('.line-product-select') || row.querySelector('select');
+                const opt = select?.options[select.selectedIndex];
+                const prodName = opt?.textContent?.trim() || 'sản phẩm';
+                let unreserved = 0;
+                const qtyInput = row.querySelector('.qty-input');
+                if (opt && opt.dataset.unreserved !== undefined) {
+                    unreserved = parseInt(opt.dataset.unreserved) || 0;
+                } else if (qtyInput && qtyInput.dataset.available) {
+                    unreserved = parseInt(qtyInput.dataset.available) || 0;
+                }
+                const qty = parseInt(qtyInput?.value) || 0;
+
+                if (!validateRowQty(row)) {
+                    isValid = false;
+                    if (!firstErrorMsg) {
+                        if (qty > unreserved) {
+                            firstErrorMsg = `Số lượng yêu cầu (${qty}) không được vượt quá số lượng khả dụng (${unreserved}) của ${prodName}.`;
+                        } else {
+                            firstErrorMsg = `Số lượng yêu cầu của ${prodName} phải lớn hơn 0.`;
+                        }
+                        firstInvalidInput = qtyInput;
+                    }
+                }
+            });
+
+            if (!isValid && firstErrorMsg) {
+                alert(firstErrorMsg);
+                firstInvalidInput?.focus();
+            }
+            return isValid;
+        }
+
+        function recalcTotal() {
+            let total = 0;
+            const rows = tableBody.querySelectorAll('.line-row');
+            rows.forEach((row, idx) => {
+                const rowNum = row.querySelector('.row-num');
+                if (rowNum) rowNum.textContent = (idx + 1);
+
+                const select = row.querySelector('.line-product-select');
+                if (select) select.name = `Lines[${idx}].ProductId`;
+
+                const qtyInput = row.querySelector('.qty-input');
+                if (qtyInput) {
+                    qtyInput.name = `Lines[${idx}].Quantity`;
+                    const val = parseInt(qtyInput.value) || 0;
+                    total += val;
+                }
+            });
+            if (totalQtyDisplay) totalQtyDisplay.textContent = total;
+
+            if (rows.length === 0) {
+                if (noLinesWarning) noLinesWarning.style.display = 'block';
+            } else {
+                if (noLinesWarning) noLinesWarning.style.display = 'none';
+            }
+        }
 
         btnAddLine.addEventListener('click', function () {
+            if (!fromWhSelect.value) {
+                alert('Vui lòng chọn Kho nguồn trước khi thêm sản phẩm.');
+                fromWhSelect.focus();
+                return;
+            }
+
             const rows = tableBody.querySelectorAll('.line-row');
             const newIndex = rows.length;
-            const firstRow = rows[0];
-            const clone = firstRow.cloneNode(true);
 
-            const productSelect = clone.querySelector('select');
-            productSelect.name = `Lines[${newIndex}].ProductId`;
-            productSelect.selectedIndex = 0;
+            const newRow = document.createElement('tr');
+            newRow.className = 'line-row';
 
-            const qtyInput = clone.querySelector('input[type="number"]');
-            qtyInput.name = `Lines[${newIndex}].Quantity`;
-            qtyInput.value = '1';
+            let optionsHtml = '<option value="">-- Chọn sản phẩm --</option>';
+            currentProducts.forEach(p => {
+                optionsHtml += `<option value="${p.productId}" data-unit="${p.unit}" data-code="${p.productCode}" data-unreserved="${p.unreservedQuantity}">[${p.productCode}] ${p.productName}</option>`;
+            });
 
-            tableBody.appendChild(clone);
-            bindRemoveButtons();
+            newRow.innerHTML = `
+                <td class="row-num text-muted fw-semibold">${newIndex + 1}</td>
+                <td>
+                    <select class="form-select line-product-select" name="Lines[${newIndex}].ProductId" required>
+                        ${optionsHtml}
+                    </select>
+                </td>
+                <td>
+                    <span class="unit-label text-muted">—</span>
+                </td>
+                <td>
+                    <span class="stock-badge badge-stock">Khả dụng: <strong>—</strong></span>
+                </td>
+                <td>
+                    <input type="number"
+                           class="form-control text-end qty-input"
+                           name="Lines[${newIndex}].Quantity"
+                           value="1"
+                           min="1"
+                           max="1000000"
+                           data-available="0"
+                           required />
+                    <div class="qty-error-msg text-danger mt-1" style="font-size: 11.5px; display: none;"></div>
+                </td>
+                <td style="text-align: center;">
+                    <button type="button" class="btn-remove-line sales-danger-icon" title="Xóa dòng">
+                        <i class="bi bi-trash" aria-hidden="true"></i>
+                    </button>
+                </td>
+            `;
+
+            tableBody.appendChild(newRow);
+            bindLineEvents(newRow);
+            recalcTotal();
         });
 
-        function bindRemoveButtons() {
-            tableBody.querySelectorAll('.btn-remove-line').forEach(btn => {
-                btn.onclick = function () {
+        function bindLineEvents(row) {
+            const btnRemove = row.querySelector('.btn-remove-line');
+            if (btnRemove) {
+                btnRemove.onclick = function () {
                     const rows = tableBody.querySelectorAll('.line-row');
                     if (rows.length <= 1) {
                         alert('Lệnh chuyển kho phải có ít nhất một dòng sản phẩm.');
                         return;
                     }
-                    btn.closest('tr').remove();
-                    reindexRows();
+                    row.remove();
+                    recalcTotal();
                 };
-            });
+            }
+
+            const select = row.querySelector('.line-product-select');
+            if (select) {
+                select.onchange = function () {
+                    updateLineDetails(this);
+
+                    const selectedVal = this.value;
+                    if (selectedVal) {
+                        let count = 0;
+                        tableBody.querySelectorAll('.line-product-select').forEach(s => {
+                            if (s.value === selectedVal) count++;
+                        });
+                        if (count > 1) {
+                            alert('Sản phẩm này đã có trong danh sách chuyển kho. Vui lòng cộng dồn số lượng thay vì chọn trùng.');
+                            this.value = '';
+                            updateLineDetails(this);
+                        }
+                    }
+                };
+            }
+
+            const qtyInput = row.querySelector('.qty-input');
+            if (qtyInput) {
+                qtyInput.oninput = function () {
+                    validateRowQty(row);
+                    recalcTotal();
+                };
+            }
         }
 
-        function reindexRows() {
-            tableBody.querySelectorAll('.line-row').forEach((row, idx) => {
-                row.querySelector('select').name = `Lines[${idx}].ProductId`;
-                row.querySelector('input[type="number"]').name = `Lines[${idx}].Quantity`;
-            });
-        }
+        tableBody.querySelectorAll('.line-row').forEach(row => {
+            bindLineEvents(row);
+            validateRowQty(row);
+        });
 
-        bindRemoveButtons();
+        recalcTotal();
 
         document.getElementById('btnSaveDraft').addEventListener('click', function () {
             if (fromWhSelect.value && toWhSelect.value && fromWhSelect.value === toWhSelect.value) {
                 alert('Kho nguồn và kho đích phải khác nhau.');
+                return;
+            }
+            if (dispatchDateInput && expectedDateInput && expectedDateInput.value < dispatchDateInput.value) {
+                alert('Ngày dự kiến nhận phải bằng hoặc sau ngày chuyển đi.');
+                return;
+            }
+            if (!validateAllLines()) {
                 return;
             }
             isReleaseInput.value = 'false';
@@ -220,7 +586,14 @@
                 alert('Kho nguồn và kho đích phải khác nhau.');
                 return;
             }
-            if (confirm('Bạn có chắc chắn muốn phát hành lệnh chuyển kho này?')) {
+            if (dispatchDateInput && expectedDateInput && expectedDateInput.value < dispatchDateInput.value) {
+                alert('Ngày dự kiến nhận phải bằng hoặc sau ngày chuyển đi.');
+                return;
+            }
+            if (!validateAllLines()) {
+                return;
+            }
+            if (confirm('Bạn có chắc chắn muốn phát hành lệnh chuyển kho này? Nguồn tồn tại kho nguồn sẽ được giữ chỗ ngay lập tức.')) {
                 isReleaseInput.value = 'true';
                 form.submit();
             }

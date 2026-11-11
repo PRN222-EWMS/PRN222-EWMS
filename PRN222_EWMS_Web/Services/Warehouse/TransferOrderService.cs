@@ -97,6 +97,7 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
                 ToWarehouseName = t.ToWarehouse.WarehouseName,
                 ItemCondition = t.ItemCondition,
                 Status = t.Status,
+                DispatchDate = t.DispatchDate,
                 ExpectedDate = t.ExpectedDate,
                 CreatedAt = t.CreatedAt,
                 CreatedByName = t.CreatedByUser.FullName,
@@ -205,6 +206,7 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
             ToWarehouseName = order.ToWarehouse.WarehouseName,
             ItemCondition = order.ItemCondition,
             Status = order.Status,
+            DispatchDate = order.DispatchDate,
             ExpectedDate = order.ExpectedDate,
             CreatedAt = order.CreatedAt,
             CreatedByName = order.CreatedByUser.FullName,
@@ -220,6 +222,57 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
     // =========================================================================
     // 3. CHỨC NĂNG 37: TẠO LỆNH CHUYỂN KHO (MANAGER)
     // =========================================================================
+    public async Task<List<ProductLookupDto>> GetAvailableProductsAsync(int warehouseId, string itemCondition = "GOOD")
+    {
+        if (warehouseId <= 0) return [];
+
+        var heldBySource = await db.Reservations
+            .Where(r => r.Status == "ACTIVE" && r.WarehouseId == warehouseId && r.ItemCondition == itemCondition)
+            .GroupBy(r => r.SupplySourceId)
+            .Select(g => new { SupplySourceId = g.Key, ReservedBalance = g.Sum(r => (long)r.ReservedQuantity - r.ConsumedQuantity - r.ReleasedQuantity) })
+            .ToDictionaryAsync(x => x.SupplySourceId, x => x.ReservedBalance);
+
+        var sources = await db.SupplySources
+            .Where(s => s.WarehouseId == warehouseId && s.ItemCondition == itemCondition && s.SupplyState == "PHYSICAL")
+            .Select(s => new { s.SupplySourceId, s.ProductId, s.EligibleQuantity })
+            .ToListAsync();
+
+        var lookup = sources
+            .Select(s =>
+            {
+                var reserved = heldBySource.TryGetValue(s.SupplySourceId, out var b) ? b : 0;
+                return new { s.ProductId, Unreserved = Math.Max(0, (long)s.EligibleQuantity - reserved) };
+            })
+            .GroupBy(x => x.ProductId)
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.Unreserved));
+
+        var products = await db.Products
+            .AsNoTracking()
+            .Where(p => p.Status == "ACTIVE")
+            .OrderBy(p => p.ProductCode)
+            .Select(p => new ProductLookupDto
+            {
+                ProductId = p.ProductId,
+                ProductCode = p.ProductCode,
+                ProductName = p.ProductName,
+                Unit = p.Unit,
+                CategoryId = p.CategoryId,
+                BrandId = p.BrandId,
+                UnreservedQuantity = 0
+            })
+            .ToListAsync();
+
+        foreach (var p in products)
+        {
+            if (lookup.TryGetValue(p.ProductId, out var unreserved))
+            {
+                p.UnreservedQuantity = unreserved;
+            }
+        }
+
+        return products;
+    }
+
     public async Task<CreateTransferOrderViewModel> GetCreateFormAsync()
     {
         var warehouses = await db.Warehouses
@@ -228,26 +281,33 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
             .Select(w => new LookupItemDto { Id = w.WarehouseId, Name = w.WarehouseName })
             .ToListAsync();
 
-        var products = await db.Products
-            .AsNoTracking()
-            .Where(p => p.Status == "ACTIVE")
-            .Select(p => new ProductLookupDto
-            {
-                ProductId = p.ProductId,
-                ProductCode = p.ProductCode,
-                ProductName = p.ProductName,
-                Unit = p.Unit,
-                CategoryId = p.CategoryId,
-                BrandId = p.BrandId
-            })
-            .ToListAsync();
+        var defaultFromWhId = warehouses.Count > 0 ? warehouses[0].Id : 0;
+        var products = defaultFromWhId > 0
+            ? await GetAvailableProductsAsync(defaultFromWhId, "GOOD")
+            : await db.Products
+                .AsNoTracking()
+                .Where(p => p.Status == "ACTIVE")
+                .Select(p => new ProductLookupDto
+                {
+                    ProductId = p.ProductId,
+                    ProductCode = p.ProductCode,
+                    ProductName = p.ProductName,
+                    Unit = p.Unit,
+                    CategoryId = p.CategoryId,
+                    BrandId = p.BrandId,
+                    UnreservedQuantity = 0
+                })
+                .ToListAsync();
 
+        var today = DateOnly.FromDateTime(DateTime.Today);
         return new CreateTransferOrderViewModel
         {
             Warehouses = warehouses,
+            FromWarehouseId = defaultFromWhId,
             Products = products,
             StaffUsers = [],
-            ExpectedDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3)),
+            DispatchDate = today,
+            ExpectedDate = today.AddDays(3),
             Lines = [new CreateTransferOrderLineInput { ProductId = 0, Quantity = 1 }]
         };
     }
@@ -259,7 +319,7 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
         // 1. Validation kho nguồn và kho đích
         if (model.FromWarehouseId == model.ToWarehouseId)
         {
-            return (false, "Select two different valid warehouses.", 0);
+            return (false, "Vui lòng chọn hai kho khác nhau hợp lệ.", 0);
         }
 
         var fromWh = await db.Warehouses.FindAsync(model.FromWarehouseId);
@@ -275,8 +335,18 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
             return (false, "Tình trạng hàng phải là GOOD hoặc DAMAGED.", 0);
         }
 
-        // 3. Validation ETA
-        if (model.ExpectedDate.HasValue && model.ExpectedDate.Value < DateOnly.FromDateTime(DateTime.UtcNow))
+        // 3. Validation ETA & DispatchDate
+        if (model.DispatchDate.HasValue && model.DispatchDate.Value < DateOnly.FromDateTime(DateTime.Today))
+        {
+            return (false, "Ngày chuyển đi không được nhỏ hơn ngày hiện tại.", 0);
+        }
+
+        if (model.DispatchDate.HasValue && model.ExpectedDate.HasValue && model.ExpectedDate.Value < model.DispatchDate.Value)
+        {
+            return (false, "Ngày dự kiến nhận phải bằng hoặc sau ngày chuyển đi.", 0);
+        }
+
+        if (model.ExpectedDate.HasValue && model.ExpectedDate.Value < DateOnly.FromDateTime(DateTime.Today))
         {
             return (false, "Ngày dự kiến chuyển đến (ETA) không được nhỏ hơn ngày hiện tại.", 0);
         }
@@ -303,63 +373,62 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
 
             if (!capCheck.IsValid)
             {
-                return (false, capCheck.ErrorMessage ?? "The destination warehouse does not have enough compatible capacity for all transfer items on the expected arrival date.", 0);
+                return (false, capCheck.ErrorMessage ?? "Kho đích không còn đủ sức chứa phù hợp cho toàn bộ sản phẩm chuyển đến vào ngày dự kiến.", 0);
             }
         }
         else // DAMAGED
         {
-            // Kiểm tra kho đích có Zone khu vực DEFECTIVE không
+            // Kiểm tra kho đích có Zone/Vị trí lưu trữ hàng lỗi DAMAGED không
             bool hasDefectiveZone = await db.StorageLocations
                 .AsNoTracking()
                 .AnyAsync(l => l.WarehouseId == model.ToWarehouseId
-                    && (l.ZoneType == "DEFECTIVE" || l.ConditionPolicy == "DEFECTIVE_ONLY")
+                    && (l.ZoneType == "DEFECTIVE" || l.ConditionPolicy == "DEFECTIVE_ONLY" || l.ConditionPolicy == "DAMAGED")
                     && l.Status == "ACTIVE");
 
             if (!hasDefectiveZone)
             {
-                return (false, "No compatible storage zone is configured for this product category, brand, and condition.", 0);
+                return (false, "Kho đích chưa được thiết lập khu vực lưu trữ tương thích cho loại hàng hóa và tình trạng này.", 0);
             }
         }
 
-        // 6. Nếu RELEASE ngay: Kiểm tra tồn vật lý khả dụng tại kho nguồn
-        if (model.IsRelease)
+        // 6. Kiểm tra tồn vật lý khả dụng tại kho nguồn (Validate bắt buộc cho cả Lưu nháp và Phát hành)
+        foreach (var line in groupedLines)
         {
-            foreach (var line in groupedLines)
+            // Tồn vật lý trong kho có tình trạng phù hợp
+            int physicalCount = await db.SerialItems
+                .AsNoTracking()
+                .Where(s => s.CurrentWarehouseId == model.FromWarehouseId
+                    && s.ProductId == line.ProductId
+                    && s.ItemCondition == model.ItemCondition
+                    && s.StockState == "IN_WAREHOUSE"
+                    && !s.IsQuarantined)
+                .CountAsync();
+
+            // Trừ các serial đang bị claim
+            int claimedCount = await db.PickingClaims
+                .AsNoTracking()
+                .Where(c => db.SerialItems.Any(s => s.SerialItemId == c.SerialItemId
+                    && s.CurrentWarehouseId == model.FromWarehouseId
+                    && s.ProductId == line.ProductId
+                    && s.ItemCondition == model.ItemCondition))
+                .CountAsync();
+
+            // Trừ các Reservation ACTIVE
+            int reservedCount = await db.Reservations
+                .AsNoTracking()
+                .Where(r => r.WarehouseId == model.FromWarehouseId
+                    && r.ProductId == line.ProductId
+                    && r.ItemCondition == model.ItemCondition
+                    && r.SupplyState == "PHYSICAL"
+                    && r.Status == "ACTIVE")
+                .SumAsync(r => (int?)(r.ReservedQuantity - r.ConsumedQuantity - r.ReleasedQuantity)) ?? 0;
+
+            int availablePhysical = physicalCount - claimedCount - reservedCount;
+            if (availablePhysical < line.Quantity)
             {
-                // Tồn vật lý trong kho có tình trạng phù hợp
-                int physicalCount = await db.SerialItems
-                    .AsNoTracking()
-                    .Where(s => s.CurrentWarehouseId == model.FromWarehouseId
-                        && s.ProductId == line.ProductId
-                        && s.ItemCondition == model.ItemCondition
-                        && s.StockState == "IN_WAREHOUSE"
-                        && !s.IsQuarantined)
-                    .CountAsync();
-
-                // Trừ các serial đang bị claim
-                int claimedCount = await db.PickingClaims
-                    .AsNoTracking()
-                    .Where(c => db.SerialItems.Any(s => s.SerialItemId == c.SerialItemId
-                        && s.CurrentWarehouseId == model.FromWarehouseId
-                        && s.ProductId == line.ProductId
-                        && s.ItemCondition == model.ItemCondition))
-                    .CountAsync();
-
-                // Trừ các Reservation ACTIVE
-                int reservedCount = await db.Reservations
-                    .AsNoTracking()
-                    .Where(r => r.WarehouseId == model.FromWarehouseId
-                        && r.ProductId == line.ProductId
-                        && r.ItemCondition == model.ItemCondition
-                        && r.SupplyState == "PHYSICAL"
-                        && r.Status == "ACTIVE")
-                    .SumAsync(r => (int?)(r.ReservedQuantity - r.ConsumedQuantity - r.ReleasedQuantity)) ?? 0;
-
-                int availablePhysical = physicalCount - claimedCount - reservedCount;
-                if (availablePhysical < line.Quantity)
-                {
-                    return (false, "The source warehouse does not have enough unreserved physical stock for this transfer.", 0);
-                }
+                var prod = await db.Products.FindAsync(line.ProductId);
+                var prodName = prod != null ? $"[{prod.ProductCode}] {prod.ProductName}" : $"Sản phẩm ID {line.ProductId}";
+                return (false, $"Số lượng yêu cầu ({line.Quantity}) vượt quá tồn kho khả dụng ({availablePhysical}) của sản phẩm {prodName}.", 0);
             }
         }
 
@@ -390,6 +459,7 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
                 ToWarehouseId = model.ToWarehouseId,
                 ItemCondition = model.ItemCondition,
                 Status = model.IsRelease ? "RELEASED" : "DRAFT",
+                DispatchDate = model.DispatchDate ?? DateOnly.FromDateTime(DateTime.Today),
                 ExpectedDate = model.ExpectedDate,
                 CreatedByUserId = userId,
                 AssignedToUserId = null, // Để trống để nhân viên tại kho nguồn/kho đích tự do tiếp nhận
@@ -509,19 +579,8 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
             .Select(w => new LookupItemDto { Id = w.WarehouseId, Name = w.WarehouseName })
             .ToListAsync();
 
-        var products = await db.Products
-            .AsNoTracking()
-            .Where(p => p.Status == "ACTIVE")
-            .Select(p => new ProductLookupDto
-            {
-                ProductId = p.ProductId,
-                ProductCode = p.ProductCode,
-                ProductName = p.ProductName,
-                Unit = p.Unit,
-                CategoryId = p.CategoryId,
-                BrandId = p.BrandId
-            })
-            .ToListAsync();
+        var products = await GetAvailableProductsAsync(order.FromWarehouseId, order.ItemCondition);
+        var stockDict = products.ToDictionary(p => p.ProductId, p => p.UnreservedQuantity);
 
         var dispatchItems = await db.TransferDispatchItems
             .AsNoTracking()
@@ -531,11 +590,15 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
         var lines = order.TransferOrderLines.Select(l =>
         {
             int dispatched = dispatchItems.Count(di => di.TransferLineId == l.TransferLineId);
+            stockDict.TryGetValue(l.ProductId, out var unreserved);
             return new EditTransferOrderLineInput
             {
                 TransferLineId = l.TransferLineId,
                 ProductId = l.ProductId,
+                ProductCode = l.Product.ProductCode,
+                ProductName = l.Product.ProductName,
                 Quantity = l.RequestedQuantity,
+                AvailableQuantity = unreserved,
                 MinQuantityAllowed = dispatched
             };
         }).ToList();
@@ -552,6 +615,7 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
             ToWarehouseId = order.ToWarehouseId,
             ToWarehouseName = order.ToWarehouse.WarehouseName,
             ItemCondition = order.ItemCondition,
+            DispatchDate = order.DispatchDate ?? DateOnly.FromDateTime(order.CreatedAt.Date),
             ExpectedDate = order.ExpectedDate,
             AssignedToUserId = order.AssignedToUserId,
             Note = order.Note,
@@ -584,7 +648,7 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
         var currentVersionBase64 = Convert.ToBase64String(order.RowVersion);
         if (!string.Equals(currentVersionBase64, model.RowVersionBase64, StringComparison.Ordinal))
         {
-            return (false, "This transfer order changed while you were editing it. Reload before saving.");
+            return (false, "Dữ liệu lệnh chuyển kho này đã bị thay đổi bởi người khác trong lúc bạn thao tác. Vui lòng tải lại trang trước khi lưu.");
         }
 
         bool hasDispatch = await db.TransferDispatches.AnyAsync(d => d.TransferOrderId == model.TransferOrderId);
@@ -596,22 +660,27 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
         {
             if (order.FromWarehouseId != model.FromWarehouseId || order.ToWarehouseId != model.ToWarehouseId || order.ItemCondition != model.ItemCondition)
             {
-                return (false, "Source document context cannot change while dependent source/work records exist.");
+                return (false, "Không thể thay đổi kho nguồn, kho đích hoặc tình trạng hàng khi lệnh chuyển đã phát sinh phiếu xuất hoặc nhận hàng.");
             }
         }
         else
         {
             if (model.FromWarehouseId == model.ToWarehouseId)
             {
-                return (false, "Select two different valid warehouses.");
+                return (false, "Vui lòng chọn hai kho khác nhau hợp lệ.");
             }
             order.FromWarehouseId = model.FromWarehouseId;
             order.ToWarehouseId = model.ToWarehouseId;
             order.ItemCondition = model.ItemCondition;
         }
 
-        // Validate ETA
-        if (model.ExpectedDate.HasValue && model.ExpectedDate.Value < DateOnly.FromDateTime(DateTime.UtcNow))
+        // Validate Dates
+        if (model.DispatchDate.HasValue && model.ExpectedDate.HasValue && model.ExpectedDate.Value < model.DispatchDate.Value)
+        {
+            return (false, "Ngày dự kiến nhận phải bằng hoặc sau ngày chuyển đi.");
+        }
+
+        if (model.ExpectedDate.HasValue && model.ExpectedDate.Value < DateOnly.FromDateTime(DateTime.Today))
         {
             return (false, "Ngày dự kiến chuyển đến (ETA) không được nhỏ hơn ngày hiện tại.");
         }
@@ -652,51 +721,47 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
 
             if (!capCheck.IsValid)
             {
-                return (false, capCheck.ErrorMessage ?? "The destination warehouse does not have enough compatible capacity for all transfer items on the expected arrival date.");
+                return (false, capCheck.ErrorMessage ?? "Kho đích không còn đủ sức chứa phù hợp cho toàn bộ sản phẩm chuyển đến vào ngày dự kiến.");
             }
         }
 
-        // Nếu lệnh đang RELEASED hoặc người dùng chọn Release ngay bây giờ:
-        bool willBeReleased = (order.Status == "RELEASED") || model.IsRelease;
-
-        if (willBeReleased)
+        // Kiểm tra tồn vật lý khả dụng tại kho nguồn (Validate bắt buộc cho cả Lưu nháp và Phát hành)
+        foreach (var line in groupedLines)
         {
-            // Recheck source physical stock
-            foreach (var line in groupedLines)
+            int physicalCount = await db.SerialItems
+                .AsNoTracking()
+                .Where(s => s.CurrentWarehouseId == order.FromWarehouseId
+                    && s.ProductId == line.ProductId
+                    && s.ItemCondition == order.ItemCondition
+                    && s.StockState == "IN_WAREHOUSE"
+                    && !s.IsQuarantined)
+                .CountAsync();
+
+            int claimedCount = await db.PickingClaims
+                .AsNoTracking()
+                .Where(c => db.SerialItems.Any(s => s.SerialItemId == c.SerialItemId
+                    && s.CurrentWarehouseId == order.FromWarehouseId
+                    && s.ProductId == line.ProductId
+                    && s.ItemCondition == order.ItemCondition))
+                .CountAsync();
+
+            // Trừ Reservation của các lệnh KHÁC
+            int reservedCountOther = await db.Reservations
+                .AsNoTracking()
+                .Where(r => r.WarehouseId == order.FromWarehouseId
+                    && r.ProductId == line.ProductId
+                    && r.ItemCondition == order.ItemCondition
+                    && r.SupplyState == "PHYSICAL"
+                    && r.Status == "ACTIVE"
+                    && r.TransferOrderId != model.TransferOrderId)
+                .SumAsync(r => (int?)(r.ReservedQuantity - r.ConsumedQuantity - r.ReleasedQuantity)) ?? 0;
+
+            int availablePhysical = physicalCount - claimedCount - reservedCountOther;
+            if (availablePhysical < line.Quantity)
             {
-                int physicalCount = await db.SerialItems
-                    .AsNoTracking()
-                    .Where(s => s.CurrentWarehouseId == order.FromWarehouseId
-                        && s.ProductId == line.ProductId
-                        && s.ItemCondition == order.ItemCondition
-                        && s.StockState == "IN_WAREHOUSE"
-                        && !s.IsQuarantined)
-                    .CountAsync();
-
-                int claimedCount = await db.PickingClaims
-                    .AsNoTracking()
-                    .Where(c => db.SerialItems.Any(s => s.SerialItemId == c.SerialItemId
-                        && s.CurrentWarehouseId == order.FromWarehouseId
-                        && s.ProductId == line.ProductId
-                        && s.ItemCondition == order.ItemCondition))
-                    .CountAsync();
-
-                // Trừ Reservation của các lệnh KHÁC
-                int reservedCountOther = await db.Reservations
-                    .AsNoTracking()
-                    .Where(r => r.WarehouseId == order.FromWarehouseId
-                        && r.ProductId == line.ProductId
-                        && r.ItemCondition == order.ItemCondition
-                        && r.SupplyState == "PHYSICAL"
-                        && r.Status == "ACTIVE"
-                        && r.TransferOrderId != model.TransferOrderId)
-                    .SumAsync(r => (int?)(r.ReservedQuantity - r.ConsumedQuantity - r.ReleasedQuantity)) ?? 0;
-
-                int availablePhysical = physicalCount - claimedCount - reservedCountOther;
-                if (availablePhysical < line.Quantity)
-                {
-                    return (false, "The source warehouse does not have enough unreserved physical stock for this transfer.");
-                }
+                var prod = await db.Products.FindAsync(line.ProductId);
+                var prodName = prod != null ? $"[{prod.ProductCode}] {prod.ProductName}" : $"Sản phẩm ID {line.ProductId}";
+                return (false, $"Số lượng yêu cầu ({line.Quantity}) vượt quá tồn kho khả dụng ({availablePhysical}) của sản phẩm {prodName}.");
             }
         }
 
@@ -704,6 +769,7 @@ public class TransferOrderService(EwmsDbContext db, IWarehouseCapacityEngine cap
         await using var tx = await db.Database.BeginTransactionAsync();
         try
         {
+            order.DispatchDate = model.DispatchDate;
             order.ExpectedDate = model.ExpectedDate;
             order.AssignedToUserId = null; // Để trống để nhân viên tại kho nguồn/kho đích tự do tiếp nhận
             order.Note = model.Note;

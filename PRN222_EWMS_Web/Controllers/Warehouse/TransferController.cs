@@ -69,6 +69,7 @@ public class TransferController : Controller
             form.FromWarehouseId = model.FromWarehouseId;
             form.ToWarehouseId = model.ToWarehouseId;
             form.ItemCondition = model.ItemCondition;
+            form.DispatchDate = model.DispatchDate;
             form.ExpectedDate = model.ExpectedDate;
             form.AssignedToUserId = model.AssignedToUserId;
             form.Note = model.Note;
@@ -81,6 +82,14 @@ public class TransferController : Controller
             : "Đã lưu bản nháp (DRAFT) lệnh chuyển kho thành công!";
 
         return RedirectToAction(nameof(Edit), new { id = result.TransferOrderId });
+    }
+
+    [HttpGet("GetAvailableProducts")]
+    [Authorize(Roles = "MANAGER,WAREHOUSE_STAFF")]
+    public async Task<IActionResult> GetAvailableProducts(int warehouseId, string itemCondition = "GOOD")
+    {
+        var products = await _transferService.GetAvailableProductsAsync(warehouseId, itemCondition);
+        return Json(products);
     }
 
     // =========================================================================
@@ -119,6 +128,7 @@ public class TransferController : Controller
             var form = await _transferService.GetEditFormAsync(id, CurrentUserId);
             if (form == null) return RedirectToAction(nameof(Index));
 
+            form.DispatchDate = model.DispatchDate;
             form.ExpectedDate = model.ExpectedDate;
             form.AssignedToUserId = model.AssignedToUserId;
             form.Note = model.Note;
