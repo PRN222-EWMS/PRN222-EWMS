@@ -536,6 +536,87 @@ public class OutboundService(EwmsDbContext db) : IOutboundService
             });
         }
 
+        // Tải vị trí kho để dựng đường dẫn trực quan (Zone > Kệ > Tầng / Ô sàn)
+        var allLocations = await db.StorageLocations
+            .AsNoTracking()
+            .Where(l => l.WarehouseId == outbound.SalesOrder.WarehouseId)
+            .ToListAsync();
+
+        var locationDict = allLocations.ToDictionary(l => l.LocationId);
+
+        string BuildLocationPath(int? locId)
+        {
+            if (!locId.HasValue || !locationDict.TryGetValue(locId.Value, out var loc))
+                return "Chưa gán vị trí (Chờ xếp chỗ)";
+
+            var path = new List<string> { loc.LocationName };
+            var curr = loc;
+            int depth = 0;
+            while (curr.ParentLocationId.HasValue && depth < 5)
+            {
+                if (locationDict.TryGetValue(curr.ParentLocationId.Value, out var parent))
+                {
+                    path.Insert(0, parent.LocationName);
+                    curr = parent;
+                    depth++;
+                }
+                else break;
+            }
+            return string.Join(" > ", path);
+        }
+
+        // Truy vấn gợi ý thiết bị theo nguyên tắc FIFO (Ưu tiên năm sản xuất cũ nhất)
+        var productIds = outbound.SalesOrder.SalesOrderLines.Select(l => l.ProductId).Distinct().ToList();
+
+        var availableSerials = await db.SerialItems
+            .AsNoTracking()
+            .Include(s => s.Product)
+            .Where(s => s.CurrentWarehouseId == outbound.SalesOrder.WarehouseId
+                     && productIds.Contains(s.ProductId)
+                     && s.StockState == "IN_WAREHOUSE"
+                     && s.ItemCondition == "GOOD"
+                     && !s.IsQuarantined)
+            .ToListAsync();
+
+        var activeOtherClaims = (await db.PickingClaims
+            .AsNoTracking()
+            .Where(c => c.OutboundId != outboundId)
+            .Select(c => c.SerialItemId)
+            .ToListAsync()).ToHashSet();
+
+        var scannedSerialIds = scannedItems.Select(oi => oi.SerialItemId).ToHashSet();
+
+        // Sắp xếp ưu tiên FIFO: Năm sản xuất cũ nhất -> Tháng cũ nhất -> Ngày nhập kho cũ nhất
+        var candidateSerials = availableSerials
+            .Where(s => !activeOtherClaims.Contains(s.SerialItemId))
+            .OrderBy(s => s.ManufacturingYear ?? 9999)
+            .ThenBy(s => s.ManufacturingMonth ?? 99)
+            .ThenBy(s => s.RegisteredAt)
+            .ToList();
+
+        var earliestSerialIds = candidateSerials
+            .Where(s => !scannedSerialIds.Contains(s.SerialItemId))
+            .GroupBy(s => s.ProductId)
+            .Select(g => g.First().SerialItemId)
+            .ToHashSet();
+
+        var suggestedSerials = candidateSerials.Select(s => new SuggestedSerialPickDto
+        {
+            SerialItemId = s.SerialItemId,
+            SerialNumber = s.SerialNumber,
+            ProductId = s.ProductId,
+            ProductCode = s.Product.ProductCode,
+            ProductName = s.Product.ProductName,
+            ManufacturingMonth = s.ManufacturingMonth,
+            ManufacturingYear = s.ManufacturingYear,
+            RegisteredAt = s.RegisteredAt,
+            ItemCondition = s.ItemCondition,
+            LocationId = s.CurrentLocationId,
+            LocationPath = BuildLocationPath(s.CurrentLocationId),
+            IsPriority = earliestSerialIds.Contains(s.SerialItemId),
+            IsAlreadyPickedInSession = scannedSerialIds.Contains(s.SerialItemId)
+        }).ToList();
+
         return new PickingWorkbenchViewModel
         {
             OutboundId = outbound.OutboundId,
@@ -553,7 +634,8 @@ public class OutboundService(EwmsDbContext db) : IOutboundService
             AssignedToUserId = outbound.AssignedToUserId ?? userId,
             AssignedToName = outbound.AssignedToUser?.FullName ?? "Tôi",
             Lines = lines,
-            ScannedSerials = serialDtos
+            ScannedSerials = serialDtos,
+            SuggestedSerials = suggestedSerials
         };
     }
 
