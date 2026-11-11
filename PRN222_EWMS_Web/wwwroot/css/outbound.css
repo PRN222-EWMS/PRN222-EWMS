@@ -25,12 +25,12 @@
     flex-wrap: wrap;
 }
 
-/* Badge styles */
+/* Badge styles - Notion Sticker Palette */
 .outbound-badge {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    border-radius: 999px;
+    border-radius: 9999px;
     padding: 4px 12px;
     font-size: 12px;
     font-weight: 600;
@@ -87,4 +87,200 @@
     background: #dbeafe;
     color: #005bab;
     border-color: #60a5fa;
+}
+
+/* Progress bar - Notion style */
+.outbound-progress-wrap {
+    margin-top: 10px;
+}
+.outbound-progress-bar {
+    height: 6px;
+    background: #f1f0ee;
+    border-radius: 9999px;
+    overflow: hidden;
+}
+.outbound-progress-fill {
+    height: 100%;
+    background: var(--workspace-blue, #0075de);
+    border-radius: 9999px;
+    transition: width 0.3s ease;
+}
+.outbound-progress-fill.complete {
+    background: #1aae39;
+}
+
+/* Filter pills */
+.outbound-filters-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.outbound-filter-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 9999px;
+    border: 1px solid var(--workspace-line, #e6e6e6);
+    background: #ffffff;
+    color: var(--workspace-muted, #615d59);
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.15s ease;
+}
+.outbound-filter-pill:hover {
+    background: #f6f5f4;
+    color: #31302e;
+}
+.outbound-filter-pill.active {
+    background: var(--workspace-blue, #0075de);
+    color: #ffffff;
+    border-color: var(--workspace-blue, #0075de);
+}
+
+/* Notion chips & badges */
+.outbound-fifo-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 9999px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #793400;
+    background: #fff8e1;
+    border: 1px solid #ffe082;
+    white-space: nowrap;
+}
+
+.outbound-mfg-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #494541;
+    background: #f6f5f4;
+    border: 1px solid var(--workspace-line, #e6e6e6);
+    white-space: nowrap;
+}
+
+.outbound-location-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #31302e;
+    background: #f6f5f4;
+    border: 1px solid var(--workspace-line, #e6e6e6);
+    white-space: nowrap;
+}
+
+.outbound-condition-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 9999px;
+    padding: 3px 9px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #25633a;
+    background: #eaf6ee;
+    border: 1px solid #b2f2bb;
+    white-space: nowrap;
+}
+
+/* Table row styling */
+.outbound-priority-row {
+    background: #fdfaf4 !important;
+}
+.outbound-priority-row:hover {
+    background: #fcf4e8 !important;
+}
+.outbound-picked-row {
+    color: var(--workspace-muted, #615d59) !important;
+    opacity: 0.7;
+}
+
+/* Notices / Callouts */
+.outbound-notice {
+    padding: 14px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 0;
+}
+.outbound-notice-success {
+    background: #eaf6ee;
+    border: 1px solid #b2f2bb;
+    color: #25633a;
+}
+.outbound-notice-danger {
+    background: #fff3f2;
+    border: 1px solid #f3cbc7;
+    color: #b42318;
+}
+.outbound-notice-warning {
+    background: #fff8e1;
+    border: 1px solid #ffe082;
+    color: #793400;
+}
+
+/* Modal styling according to Notion ex-modal-card */
+.outbound-modal .modal-content {
+    background: #ffffff;
+    border: 1px solid var(--workspace-line, #e6e6e6);
+    border-radius: 16px;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+}
+.outbound-modal .modal-header {
+    border-bottom: 1px solid var(--workspace-line, #e6e6e6);
+    padding: 20px 24px;
+}
+.outbound-modal .modal-body {
+    padding: 24px;
+    color: #31302e;
+}
+.outbound-modal .modal-footer {
+    border-top: 1px solid var(--workspace-line, #e6e6e6);
+    padding: 16px 24px;
+    background: #faf9f8;
+}
+
+/* Detail info grid */
+.outbound-info-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+    margin: 20px 0 0;
+}
+.outbound-info-grid dt {
+    font-size: 12.5px;
+    font-weight: 400;
+    color: var(--workspace-muted, #615d59);
+    margin-bottom: 6px;
+}
+.outbound-info-grid dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+@media (max-width: 900px) {
+    .outbound-info-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media (max-width: 600px) {
+    .outbound-info-grid {
+        grid-template-columns: 1fr;
+    }
 }

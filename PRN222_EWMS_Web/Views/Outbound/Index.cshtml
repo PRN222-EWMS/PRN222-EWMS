@@ -27,15 +27,15 @@
 
     @if (TempData["Success"] != null)
     {
-        <div class="alert alert-success mb-0" role="alert">
-            <i class="bi bi-check-circle-fill me-1" aria-hidden="true"></i>
+        <div class="outbound-notice outbound-notice-success" role="alert">
+            <i class="bi bi-check-circle-fill flex-shrink-0" aria-hidden="true"></i>
             <span>@TempData["Success"]</span>
         </div>
     }
     @if (TempData["Error"] != null)
     {
-        <div class="alert alert-danger mb-0" role="alert">
-            <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>
+        <div class="outbound-notice outbound-notice-danger" role="alert">
+            <i class="bi bi-exclamation-triangle-fill flex-shrink-0" aria-hidden="true"></i>
             <span>@TempData["Error"]</span>
         </div>
     }
@@ -92,10 +92,10 @@
             </div>
 
             <div class="col-12 d-flex gap-2 justify-content-end pt-3 border-top mt-3">
-                <a class="workspace-button sales-button-secondary" asp-action="Index" style="height: 38px; padding: 0 16px; font-size: 14px;">
+                <a class="workspace-button sales-button-secondary" asp-action="Index">
                     <i class="bi bi-arrow-counterclockwise me-1"></i> Xóa bộ lọc
                 </a>
-                <button class="workspace-button" type="submit" style="height: 38px; padding: 0 20px; font-size: 14px;">
+                <button class="workspace-button" type="submit">
                     <i class="bi bi-funnel me-1" aria-hidden="true"></i> Tìm kiếm
                 </button>
             </div>
@@ -123,7 +123,7 @@
                     @if (Model.Items.Count == 0)
                     {
                         <tr>
-                            <td colspan="9" class="text-center py-5 text-muted">
+                            <td colspan="9" class="text-center py-5 muted">
                                 <i class="bi bi-inbox fs-2 d-block mb-2 text-secondary" aria-hidden="true"></i>
                                 Không tìm thấy phiếu xuất kho nào phù hợp với bộ lọc.
                             </td>
@@ -147,10 +147,10 @@
                                 </td>
                                 <td>@item.WarehouseName</td>
                                 <td style="text-align: center;">
-                                    <span class="badge bg-light text-dark border">@item.ItemCount</span>
+                                    <span class="outbound-badge outbound-badge-draft">@item.ItemCount</span>
                                 </td>
                                 <td style="white-space: nowrap;">
-                                    <small class="text-muted">@item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
+                                    <small class="muted">@item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
                                 </td>
                                 <td>@(item.CreatedByName ?? "—")</td>
                                 <td style="white-space: nowrap;">
@@ -182,7 +182,7 @@
                                             </span>
                                             break;
                                         default:
-                                            <span class="badge bg-secondary">@item.Status</span>
+                                            <span class="outbound-badge outbound-badge-draft">@item.Status</span>
                                             break;
                                     }
                                 </td>
@@ -195,14 +195,14 @@
                                         {
                                             if (item.Status == "PICKING")
                                             {
-                                                <a class="workspace-button sales-button-small" asp-action="Picking" asp-route-id="@item.OutboundId" style="background: #0e733b; color: #ffffff; border-color: #0e733b;" title="Mở bàn nhặt hàng">
-                                                    <i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i> Nhặt hàng
+                                                <a class="workspace-button sales-button-small" asp-action="Picking" asp-route-id="@item.OutboundId" title="Mở bàn nhặt hàng">
+                                                    <i class="bi bi-box-arrow-in-right me-1"></i> Nhặt hàng
                                                 </a>
                                             }
                                             else
                                             {
                                                 <button type="button" class="workspace-button sales-button-small disabled" disabled title="Phiếu xuất ở trạng thái @item.Status không thể nhặt hàng">
-                                                    <i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i> Nhặt hàng
+                                                    <i class="bi bi-box-arrow-in-right me-1"></i> Nhặt hàng
                                                 </button>
                                             }
                                         }
@@ -219,7 +219,7 @@
         @if (Model.TotalPages > 1)
         {
             <div class="d-flex justify-content-between align-items-center p-3 border-top">
-                <div class="text-muted" style="font-size: 13px;">
+                <div class="muted" style="font-size: 13px;">
                     Hiển thị trang <strong>@Model.PageIndex</strong> / <strong>@Model.TotalPages</strong> (Tổng số: <strong>@Model.TotalItems</strong> phiếu)
                 </div>
                 <div class="d-flex gap-1">
@@ -240,7 +240,7 @@
                     {
                         if (p == Model.PageIndex)
                         {
-                            <span class="workspace-button sales-button-small" style="background-color: var(--workspace-accent, #2b4c7e); color: white;">@p</span>
+                            <span class="workspace-button sales-button-small">@p</span>
                         }
                         else if (p <= 3 || p >= Model.TotalPages - 2 || Math.Abs(p - Model.PageIndex) <= 1)
                         {
@@ -257,7 +257,7 @@
                         }
                         else if (p == 4 && Model.PageIndex > 4)
                         {
-                            <span class="px-2 align-self-center text-muted">...</span>
+                            <span class="px-2 align-self-center muted">...</span>
                         }
                     }
                     @if (Model.PageIndex < Model.TotalPages)

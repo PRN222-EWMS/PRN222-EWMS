@@ -7,7 +7,8 @@ namespace PRN222_EWMS_Web.Services.Purchasing;
 
 public class PurchasingDashboardService(
     IPurchaseOrderRepository poRepo,
-    IUserRepository userRepo) : IPurchasingDashboardService
+    IUserRepository userRepo,
+    IPurchaseOrderService poService) : IPurchasingDashboardService
 {
     public async Task<PurchasingDashboardViewModel> GetDashboardAsync(int currentUserId)
     {
@@ -32,65 +33,8 @@ public class PurchasingDashboardService(
         // 4. KPI: Số nhà cung cấp đang hoạt động trong toàn hệ thống
         var activeSupplierCount = await poRepo.Suppliers.AsNoTracking().CountAsync(s => s.Status == "ACTIVE");
 
-        // Lấy danh sách 5 đơn mua hàng gần nhất của toàn bộ phận
-        var recentOrdersRaw = await allOrdersQuery
-            .OrderByDescending(o => o.CreatedAt)
-            .Take(5)
-            .Select(o => new
-            {
-                o.PurchaseOrderId,
-                o.Pocode,
-                SupplierName = o.Supplier.SupplierName,
-                WarehouseName = o.Warehouse.WarehouseName,
-                CreatedByName = o.CreatedByUser.FullName,
-                o.CreatedByUserId,
-                o.OrderDate,
-                o.ExpectedArrivalDate,
-                o.Status,
-                o.ConfirmedAt
-            })
-            .ToListAsync();
-
-        var poIds = recentOrdersRaw.Select(r => r.PurchaseOrderId).ToList();
-
-        // Lấy tiến độ tương ứng từ VwPurchaseOrderProgress
-        var progressList = await poRepo.Progress.AsNoTracking()
-            .Where(p => poIds.Contains(p.PurchaseOrderId))
-            .GroupBy(p => p.PurchaseOrderId)
-            .Select(g => new
-            {
-                PurchaseOrderId = g.Key,
-                TotalOrdered = g.Sum(x => x.OrderedQuantity),
-                TotalClosed = g.Sum(x => x.ClosedQuantity),
-                TotalReceived = g.Sum(x => x.ReceivedQuantity),
-                TotalRemaining = g.Sum(x => x.RemainingQuantity ?? 0)
-            })
-            .ToListAsync();
-
-        var progressDict = progressList.ToDictionary(p => p.PurchaseOrderId);
-
-        var recentOrderDtos = recentOrdersRaw.Select(r =>
-        {
-            progressDict.TryGetValue(r.PurchaseOrderId, out var prog);
-            return new PoListItemDto
-            {
-                PurchaseOrderId = r.PurchaseOrderId,
-                Pocode = r.Pocode,
-                SupplierName = r.SupplierName,
-                WarehouseName = r.WarehouseName,
-                CreatedByName = r.CreatedByName,
-                CreatedByUserId = r.CreatedByUserId,
-                OrderDate = r.OrderDate,
-                ExpectedArrivalDate = r.ExpectedArrivalDate,
-                Status = r.Status,
-                ConfirmedAt = r.ConfirmedAt,
-                TotalOrderedQuantity = prog?.TotalOrdered ?? 0,
-                TotalClosedQuantity = prog?.TotalClosed ?? 0,
-                TotalReceivedQuantity = prog?.TotalReceived ?? 0,
-                TotalRemainingQuantity = prog?.TotalRemaining ?? 0,
-                CanEdit = (r.CreatedByUserId == currentUserId) && (r.Status == "DRAFT" || r.Status == "CONFIRMED")
-            };
-        }).ToList();
+        var recentOrders = await poService.GetOrdersAsync(
+            new PoListViewModel { PageSize = 5 }, currentUserId, "PURCHASING_STAFF");
 
         return new PurchasingDashboardViewModel
         {
@@ -100,7 +44,7 @@ public class PurchasingDashboardService(
             ActiveSupplierCount = activeSupplierCount,
             UserFullName = fullName,
             CurrentUserId = currentUserId,
-            RecentOrders = recentOrderDtos
+            RecentOrders = recentOrders.Items
         };
     }
 }
