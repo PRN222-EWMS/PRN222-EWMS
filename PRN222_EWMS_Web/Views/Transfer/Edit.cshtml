@@ -9,7 +9,7 @@
         <div>
             <p class="eyebrow">CHUYỂN KHO / CHỈNH SỬA</p>
             <div class="d-flex align-items-center gap-3">
-                <h1 class="mb-0">Chỉnh sửa lệnh @Model.TransferCode</h1>
+                <h1 class="mb-0">@Model.TransferCode</h1>
                 @if (Model.Status == "DRAFT")
                 {
                     <span class="transfer-badge transfer-badge-draft">Bản nháp</span>
@@ -48,7 +48,7 @@
 
     @if (TempData["Success"] != null)
     {
-        <div class="alert alert-success mb-3" role="alert">
+        <div class="alert alert-success mb-4" role="alert">
             <i class="bi bi-check-circle-fill me-1" aria-hidden="true"></i>
             <span>@TempData["Success"]</span>
         </div>
@@ -56,11 +56,13 @@
 
     @if (TempData["Error"] != null)
     {
-        <div class="alert alert-danger mb-3" role="alert">
+        <div class="alert alert-danger mb-4" role="alert">
             <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>
             <span>@TempData["Error"]</span>
         </div>
     }
+
+    <div asp-validation-summary="All" class="sales-warning mb-4" role="alert" style="@(ViewData.ModelState.IsValid ? "display:none;" : "")"></div>
 
     <form asp-action="Edit" asp-route-id="@Model.TransferOrderId" method="post" id="editTransferForm">
         @Html.AntiForgeryToken()
@@ -68,24 +70,24 @@
         <input type="hidden" asp-for="RowVersionBase64" />
         <input type="hidden" name="IsRelease" id="isReleaseInput" value="false" />
 
-        @* THÔNG TIN LỆNH CHUYỂN *@
-        <section class="workspace-card">
-            <h2 class="h5 fw-bold mb-3 border-bottom pb-2">Thông tin lệnh chuyển</h2>
+        <div class="transfer-form-grid">
+            <!-- CỘT 1: THÔNG TIN ĐIỀU CHUYỂN -->
+            <div class="workspace-card">
+                <h2 class="h5 mb-3">1. Thông tin điều chuyển</h2>
 
-            @if (Model.IsSourceContextFrozen)
-            {
-                <div class="alert alert-light border py-2 px-3 mb-3 text-muted" style="font-size: 13px;">
-                    <i class="bi bi-lock-fill me-1"></i>
-                    Lệnh này đã phát sinh phiếu xuất chuyển hoặc nhận hàng. Kho nguồn, kho đích và tình trạng hàng hóa đã được khóa cố định.
-                </div>
-                <input type="hidden" asp-for="FromWarehouseId" />
-                <input type="hidden" asp-for="ToWarehouseId" />
-                <input type="hidden" asp-for="ItemCondition" />
-            }
+                @if (Model.IsSourceContextFrozen)
+                {
+                    <div class="alert alert-light border py-2 px-3 mb-3 text-muted" style="font-size: 13px;">
+                        <i class="bi bi-lock-fill me-1"></i>
+                        Lệnh này đã phát sinh phiếu xuất chuyển hoặc nhận hàng. Kho nguồn, kho đích và tình trạng hàng hóa đã được khóa cố định.
+                    </div>
+                    <input type="hidden" asp-for="FromWarehouseId" />
+                    <input type="hidden" asp-for="ToWarehouseId" />
+                    <input type="hidden" asp-for="ItemCondition" />
+                }
 
-            <div class="row g-3">
-                <div class="col-md-6 col-lg-4">
-                    <label class="form-label fw-semibold" style="font-size: 13px;">Kho nguồn</label>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Kho nguồn</label>
                     <select class="form-select" name="FromWarehouseId" id="fromWarehouseSelect" @(Model.IsSourceContextFrozen ? "disabled" : "") required>
                         @foreach (var wh in Model.Warehouses)
                         {
@@ -94,8 +96,8 @@
                     </select>
                 </div>
 
-                <div class="col-md-6 col-lg-4">
-                    <label class="form-label fw-semibold" style="font-size: 13px;">Kho đích</label>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Kho đích</label>
                     <select class="form-select" name="ToWarehouseId" id="toWarehouseSelect" @(Model.IsSourceContextFrozen ? "disabled" : "") required>
                         @foreach (var wh in Model.Warehouses)
                         {
@@ -104,73 +106,85 @@
                     </select>
                 </div>
 
-                <div class="col-md-6 col-lg-4">
-                    <label class="form-label fw-semibold" style="font-size: 13px;">Tình trạng hàng hóa</label>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Tình trạng hàng hóa</label>
                     <select class="form-select" name="ItemCondition" id="itemConditionSelect" @(Model.IsSourceContextFrozen ? "disabled" : "") required>
                         <option value="GOOD" selected="@(Model.ItemCondition == "GOOD")">Hàng tốt</option>
                         <option value="DAMAGED" selected="@(Model.ItemCondition == "DAMAGED")">Hàng lỗi</option>
                     </select>
                 </div>
+            </div>
 
-                <div class="col-md-6 col-lg-3">
-                    <label class="form-label fw-semibold" style="font-size: 13px;">
-                        Ngày chuyển đi <span class="text-danger">*</span>
-                    </label>
-                    <input type="date"
-                           class="form-control"
-                           name="DispatchDate"
-                           id="dispatchDateInput"
-                           value="@Model.DispatchDate?.ToString("yyyy-MM-dd")"
-                           min="@DateTime.Today.ToString("yyyy-MM-dd")"
-                           required />
+            <!-- CỘT 2: MỐC THỜI GIAN & GHI CHÚ -->
+            <div class="workspace-card">
+                <h2 class="h5 mb-3">2. Mốc thời gian & ghi chú</h2>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Mã lệnh chuyển</label>
+                    <input type="text" class="form-control" value="@Model.TransferCode" readonly style="background:#f6f5f4;" />
                 </div>
 
-                <div class="col-md-6 col-lg-3">
-                    <label class="form-label fw-semibold" style="font-size: 13px;">
-                        Ngày dự kiến nhận <span class="text-danger">*</span>
-                    </label>
-                    <input type="date"
-                           class="form-control"
-                           name="ExpectedDate"
-                           id="expectedDateInput"
-                           value="@Model.ExpectedDate?.ToString("yyyy-MM-dd")"
-                           min="@(Model.DispatchDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd"))"
-                           required />
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">
+                            Ngày chuyển đi <span class="text-danger">*</span>
+                        </label>
+                        <input type="date"
+                               class="form-control"
+                               name="DispatchDate"
+                               id="dispatchDateInput"
+                               value="@Model.DispatchDate?.ToString("yyyy-MM-dd")"
+                               min="@DateTime.Today.ToString("yyyy-MM-dd")"
+                               required />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">
+                            Ngày dự kiến nhận <span class="text-danger">*</span>
+                        </label>
+                        <input type="date"
+                               class="form-control"
+                               name="ExpectedDate"
+                               id="expectedDateInput"
+                               value="@Model.ExpectedDate?.ToString("yyyy-MM-dd")"
+                               min="@(Model.DispatchDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd"))"
+                               required />
+                    </div>
                 </div>
 
-                <div class="col-md-12 col-lg-6">
-                    <label class="form-label fw-semibold" style="font-size: 13px;">Ghi chú</label>
-                    <input type="text" class="form-control" name="Note" value="@Model.Note" maxlength="1000" />
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Ghi chú điều chuyển</label>
+                    <textarea class="form-control" name="Note" rows="2" maxlength="1000" placeholder="Ghi chú thêm về chuyến chuyển hàng...">@Model.Note</textarea>
                 </div>
             </div>
-        </section>
+        </div>
 
-        @* DANH SÁCH MẶT HÀNG *@
-        <section class="workspace-card">
-            <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-                <h2 class="h5 fw-bold mb-0">Danh sách sản phẩm</h2>
+        <!-- KHỐI SẢN PHẨM CHUYỂN KHO -->
+        <section class="workspace-card mt-4">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <div>
+                    <h2 class="h5 mb-0">3. Danh sách sản phẩm chuyển kho <span class="text-danger">*</span></h2>
+                </div>
                 @if (!Model.IsSourceContextFrozen)
                 {
-                    <button type="button" class="workspace-button sales-button-secondary" style="min-height: 34px; padding: 4px 14px; font-size: 13px;" id="btnAddLine">
+                    <button type="button" class="workspace-button sales-button-small" id="btnAddLine">
                         <i class="bi bi-plus-lg me-1"></i> Thêm sản phẩm
                     </button>
                 }
             </div>
 
-            <div class="table-responsive">
-                <table class="table table-bordered align-middle" id="linesTable" style="font-size: 14px;">
-                    <thead class="table-light">
+            <div class="table-wrap">
+                <table class="workspace-table transfer-lines-table" id="linesTable">
+                    <thead>
                         <tr>
-                            <th style="width: 50px;" class="text-center">#</th>
-                            <th style="min-width: 260px;">Sản phẩm <span class="text-danger">*</span></th>
-                            <th style="width: 100px;">ĐVT</th>
-                            <th style="width: 180px;">Tồn khả dụng</th>
-                            <th style="width: 150px;" class="text-center">Số lượng yêu cầu <span class="text-danger">*</span></th>
+                            <th style="width: 50px;">STT</th>
+                            <th style="min-width: 280px;">Sản phẩm <span class="text-danger">*</span></th>
+                            <th style="width: 90px;">ĐVT</th>
+                            <th style="width: 170px;">Tồn khả dụng</th>
+                            <th style="width: 160px; text-align: right;">Số lượng yêu cầu <span class="text-danger">*</span></th>
                             @if (Model.IsSourceContextFrozen)
                             {
-                                <th style="width: 110px;" class="text-center">Đã xuất</th>
+                                <th style="width: 90px; text-align: center;">Đã xuất</th>
                             }
-                            <th style="width: 70px;" class="text-center">Thao tác</th>
+                            <th style="width: 70px; text-align: center;">Thao tác</th>
                         </tr>
                     </thead>
                     <tbody id="linesTableBody">
@@ -180,7 +194,7 @@
                             var selectedProduct = Model.Products.FirstOrDefault(p => p.ProductId == line.ProductId);
                             var unreserved = selectedProduct?.UnreservedQuantity ?? line.AvailableQuantity;
                             <tr class="line-row">
-                                <td class="row-num text-center text-muted fw-semibold">@(i + 1)</td>
+                                <td class="row-num text-muted fw-semibold">@(i + 1)</td>
                                 <td>
                                     <input type="hidden" name="Lines[@i].TransferLineId" value="@line.TransferLineId" />
                                     @if (line.IsProductFrozen)
@@ -231,6 +245,7 @@
                                            name="Lines[@i].Quantity"
                                            value="@line.Quantity"
                                            min="@line.MinQuantityAllowed"
+                                           max="1000000"
                                            data-available="@unreserved"
                                            required />
                                     <div class="qty-error-msg text-danger mt-1" style="font-size: 11.5px; display: none;"></div>
@@ -241,11 +256,11 @@
                                         <span class="fw-semibold">@line.DispatchedQuantity</span>
                                     </td>
                                 }
-                                <td class="text-center">
+                                <td style="text-align: center;">
                                     @if (line.MinQuantityAllowed == 1 && !line.IsProductFrozen)
                                     {
-                                        <button type="button" class="btn btn-outline-danger btn-sm btn-remove-line" title="Xóa">
-                                            <i class="bi bi-trash"></i>
+                                        <button type="button" class="btn-remove-line sales-danger-icon" title="Xóa dòng">
+                                            <i class="bi bi-trash" aria-hidden="true"></i>
                                         </button>
                                     }
                                     else
@@ -269,41 +284,43 @@
                     </tfoot>
                 </table>
             </div>
-        </section>
 
-        @* THANH NÚT HÀNH ĐỘNG *@
-        <section class="workspace-card">
-            <div class="d-flex justify-content-end align-items-center gap-2">
-                <a class="workspace-button sales-button-secondary" asp-controller="ManagerTransfer" asp-action="Index">Thoát</a>
-                @if (Model.CanCancel)
-                {
-                    <button type="button" class="workspace-button sales-button-secondary text-danger border-danger" data-bs-toggle="modal" data-bs-target="#cancelTransferModal">
-                        <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Hủy lệnh chuyển
-                    </button>
-                }
-                @if (isDraft)
-                {
-                    <button type="button" class="workspace-button sales-button-secondary" id="btnSaveDraft">
-                        <i class="bi bi-file-earmark me-1" aria-hidden="true"></i> Lưu thay đổi
-                    </button>
-                    <button type="button" class="workspace-button" id="btnRelease" style="background: #0e733b; border-color: #0e733b;">
-                        <i class="bi bi-check-circle me-1" aria-hidden="true"></i> Lưu & Phát hành
-                    </button>
-                }
-                else if (Model.Status == "RELEASED")
-                {
-                    <button type="button" class="workspace-button" id="btnSaveDraft" style="background: #0075de; border-color: #0075de;">
-                        <i class="bi bi-check-circle me-1" aria-hidden="true"></i> Lưu cập nhật
-                    </button>
-                }
+            <div id="noLinesWarning" class="sales-muted-small text-danger mt-2" style="@(Model.Lines.Count > 0 ? "display:none;" : "")">
+                <i class="bi bi-exclamation-circle me-1"></i> Lệnh chuyển kho phải có ít nhất 1 dòng sản phẩm yêu cầu.
             </div>
         </section>
+
+        <!-- THANH NÚT THAO TÁC -->
+        <div class="transfer-form-actions d-flex justify-content-end align-items-center gap-2 mt-4">
+            <a class="workspace-button sales-button-secondary" asp-controller="ManagerTransfer" asp-action="Index">Thoát</a>
+            @if (Model.CanCancel)
+            {
+                <button type="button" class="workspace-button sales-button-secondary text-danger border-danger" data-bs-toggle="modal" data-bs-target="#cancelTransferModal">
+                    <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Hủy lệnh chuyển
+                </button>
+            }
+            @if (isDraft)
+            {
+                <button type="button" class="workspace-button sales-button-secondary" id="btnSaveDraft">
+                    <i class="bi bi-file-earmark me-1" aria-hidden="true"></i> Lưu thay đổi
+                </button>
+                <button type="button" class="workspace-button" id="btnRelease" style="background: #0e733b; border-color: #0e733b;">
+                    <i class="bi bi-check-circle me-1" aria-hidden="true"></i> Lưu & Phát hành
+                </button>
+            }
+            else if (Model.Status == "RELEASED")
+            {
+                <button type="button" class="workspace-button" id="btnSaveDraft" style="background: #0075de; border-color: #0075de;">
+                    <i class="bi bi-check-circle me-1" aria-hidden="true"></i> Lưu cập nhật
+                </button>
+            }
+        </div>
     </form>
 </div>
 
 @if (Model.CanCancel)
 {
-    @* MODAL XÁC NHẬN HỦY LỆNH CHUYỂN KHO *@
+    <!-- MODAL XÁC NHẬN HỦY LỆNH CHUYỂN KHO -->
     <div class="modal fade" id="cancelTransferModal" tabindex="-1" aria-labelledby="cancelTransferModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -342,6 +359,7 @@
         const dispatchDateInput = document.getElementById('dispatchDateInput');
         const expectedDateInput = document.getElementById('expectedDateInput');
         const totalQtyDisplay = document.getElementById('totalQtyDisplay');
+        const noLinesWarning = document.getElementById('noLinesWarning');
 
         // Danh sách sản phẩm cùng tồn khả dụng
         let currentProducts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Products.Select(p => new {
@@ -495,10 +513,16 @@
             let firstErrorMsg = '';
             let firstInvalidInput = null;
 
-            tableBody.querySelectorAll('.line-row').forEach(row => {
+            const rows = tableBody.querySelectorAll('.line-row');
+            if (rows.length === 0) {
+                alert('Lệnh chuyển kho phải có ít nhất một dòng sản phẩm yêu cầu.');
+                return false;
+            }
+
+            rows.forEach(row => {
                 const select = row.querySelector('.line-product-select') || row.querySelector('select');
                 const opt = select?.options[select.selectedIndex];
-                const prodName = opt?.textContent?.trim() || 'sản phẩm';
+                const prodName = opt ? opt.textContent.trim() : (row.querySelector('strong')?.textContent?.trim() || 'sản phẩm');
                 let unreserved = 0;
                 const qtyInput = row.querySelector('.qty-input');
                 if (opt && opt.dataset.unreserved !== undefined) {
@@ -552,6 +576,12 @@
                 }
             });
             if (totalQtyDisplay) totalQtyDisplay.textContent = total;
+
+            if (rows.length === 0) {
+                if (noLinesWarning) noLinesWarning.style.display = 'block';
+            } else {
+                if (noLinesWarning) noLinesWarning.style.display = 'none';
+            }
         }
 
         if (btnAddLine) {
@@ -604,18 +634,25 @@
                 }
 
                 const qtyInput = clone.querySelector('.qty-input');
-                if (qtyInput) {
-                    qtyInput.name = `Lines[${newIndex}].Quantity`;
-                    qtyInput.value = '1';
-                    qtyInput.min = '1';
-                    qtyInput.dataset.available = '0';
-                    qtyInput.classList.remove('is-invalid');
-                }
+                qtyInput.name = `Lines[${newIndex}].Quantity`;
+                qtyInput.value = '1';
+                qtyInput.dataset.available = '0';
+                qtyInput.min = '1';
+                qtyInput.classList.remove('is-invalid');
+
                 const errSpan = clone.querySelector('.qty-error-msg');
                 if (errSpan) {
                     errSpan.textContent = '';
                     errSpan.style.display = 'none';
                 }
+
+                // Luôn cho phép xóa đối với dòng mới thêm
+                const actionCell = clone.cells[clone.cells.length - 1];
+                actionCell.innerHTML = `
+                    <button type="button" class="btn-remove-line sales-danger-icon" title="Xóa dòng">
+                        <i class="bi bi-trash" aria-hidden="true"></i>
+                    </button>
+                `;
 
                 tableBody.appendChild(clone);
                 bindLineEvents(clone);
@@ -641,6 +678,19 @@
             if (select) {
                 select.onchange = function () {
                     updateLineDetails(this);
+
+                    const selectedVal = this.value;
+                    if (selectedVal) {
+                        let count = 0;
+                        tableBody.querySelectorAll('.line-product-select').forEach(s => {
+                            if (s.value === selectedVal) count++;
+                        });
+                        if (count > 1) {
+                            alert('Sản phẩm này đã có trong danh sách chuyển kho. Vui lòng cộng dồn số lượng thay vì chọn trùng.');
+                            this.value = '';
+                            updateLineDetails(this);
+                        }
+                    }
                 };
             }
 
