@@ -272,6 +272,7 @@
                                             {
                                                 <form method="post" asp-action="Cancel" asp-route-id="@order.Id" class="d-inline m-0 p-0">
                                                     @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="rowVersion" value="@Convert.ToBase64String(order.RowVersion)" />
                                                     <button type="submit" class="workspace-button sales-button-secondary sales-button-small text-danger" style="border-color: #fca5a5;" title="Hủy" aria-label="Hủy">
                                                         <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Hủy
                                                     </button>
@@ -284,6 +285,7 @@
                                                         data-bs-target="#indexCancelModal" 
                                                         data-return-id="@order.Id" 
                                                         data-return-code="@order.ReturnCode" 
+                                                        data-return-version="@Convert.ToBase64String(order.RowVersion)"
                                                         title="Hủy" 
                                                         aria-label="Hủy">
                                                     <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Hủy
@@ -357,6 +359,7 @@
             <div class="modal-content">
                 <form method="post" asp-action="Cancel" id="indexCancelForm">
                     @Html.AntiForgeryToken()
+                    <input type="hidden" name="rowVersion" id="indexCancelRowVersion" />
                     <div class="modal-header">
                         <h5 class="modal-title fw-bold text-danger" id="indexCancelModalLabel">
                             <i class="bi bi-exclamation-triangle-fill me-2"></i> Xác nhận hủy đơn trả hàng
@@ -393,6 +396,7 @@
                         document.getElementById("indexCancelReturnCode").textContent = code || `#${id}`;
                         document.getElementById("indexCancelForm").action = `/CustomerReturnOrder/Cancel/${id}`;
                         document.getElementById("indexCancelReason").value = "";
+                        document.getElementById("indexCancelRowVersion").value = btn.getAttribute("data-return-version") || "";
                     });
                 }
             });

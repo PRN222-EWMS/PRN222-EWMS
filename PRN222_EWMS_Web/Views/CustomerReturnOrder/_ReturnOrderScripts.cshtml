@@ -8,7 +8,8 @@
             const c = document.querySelector(".toast-container") || document.body;
             const el = document.createElement("div");
             el.className = "toast align-items-center border-0 shadow bg-white";
-            el.innerHTML = `<div class="d-flex border-start border-danger border-4 rounded-start"><div class="toast-body d-flex align-items-center gap-2"><i class="bi bi-exclamation-triangle-fill text-danger"></i><span>${msg}</span></div><button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button></div>`;
+            el.innerHTML = `<div class="d-flex border-start border-danger border-4 rounded-start"><div class="toast-body d-flex align-items-center gap-2"><i class="bi bi-exclamation-triangle-fill text-danger"></i><span></span></div><button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button></div>`;
+            el.querySelector(".toast-body span").textContent = msg;
             c.appendChild(el);
             new bootstrap.Toast(el, { delay: 3000 }).show();
             el.addEventListener("hidden.bs.toast", () => el.remove());
@@ -59,12 +60,11 @@
             const idx = body().children.length;
             const tr = document.createElement("tr");
             tr.dataset.rowIndex = idx;
-            const opts = lines.map(l => `<option value="${l.solineId}" data-product-id="${l.productId}" data-unit="${l.unit || 'Cái'}" data-shipped="${l.shippedQuantity}" data-eligible="${l.eligibleQuantity}" ${used.includes(l.solineId.toString()) ? 'disabled' : ''}>${l.productCode} — ${l.productName} (Khả dụng: ${l.eligibleQuantity})</option>`).join("");
 
             tr.innerHTML = `
                 <td>
                     <select name="Lines[${idx}].SolineId" class="form-select form-select-sm soline-select" required>
-                        <option value="">-- Chọn mặt hàng --</option>${opts}
+                        <option value="">-- Chọn mặt hàng --</option>
                     </select>
                     <input type="hidden" name="Lines[${idx}].ProductId" class="product-id-input" value="0" />
                 </td>
@@ -77,6 +77,17 @@
             body().appendChild(tr);
             if (alertBox()) alertBox().style.display = "none";
             const sel = tr.querySelector(".soline-select");
+            lines.forEach(line => {
+                const option = document.createElement("option");
+                option.value = line.solineId;
+                option.dataset.productId = line.productId;
+                option.dataset.unit = line.unit || "Cái";
+                option.dataset.shipped = line.shippedQuantity;
+                option.dataset.eligible = line.eligibleQuantity;
+                option.textContent = `${line.productCode} — ${line.productName} (Khả dụng: ${line.eligibleQuantity})`;
+                option.disabled = used.includes(line.solineId.toString());
+                sel.appendChild(option);
+            });
             sel.value = avail[0].solineId;
             onLineChange(sel);
         }

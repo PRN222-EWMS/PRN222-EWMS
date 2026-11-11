@@ -32,7 +32,7 @@ public class CustomerReturnOrderService(
 
         int page = Math.Max(1, filter.Page);
         int pageSize = Math.Clamp(filter.PageSize < 1 ? 10 : filter.PageSize, 1, 100);
-        int skip = (page - 1) * pageSize;
+        int skip = (int)Math.Min((long)(page - 1) * pageSize, int.MaxValue);
 
         var result = new ReturnOrderListViewModel
         {
@@ -87,23 +87,19 @@ public class CustomerReturnOrderService(
         var (items, totalCount) = await repo.GetReturnOrdersPagedAsync(filterDto, cancellationToken);
 
         result.TotalCount = totalCount;
+        result.Page = Math.Clamp(page, 1, result.TotalPages);
         result.Items = items.Select(dto => new ReturnOrderListRowViewModel
         {
             Id = dto.ReturnOrderId,
             ReturnCode = dto.ReturnCode,
-            SalesOrderId = dto.SalesOrderId,
-            SalesOrderCode = dto.SalesOrderCode,
+            RowVersion = dto.RowVersion,
             CustomerName = dto.CustomerName,
-            WarehouseId = dto.WarehouseId,
             WarehouseName = dto.WarehouseName,
             CreatedAt = dto.CreatedAt,
-            CreatedByUserId = dto.CreatedByUserId,
             CreatedByName = dto.CreatedByName,
             Status = dto.Status,
-            LinesCount = dto.LinesCount,
             TotalRequestedQuantity = dto.TotalRequestedQuantity,
             CompletedReceivedQuantity = dto.CompletedReceivedQuantity,
-            Reason = dto.Reason,
             CanEdit = isSalesStaff && dto.Status == "DRAFT",
             CanCancel = isSalesStaff && (dto.Status == "DRAFT" || dto.Status == "OPEN") && !dto.HasReturnReceipts,
             CanReceive = isWarehouseStaff && (dto.Status is "OPEN" or "PARTIALLY_RECEIVED") && dto.CompletedReceivedQuantity < dto.TotalRequestedQuantity

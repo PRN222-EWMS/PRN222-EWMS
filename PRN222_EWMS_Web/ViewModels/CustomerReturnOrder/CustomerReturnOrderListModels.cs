@@ -45,6 +45,7 @@ public class ReturnOrderListRowViewModel
 {
     public long Id { get; set; }
     public string ReturnCode { get; set; } = "";
+    public byte[] RowVersion { get; set; } = [];
     public string CustomerName { get; set; } = "";
     public string WarehouseName { get; set; } = "";
     public DateTime CreatedAt { get; set; }
@@ -82,6 +83,7 @@ public record ReturnOrderListRowDto(
     string Status,
     int TotalRequestedQuantity,
     int CompletedReceivedQuantity,
-    bool HasReturnReceipts
+    bool HasReturnReceipts,
+    byte[] RowVersion
 );
 

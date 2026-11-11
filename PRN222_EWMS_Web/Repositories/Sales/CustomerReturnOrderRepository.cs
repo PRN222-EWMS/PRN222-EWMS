@@ -427,6 +427,9 @@ public class CustomerReturnOrderRepository(EwmsDbContext db) : ICustomerReturnOr
         int actorId,
         CancellationToken cancellationToken = default)
     {
+        if (originalRowVersion is not { Length: 8 })
+            throw new InvalidOperationException("Thông tin phiên bản dữ liệu không hợp lệ. Vui lòng tải lại trang trước khi hủy.");
+
         if (db.Database.CurrentTransaction == null)
             throw new InvalidOperationException("Thao tác hủy đơn trả hàng yêu cầu một giao dịch đang hoạt động (InTransactionAsync).");
 
@@ -446,10 +449,7 @@ public class CustomerReturnOrderRepository(EwmsDbContext db) : ICustomerReturnOr
             throw new InvalidOperationException("Không thể hủy đơn trả hàng đã phát sinh phiếu nhận hàng (Inbound/ReturnReceipt).");
         }
 
-        if (originalRowVersion != null && originalRowVersion.Length > 0)
-        {
-            db.Entry(currentOrder).Property(e => e.RowVersion).OriginalValue = originalRowVersion;
-        }
+        db.Entry(currentOrder).Property(e => e.RowVersion).OriginalValue = originalRowVersion;
 
         currentOrder.Status = "CANCELLED";
         if (!string.IsNullOrWhiteSpace(cancelReason))
@@ -569,10 +569,12 @@ public class CustomerReturnOrderRepository(EwmsDbContext db) : ICustomerReturnOr
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
+        var lastPageSkip = totalCount == 0 ? 0 : (totalCount - 1) / filter.Take * filter.Take;
+        var skip = Math.Clamp(filter.Skip, 0, lastPageSkip);
 
         var items = await query
             .OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.ReturnOrderId)
-            .Skip(filter.Skip).Take(filter.Take)
+            .Skip(skip).Take(filter.Take)
             .Select(r => new ReturnOrderListRowDto(
                 r.ReturnOrderId,
                 r.ReturnCode,
@@ -583,7 +585,8 @@ public class CustomerReturnOrderRepository(EwmsDbContext db) : ICustomerReturnOr
                 r.Status,
                 r.CustomerReturnOrderLineReturnOrders.Sum(l => l.RequestedQuantity),
                 db.ReturnReceiptItems.Count(rri => rri.IsActive && rri.ReturnReceipt.ReturnOrderId == r.ReturnOrderId && rri.ReturnReceipt.Status == "DONE"),
-                db.ReturnReceipts.Any(rr => rr.ReturnOrderId == r.ReturnOrderId)
+                db.ReturnReceipts.Any(rr => rr.ReturnOrderId == r.ReturnOrderId),
+                r.RowVersion
             ))
             .ToListAsync(cancellationToken);
 

@@ -133,7 +133,14 @@ public class CustomerReturnOrderController(ICustomerReturnOrderService returnOrd
         if (CurrentUserId <= 0) return Challenge();
         if (id <= 0) return NotFound();
 
-        byte[]? parsedRowVersion = !string.IsNullOrEmpty(rowVersion) ? Convert.FromBase64String(rowVersion) : null;
+        var parsedRowVersion = new byte[8];
+        if (string.IsNullOrEmpty(rowVersion)
+            || !Convert.TryFromBase64String(rowVersion, parsedRowVersion, out var bytesWritten)
+            || bytesWritten != parsedRowVersion.Length)
+        {
+            TempData["Error"] = "Thông tin phiên bản dữ liệu không hợp lệ. Vui lòng tải lại trang trước khi hủy.";
+            return RedirectToAction(nameof(Index));
+        }
         var (success, message) = await returnOrderService.CancelReturnOrderAsync(id, cancelReason, parsedRowVersion, CurrentUserId, cancellationToken);
         TempData[success ? "Success" : "Error"] = message;
         return RedirectToAction(nameof(Index));
