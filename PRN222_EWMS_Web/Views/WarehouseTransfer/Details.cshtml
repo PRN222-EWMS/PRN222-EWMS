@@ -132,6 +132,26 @@
     {
         <form asp-action="ScanDispatch" asp-route-id="@Model.Id" method="post">
             <input type="hidden" name="dispatchId" value="@doc.DispatchId" />
+            @if (Model.DispatchSerialOptions.Count > 0)
+            {
+                <label class="form-label" for="serial-options-@doc.DispatchId">Chọn serial theo vị trí</label>
+                <select class="form-select mb-3" id="serial-options-@doc.DispatchId" data-dispatch-options>
+                    <option value="">Chọn serial trong kho</option>
+                    @foreach (var group in Model.DispatchSerialOptions.GroupBy(s => new { s.ProductCode, s.ProductName, s.Location }))
+                    {
+                        <optgroup label="@($"{group.Key.ProductCode} · {group.Key.ProductName} · {group.Key.Location}")">
+                            @foreach (var serial in group)
+                            {
+                                <option value="@serial.SerialNumber">@serial.SerialNumber</option>
+                            }
+                        </optgroup>
+                    }
+                </select>
+            }
+            else
+            {
+                <p class="text-muted">Không còn serial đủ điều kiện để gợi ý cho phiếu này.</p>
+            }
             <partial name="_SerialCapture" model="@(new SerialCaptureViewModel
             {
                 SerialName = "serialNumber",
@@ -235,5 +255,17 @@
     @if (Model.Documents.Any(doc => doc.CanScan || doc.CanScanReceipt))
     {
         <partial name="_SerialCaptureScripts" />
+        <script>
+            document.querySelectorAll('[data-dispatch-options]').forEach(select => {
+                select.addEventListener('change', () => {
+                    if (!select.value) return;
+                    const input = select.form.querySelector('[data-serial-input]');
+                    input.value = select.value;
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.focus();
+                    select.selectedIndex = 0;
+                });
+            });
+        </script>
     }
 }
