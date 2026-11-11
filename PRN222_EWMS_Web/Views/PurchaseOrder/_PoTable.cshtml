@@ -1,0 +1,175 @@
+@model IEnumerable<PRN222_EWMS_Web.ViewModels.Purchasing.PoListItemDto>
+
+<div class="table-wrap">
+    <table class="workspace-table">
+        <thead>
+            <tr>
+                <th>Mã đơn</th>
+                <th>Nhà cung cấp</th>
+                <th>Kho nhận</th>
+                <th>Ngày đặt / Dự kiến đến</th>
+                <th>Người tạo</th>
+                <th style="min-width: 160px;">Tiến độ nhận hàng</th>
+                <th>Trạng thái</th>
+                <th style="text-align: right; min-width: 220px;">Thao tác</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var order in Model)
+            {
+                var statusClass = order.Status switch
+                {
+                    "DRAFT" => "po-status-draft",
+                    "CONFIRMED" => "po-status-confirmed",
+                    "PARTIALLY_RECEIVED" => "po-status-partially",
+                    "RECEIVED" => "po-status-received",
+                    "CLOSED" => "po-status-closed",
+                    "CANCELLED" => "po-status-cancelled",
+                    _ => "po-status-draft"
+                };
+
+                var statusText = order.Status switch
+                {
+                    "DRAFT" => "Bản nháp",
+                    "CONFIRMED" => "Đã xác nhận",
+                    "PARTIALLY_RECEIVED" => "Nhận 1 phần",
+                    "RECEIVED" => "Đã nhận đủ",
+                    "CLOSED" => "Đã đóng",
+                    "CANCELLED" => "Đã hủy",
+                    _ => order.Status
+                };
+
+                <tr>
+                    <td>
+                        <a asp-controller="PurchaseOrder" asp-action="Details" asp-route-id="@order.PurchaseOrderId" class="fw-semibold text-primary text-decoration-none">
+                            @order.Pocode
+                        </a>
+                    </td>
+                    <td>
+                        <div>@order.SupplierName</div>
+                    </td>
+                    <td>
+                        <div>@order.WarehouseName</div>
+                    </td>
+                    <td>
+                        <div>@order.OrderDate.ToString("dd/MM/yyyy")</div>
+                        <div class="muted small">
+                            Đến: @order.ExpectedArrivalDate.ToString("dd/MM/yyyy")
+                        </div>
+                        @if (order.IsOverdue)
+                        {
+                            <div class="po-overdue-tag">
+                                <i class="bi bi-clock-history" aria-hidden="true"></i> Quá hạn giao
+                            </div>
+                        }
+                    </td>
+                    <td>
+                        <div>@order.CreatedByName</div>
+                    </td>
+                    <td>
+                        <div class="d-flex justify-content-between small text-muted mb-1">
+                            <span>Đã nhận: <strong>@order.TotalReceivedQuantity</strong>/@order.TotalOrderedQuantity</span>
+                            <span>@order.ProgressPercent%</span>
+                        </div>
+                        <div class="po-progress-wrap">
+                            <div class="po-progress-bar">
+                                <div class="po-progress-fill @(order.TotalReceivedQuantity < order.TotalOrderedQuantity ? "partial" : "")" 
+                                     style="width: @(order.ProgressPercent)%"></div>
+                            </div>
+                        </div>
+                        <div class="small muted mt-1">
+                            Còn lại: <span class="fw-medium text-dark">@order.TotalRemainingQuantity</span>
+                            @if (order.TotalClosedQuantity > 0)
+                            {
+                                <span class="text-secondary">(Đã đóng: @order.TotalClosedQuantity)</span>
+                            }
+                        </div>
+                    </td>
+                    <td>
+                        <span class="po-status @statusClass">
+                            @statusText
+                        </span>
+                    </td>
+                    <td style="text-align: right; white-space: nowrap;">
+                        <a class="workspace-button sales-button-small" asp-controller="PurchaseOrder" asp-action="Details" asp-route-id="@order.PurchaseOrderId" title="Xem chi tiết">
+                            <i class="bi bi-eye me-1" aria-hidden="true"></i> Chi tiết
+                        </a>
+                        @if (order.CanEdit)
+                        {
+                            <a class="workspace-button sales-button-secondary sales-button-small ms-1" asp-controller="PurchaseOrder" asp-action="Edit" asp-route-id="@order.PurchaseOrderId" title="Chỉnh sửa đơn hàng">
+                                <i class="bi bi-pencil-square me-1" aria-hidden="true"></i> Sửa
+                            </a>
+                        }
+                        else
+                        {
+                            <button type="button" class="workspace-button sales-button-small po-btn-disabled ms-1" disabled title="Đơn hàng ở trạng thái @statusText không thể chỉnh sửa">
+                                <i class="bi bi-pencil-square me-1" aria-hidden="true"></i> Sửa
+                            </button>
+                        }
+                        @if (order.CanCancel)
+                        {
+                            <button type="button" class="workspace-button sales-button-secondary sales-button-small ms-1 text-danger"
+                                    style="border-color: #fca5a5;"
+                                    onclick="openIndexCancelModal(@order.PurchaseOrderId, '@order.Pocode')"
+                                    title="Hủy đơn mua hàng">
+                                <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Hủy
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="workspace-button sales-button-small po-btn-disabled ms-1"
+                                    disabled
+                                    title="@(order.CannotCancelReason ?? $"Đơn hàng ở trạng thái {statusText} không thể hủy")">
+                                <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Hủy
+                            </button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (!Model.Any())
+{
+    <div class="sales-empty">
+        <i class="bi bi-inbox" style="font-size: 32px;" aria-hidden="true"></i>
+        <p class="mt-2 mb-0">Không có đơn mua hàng nào phù hợp với bộ lọc hiện tại.</p>
+    </div>
+}
+
+<!-- MODAL XÁC NHẬN HỦY ĐƠN MUA HÀNG TRÊN DANH SÁCH -->
+<div id="indexCancelModal" class="po-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="indexCancelModalTitle">
+    <div class="po-modal">
+        <div class="po-modal-header">
+            <h3 id="indexCancelModalTitle">Xác nhận hủy đơn mua hàng</h3>
+            <button type="button" class="btn-close" onclick="closeIndexCancelModal()" aria-label="Đóng"></button>
+        </div>
+        <form id="indexCancelForm" method="post" asp-controller="PurchaseOrder" asp-action="Cancel">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="returnUrl" value="@Context.Request.Path@Context.Request.QueryString" />
+            <p class="mb-0">
+                Bạn có chắc chắn muốn hủy đơn mua hàng <strong id="indexCancelPoCode"></strong>?
+            </p>
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <button type="button" class="workspace-button sales-button-secondary" onclick="closeIndexCancelModal()">Bỏ qua</button>
+                <button type="submit" class="workspace-button" style="background: #c92a2a; border-color: #c92a2a;">
+                    <i class="bi bi-x-circle me-1"></i> Xác nhận hủy đơn
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openIndexCancelModal(poId, poCode) {
+        var form = document.getElementById('indexCancelForm');
+        form.action = '/PurchaseOrder/Cancel/' + poId;
+        document.getElementById('indexCancelPoCode').innerText = poCode;
+        document.getElementById('indexCancelModal').classList.add('show');
+    }
+
+    function closeIndexCancelModal() {
+        document.getElementById('indexCancelModal').classList.remove('show');
+    }
+</script>
