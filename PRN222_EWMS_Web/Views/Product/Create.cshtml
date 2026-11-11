@@ -4,7 +4,12 @@
     ViewData["Title"] = "Tạo sản phẩm";
 }
 
-<h2 class="mb-4">Tạo sản phẩm</h2>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+    <h1 class="mb-0">Tạo sản phẩm</h1>
+    <a asp-action="Index" class="btn btn-outline-secondary rounded-pill ms-auto">
+        <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Quay lại danh sách
+    </a>
+</div>
 
 <form asp-action="Create" method="post">
     <div asp-validation-summary="ModelOnly"

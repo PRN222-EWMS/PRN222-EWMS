@@ -12,11 +12,13 @@ public class ProductService(IProductRepository repository)
 {
     public async Task<ProductListViewModel?> GetProductListPageAsync(
         string? keyword, int? warehouseId, int userId,
-        bool isManager, bool isWarehouseStaff, bool isPurchasingStaff = false)
+        bool isManager, bool isWarehouseStaff, bool isPurchasingStaff = false,
+        string? status = null)
     {
         var result = new ProductListViewModel
         {
             Keyword = keyword,
+            Status = status,
             CanFilterWarehouse = (isManager || isPurchasingStaff) && !isWarehouseStaff
         };
 
@@ -47,6 +49,8 @@ public class ProductService(IProductRepository repository)
         // Manager and Purchasing keep the shared catalog, including zero-stock products.
         var products = await repository.GetListAsync(
             keyword, isWarehouseStaff ? effectiveWarehouseId : null);
+        if (!string.IsNullOrEmpty(status))
+            products = products.Where(product => product.Status == status).ToList();
         var counts = await repository.GetStockCountsAsync(effectiveWarehouseId);
         var stockByProduct = counts.ToDictionary(s => s.ProductId);
 

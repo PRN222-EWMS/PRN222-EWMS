@@ -6,6 +6,7 @@ namespace PRN222_EWMS_Web.ViewModels.Products;
 public class ProductListViewModel
 {
     public string? Keyword { get; set; }
+    public string? Status { get; set; }
     public int? WarehouseId { get; set; }
     public bool CanFilterWarehouse { get; set; }
     public List<SelectListItem> Warehouses { get; set; } = new();
