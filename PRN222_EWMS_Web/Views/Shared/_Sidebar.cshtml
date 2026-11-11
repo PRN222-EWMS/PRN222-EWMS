@@ -41,7 +41,7 @@
             ("Xuất kho", "bi-box-arrow-up", "Outbound", "Index", new[] { "WAREHOUSE_STAFF", "MANAGER" }),
             ("Chuyển kho", "bi-arrow-left-right", "Transfer", "Index", new[] { "MANAGER", "WAREHOUSE_STAFF" }),
             ("Kiểm kê", "bi-clipboard-check", "ManagerStocktake", "Index", new[] { "MANAGER" }),
-            ("Duyệt điều chỉnh", "bi-check2-square", "InventoryAdjustment", "Index", new[] { "CEO" })
+            ("Duyệt điều chỉnh kiểm kê", "bi-check2-square", "CeoStocktakeAdjustment", "Index", new[] { "CEO" })
         })
     };
     if (role == "SALES_STAFF")
@@ -98,7 +98,7 @@
             var allowedItems = section.Items
                 .Where(i => i.Roles.Length == 0 || i.Roles.Contains(role, StringComparer.OrdinalIgnoreCase))
                 // Keep CEO's scope and include the merged modules available to Manager.
-                .Where(i => !isCeo || (i.Action == "Index" && (i.Controller is "Home" or "Warehouse" or "CeoPurchaseProgress")))
+                .Where(i => !isCeo || (i.Action == "Index" && (i.Controller is "Home" or "Warehouse" or "CeoPurchaseProgress" or "CeoStocktakeAdjustment")))
                 .Where(i => !isManager || (i.Action == "Index" && (i.Controller is "Home" or "Warehouse" or "PurchaseOrder" or "SalesOrder" or "ManagerInbound" or "Outbound" or "Transfer" or "ManagerStocktake")))
                 .ToArray();
             if (allowedItems.Length == 0) { continue; }

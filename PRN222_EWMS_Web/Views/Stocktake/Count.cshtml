@@ -1,0 +1,250 @@
+﻿@using PRN222_EWMS_Web.ViewModels.Stocktaking
+@model StocktakeExecutionViewModel
+@{
+    ViewData["Title"] = "Ghi nhận kiểm kê " + Model.Plan.StocktakeCode;
+    string Entered(string name, string fallback = "") => ViewData.ModelState.TryGetValue(name, out var state) ? state.AttemptedValue ?? fallback : fallback;
+    string Product(int? id) => Model.Products.FirstOrDefault(p => p.ProductId == id)?.ProductName ?? "Chưa xác định";
+    var locationsById = Model.Locations.ToDictionary(location => location.LocationId);
+    List<PRN222_EWMS_Web.Models.StorageLocation> Hierarchy(int id)
+    {
+        var ancestors = new List<PRN222_EWMS_Web.Models.StorageLocation>();
+        var seen = new HashSet<int>();
+        int? current = id;
+        while (current.HasValue && seen.Add(current.Value) && locationsById.TryGetValue(current.Value, out var location))
+        {
+            ancestors.Add(location);
+            current = location.ParentLocationId;
+        }
+        ancestors.Reverse();
+        return ancestors;
+    }
+    string Path(int? id)
+    {
+        if (!id.HasValue) return "Hàng chờ xếp kệ";
+        var ancestors = Hierarchy(id.Value);
+        return ancestors.Count == 0 ? "Vị trí #" + id : string.Join(" / ", ancestors.Select(location => location.LocationName));
+    }
+    var countLocations = Model.CountLocations.Where(location => location.LocationType is "TIER" or "FLOOR_SLOT")
+        .OrderBy(location => Path(location.LocationId)).ToList();
+}
+<style>
+    #count-form .serial-capture-actions .serial-capture-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+        font: inherit;
+        font-size: 13px;
+    }
+</style>
+<div class="warehouse-list">
+    <header class="workspace-heading"><div><p class="eyebrow">GHI NHẬN THỰC TẾ</p><h1>Đợt kiểm kê: @Model.Plan.StocktakeCode</h1><p class="muted">Khu vực được giao: @Model.ScopeLabel</p></div><a asp-action="Details" asp-route-id="@Model.Plan.StocktakeId" asp-route-recountRequestId="@Model.RecountRequestId" class="workspace-button sales-button-secondary">Chi tiết nhiệm vụ</a></header>
+    @if (TempData["Success"] is string success) { <div class="workspace-notice" role="status">@success</div> }
+    @if (TempData["Error"] is string error) { <div class="alert alert-danger" role="alert">@error</div> }
+    <div asp-validation-summary="All" class="text-danger" role="alert"></div>
+    @if (Model.CanCount)
+    {
+        <section class="workspace-card"><h2>Ghi nhận sản phẩm thực tế</h2>
+            <form asp-action="Scan" method="post" class="workspace-form mt-0" id="count-form" style="gap:16px">@Html.AntiForgeryToken()
+                <input type="hidden" name="Id" value="@Model.Plan.StocktakeId" /><input type="hidden" name="Version" value="@Model.Version" /><input type="hidden" name="RecountRequestId" value="@Model.RecountRequestId" />
+                <fieldset class="border rounded p-3" id="count-location-picker">
+                    <legend class="float-none w-auto fs-6 px-2 mb-0">Đang kiểm tại <span class="text-danger">*</span></legend>
+                    <select id="LocationId" name="LocationId" class="d-none" tabindex="-1" aria-hidden="true"
+                            data-allow-awaiting="@Model.AllowAwaitingPutaway.ToString().ToLowerInvariant()">
+                        <option value="">Hàng chờ xếp kệ</option>
+                        @foreach (var location in countLocations)
+                        {
+                            var hierarchy = Hierarchy(location.LocationId).Select(node => new { id = node.LocationId, name = node.LocationName, type = node.LocationType });
+                            <option value="@location.LocationId" data-hierarchy="@System.Text.Json.JsonSerializer.Serialize(hierarchy)">@Path(location.LocationId)</option>
+                        }
+                    </select>
+                    @if (Model.AllowAwaitingPutaway && countLocations.Count > 0)
+                    {
+                        <div class="mb-3">
+                            <label for="count-location-mode">Loại vị trí</label>
+                            <select id="count-location-mode">
+                                <option value="storage">Vị trí lưu kho</option>
+                                <option value="awaiting">Hàng chờ xếp kệ</option>
+                            </select>
+                        </div>
+                    }
+                    <div id="count-location-levels" class="row g-2"></div>
+                    <p id="count-location-summary" class="small muted mb-0" role="status"></p>
+                </fieldset>
+                <partial name="_SerialCapture" model="@(new PRN222_EWMS_Web.ViewModels.Shared.SerialCaptureViewModel {
+                    SerialName = "Serial", Value = Entered("Serial"),
+                    HelpText = "",
+                    Hint = "Tự tra cứu khi ngừng nhập hoặc nhấn Enter." })" />
+                <div id="serial-result" class="mt-3" role="status" aria-live="polite"></div>
+                <fieldset id="actual-fields" hidden disabled class="border-0 p-0 mt-4" style="min-width:0">
+                    <h3 class="h5">Tình trạng sản phẩm</h3>
+                    <div class="row g-3">
+                        <div class="col-md-5"><label for="Condition">Tình trạng thực tế *</label><select id="Condition" name="Condition" required><option value="GOOD">Tốt</option><option value="DAMAGED">Hỏng</option></select></div>
+                        
+                        <details class="col-12"><summary>Thêm ghi chú / bằng chứng</summary><label for="Note" class="mt-2">Ghi chú</label><textarea id="Note" name="Note" maxlength="1000" rows="3" style="width:100%">@Entered("Note")</textarea></details>
+                    </div>
+                    
+                    <button class="workspace-button" type="submit">Lưu ghi nhận</button>
+                </fieldset>
+                <noscript><p class="text-danger">Vui lòng bật JavaScript để kiểm tra serial.</p></noscript>
+            </form>
+        </section>
+    }
+    else { <div class="alert alert-info" role="status">Nhiệm vụ hiện không cho phép ghi nhận thêm. Vui lòng xem trạng thái tại trang chi tiết.</div> }
+    <section class="workspace-card"><h2>Tiến độ ghi nhận</h2><p class="muted">@Model.Observations.Count(o => o.ScannedAt.HasValue) dòng đã được ghi nhận trong dữ liệu hiển thị.</p><div class="table-wrap"><table class="workspace-table"><thead><tr><th>Serial / sản phẩm</th><th>Vòng</th><th>Tình trạng thực tế</th><th>Vị trí thực tế</th><th>Kết quả / ghi chú</th></tr></thead><tbody>
+    @foreach (var row in Model.Observations.OrderByDescending(o => o.ScannedAt).ThenBy(o => o.ScannedSerial))
+    {
+        var handling = Model.Handling.FirstOrDefault(h => h.ScannedSerial == row.ScannedSerial);
+        <tr><td><strong>@row.ScannedSerial</strong><small class="d-block muted">@Product(row.ProductId)</small></td><td>@row.RoundNumber</td><td>@(row.ActualQuantity == 0 ? "Chưa ghi nhận" : row.ActualCondition == "DAMAGED" ? "Hỏng" : "Tốt")</td><td>@(row.ActualQuantity == 0 ? "—" : Path(row.ActualLocationId))</td><td>@StocktakeDisplay.Difference(row.DifferenceType)@if (handling is not null) { <span class="d-block mt-1">@(handling.Status == "MOVED" ? "Đã chuyển" : handling.Status == "CANCELLED" ? "Đã sửa ghi nhận" : "Chờ chuyển")</span>@if (handling.Status == "WAITING" && handling.RecordedByUserId == Model.ActorId) { <a asp-action="Handle" asp-route-id="@Model.Plan.StocktakeId" asp-route-handlingId="@handling.HandlingId" asp-route-recountRequestId="@Model.RecountRequestId" class="workspace-button sales-button-small mt-2">Xử lý vị trí</a> } }<small class="d-block muted text-break">@row.Note</small></td></tr>
+    }
+    @if (Model.Observations.Count == 0) { <tr><td colspan="5" class="text-center muted py-4">Chưa có serial được ghi nhận.</td></tr> }
+    </tbody></table></div></section>
+    @if (Model.Handling.Any(h => h.Status == "WAITING" && h.RecordedByUserId == Model.ActorId)) { <div class="alert alert-warning" role="status">Còn hàng chờ chuyển đến vị trí hợp lệ. Xử lý xong trước khi gửi kết quả.</div> }
+    @if (Model.CanSubmit)
+    {
+        <section class="workspace-card"><h2>Gửi kết quả cho Manager</h2><p>Sau khi gửi, bạn không thể sửa kết quả đếm.</p><form asp-action="Submit" method="post" onsubmit="return confirm('Bạn đã kiểm tra xong toàn bộ phạm vi được giao và muốn gửi kết quả?');">@Html.AntiForgeryToken()<input type="hidden" name="Id" value="@Model.Plan.StocktakeId" /><input type="hidden" name="Version" value="@Model.Version" /><input type="hidden" name="RecountRequestId" value="@Model.RecountRequestId" /><button class="workspace-button" type="submit">Xác nhận gửi kết quả</button></form></section>
+    }
+</div>
+
+@section Scripts {
+<partial name="_SerialCaptureScripts" />
+<script>
+(() => {
+ const form = document.getElementById('count-form'); if (!form) return;
+ const serial = document.getElementById('Serial'), root = form.querySelector('[data-serial-capture]');
+ const fields = document.getElementById('actual-fields'), result = document.getElementById('serial-result');
+ const location = document.getElementById('LocationId');
+ const key = 'stocktake-location:' + form.elements.Id.value + ':' + form.elements.RecountRequestId.value;
+ const mode = document.getElementById('count-location-mode');
+ const levels = document.getElementById('count-location-levels');
+ const summary = document.getElementById('count-location-summary');
+ const allowAwaiting = location.dataset.allowAwaiting === 'true';
+ const paths = Array.from(location.options).filter(option => option.dataset.hierarchy)
+  .map(option => ({ value: option.value, nodes: JSON.parse(option.dataset.hierarchy) }));
+ const levelNames = { ZONE: 'Khu', ROW: 'Dãy', RACK: 'Kệ', TIER: 'Tầng', FLOOR_SLOT: 'Ô sàn' };
+ let awaiting = allowAwaiting && paths.length === 0;
+ let selectedNodes = [];
+ let locationReady = false;
+ let checked = null, sequence = 0, timer, data = null, saving = false;
+ let saved = null;
+ try { saved = sessionStorage.getItem(key); } catch { }
+ const restored = paths.find(path => path.value === saved) ?? (!allowAwaiting && paths.length === 1 ? paths[0] : null);
+ if (restored) selectedNodes = restored.nodes.map(node => node.id);
+ if (allowAwaiting && saved === '') awaiting = true;
+ if (mode) mode.value = awaiting ? 'awaiting' : 'storage';
+
+ function renderLocation() {
+  const levelFields = [];
+  let remaining = paths;
+  let selectedPath = null;
+  if (!awaiting) {
+   for (let depth = 0; remaining.length > 0; depth++) {
+    const choices = new Map(remaining.filter(path => path.nodes[depth])
+     .map(path => [path.nodes[depth].id, path.nodes[depth]]));
+    if (choices.size === 0) break;
+    const types = new Set(Array.from(choices.values(), node => node.type));
+    const labelText = types.size === 1 ? levelNames[types.values().next().value] ?? 'Vị trí' : 'Vị trí';
+    const column = document.createElement('div');
+    column.className = 'col-12 col-sm-6 col-lg-3';
+    const select = document.createElement('select');
+    select.id = 'count-location-level-' + depth;
+    select.required = true;
+    select.add(new Option('Chọn ' + labelText.toLowerCase(), ''));
+    for (const node of choices.values()) select.add(new Option(node.name, String(node.id)));
+    const label = document.createElement('label');
+    label.htmlFor = select.id;
+    label.textContent = labelText;
+    column.append(label, select);
+    levelFields.push(column);
+    const selected = selectedNodes[depth];
+    select.value = choices.has(selected) ? String(selected) : '';
+    select.addEventListener('change', () => {
+     selectedNodes = selectedNodes.slice(0, depth);
+     if (select.value) selectedNodes.push(Number(select.value));
+     renderLocation();
+     document.getElementById(select.id)?.focus({ preventScroll: true });
+    });
+    if (!select.value) break;
+    remaining = remaining.filter(path => path.nodes[depth]?.id === selected);
+    selectedPath = remaining.find(path => path.nodes.length === depth + 1) ?? null;
+    if (selectedPath) break;
+   }
+  }
+  levels.replaceChildren(...levelFields);
+  locationReady = awaiting || selectedPath !== null;
+  location.value = selectedPath?.value ?? '';
+  summary.classList.toggle('mt-2', levelFields.length > 0);
+  summary.textContent = locationReady
+   ? 'Đã chọn · ' + location.selectedOptions[0].textContent.trim()
+   : paths.length === 0 ? 'Không có vị trí để kiểm trong phần việc này.' : '';
+  try {
+   if (locationReady) sessionStorage.setItem(key, location.value);
+   else sessionStorage.removeItem(key);
+  } catch { }
+  showResult();
+ }
+ mode?.addEventListener('change', () => {
+  awaiting = mode.value === 'awaiting';
+  renderLocation();
+ });
+ renderLocation();
+ function reset() {
+  clearTimeout(timer); sequence++; checked = null; data = null;
+  fields.hidden = true; fields.disabled = true; result.textContent = '';
+ }
+ function showResult() {
+  if (!data) return;
+  if (data.blockedReason) {
+   result.className = 'mt-3 alert alert-warning';
+   result.textContent = data.blockedReason;
+   return;
+  }
+  let warning = data.alreadyRecorded;
+  let message = 'Đã tìm thấy: ' + data.productName + ' · Serial: ' + checked;
+  if (data.alreadyRecorded) message += ' Bạn đã ghi nhận serial này; lưu lại sẽ cập nhật kết quả của bạn, không tăng số lượng.';
+  const expected = data.expectedLocationId == null ? '' : String(data.expectedLocationId);
+  if (data.found && locationReady && (expected !== location.value || data.expectedLocation === 'Chưa có vị trí tại kho này')) {
+   warning = true;
+   message += ' Khác vị trí: hệ thống ghi nhận tại ' + data.expectedLocation + '. Ghi nhận nơi tìm thấy tại ' + location.selectedOptions[0].textContent.trim() + '. Sau khi lưu, mở Xử lý vị trí để chuyển hàng về ô đúng hoặc ô thay thế hợp lệ.';
+  }
+  result.className = 'mt-3 alert ' + (warning ? 'alert-warning' : 'alert-success'); result.textContent = message;
+ }
+ async function lookup() {
+  reset(); const value = serial.value.trim(); if (!value) return;
+  if (!serial.reportValidity()) return;
+  const ticket = sequence;
+  result.className = 'mt-3 alert alert-info'; result.textContent = 'Đang tra cứu serial…';
+  const url = new URL('@Url.Action("LookupSerial", "Stocktake")', window.location.origin);
+  url.searchParams.set('id', form.elements.Id.value); url.searchParams.set('recountRequestId', form.elements.RecountRequestId.value); url.searchParams.set('serial', value);
+  try {
+   const response = await fetch(url, { cache: 'no-store', headers: { Accept: 'application/json' } });
+   if (ticket !== sequence) return;
+   const next = await response.json();
+   if (!response.ok) throw new Error(next.message || 'Không thể tra cứu serial. Hãy thử nhập lại mã.');
+   data = next; checked = value;
+   fields.hidden = Boolean(data.blockedReason);
+   fields.disabled = fields.hidden;
+   showResult();
+  } catch (error) {
+   if (ticket !== sequence) return;
+   result.className = 'mt-3 alert alert-danger'; result.textContent = error instanceof SyntaxError ? 'Không thể tra cứu serial. Hãy tải lại trang hoặc đăng nhập lại.' : error.message;
+  }
+ }
+ root.addEventListener('serialcapture:changed', event => {
+  reset(); if (!serial.value.trim()) return;
+  if (event.detail.method !== 'MANUAL') void lookup();
+  else timer = setTimeout(lookup, 650);
+ });
+ serial.addEventListener('blur', () => { if (serial.value.trim() && checked !== serial.value.trim()) void lookup(); });
+ serial.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); void lookup(); } });
+ form.addEventListener('submit', e => {
+  if (saving || !locationReady) { e.preventDefault(); return; }
+  if (checked !== serial.value.trim() || fields.disabled) { e.preventDefault(); void lookup(); return; }
+  saving = true;
+ });
+ window.addEventListener('pageshow', () => { saving = false; });
+ if (serial.value.trim()) void lookup();
+ serial.focus({ preventScroll: true });
+})();
+</script>
+}
