@@ -135,6 +135,40 @@ public class WarehouseTransferRepository(EwmsDbContext db)
                         && (dispatch.TransferOrder.Status == "RELEASED" || dispatch.TransferOrder.Status == "IN_PROGRESS")
                 })
                 .ToListAsync();
+
+            if (detail.Documents.Any(doc => doc.CanScan))
+            {
+                var active = db.TransferDispatchItems.Where(i => i.IsActive);
+                var open = active.Where(i => i.Dispatch.Status == "DRAFT" || i.Dispatch.IsActivePicking);
+                detail.DispatchSerialOptions = await (
+                    from line in db.TransferOrderLines
+                    join serial in db.SerialItems on line.ProductId equals serial.ProductId
+                    where line.TransferOrderId == orderId && serial.CurrentWarehouseId == warehouseId
+                        && serial.StockState == "IN_WAREHOUSE" && !serial.IsQuarantined
+                        && serial.ItemCondition == detail.ItemCondition && serial.CurrentSupplyState == "PHYSICAL"
+                        && serial.CurrentSupplySourceId != null
+                        && !db.PickingClaims.Any(c => c.SerialItemId == serial.SerialItemId)
+                    let counted = active.Count(i => i.TransferLineId == line.TransferLineId
+                        && (i.Dispatch.Status == "DONE" || i.Dispatch.Status == "DRAFT" || i.Dispatch.IsActivePicking))
+                    where counted < line.RequestedQuantity - line.CancelledQuantity
+                    let reserved = db.Reservations.Where(r => r.TransferLineId == line.TransferLineId
+                        && r.SupplySourceId == serial.CurrentSupplySourceId && r.Status == "ACTIVE"
+                        && r.SupplyState == "PHYSICAL")
+                        .Sum(r => (int?)(r.ReservedQuantity - r.ConsumedQuantity - r.ReleasedQuantity)) ?? 0
+                    where reserved > open.Count(i => i.TransferLineId == line.TransferLineId
+                        && i.SourceAtDispatchId == serial.CurrentSupplySourceId)
+                    let location = serial.CurrentLocation
+                    let parent = location!.ParentLocation
+                    let rowOrZone = parent!.ParentLocation
+                    let zone = rowOrZone!.ParentLocation
+                    let path = location == null ? "Chưa xác định vị trí" :
+                        (zone == null ? "" : zone.LocationName + " → ") +
+                        (rowOrZone == null ? "" : rowOrZone.LocationName + " → ") +
+                        (parent == null ? "" : parent.LocationName + " → ") + location.LocationName
+                    orderby line.Product.ProductCode, path, serial.SerialNumber
+                    select new DispatchSerialOption(line.Product.ProductCode, line.Product.ProductName,
+                        path, serial.SerialNumber)).ToListAsync();
+            }
         }
         else
         {

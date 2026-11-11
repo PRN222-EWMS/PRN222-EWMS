@@ -14,7 +14,10 @@ public class WarehouseTransferDetail
     public List<TransferProgressRow> Lines { get; set; } = [];
     public List<WarehouseTransferDocument> Documents { get; set; } = [];
     public List<string> IncomingSerials { get; set; } = [];
+    public List<DispatchSerialOption> DispatchSerialOptions { get; set; } = [];
 }
+
+public record DispatchSerialOption(string ProductCode, string ProductName, string Location, string SerialNumber);
 
 public record TransferProgressRow(
     string ProductCode, string ProductName, int Requested, int Cancelled,
