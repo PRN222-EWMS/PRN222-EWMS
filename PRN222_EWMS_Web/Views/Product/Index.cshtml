@@ -5,49 +5,63 @@
 }
 
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-    <h2 class="mb-0">Danh sách sản phẩm</h2>
+    <h1 class="mb-0">Danh sách sản phẩm</h1>
     <div class="d-flex flex-wrap gap-2 ms-auto">
         @if (User.IsInRole("PURCHASING_STAFF"))
         {
-            <a asp-action="Create" class="btn btn-primary">Thêm sản phẩm</a>
+            <a asp-action="Create" class="btn btn-primary rounded-pill">Thêm sản phẩm</a>
         }
         @if (User.IsInRole("MANAGER"))
         {
             <a asp-controller="ManagerDashboard"
                asp-action="Dashboard"
-               class="btn btn-outline-secondary">
+               class="btn btn-outline-secondary rounded-pill">
                 ← Về tổng quan
             </a>
         }
     </div>
 </div>
 
-<form asp-action="Index" method="get" class="row g-2 mb-3">
-    <div class="@(Model.CanFilterWarehouse ? "col-md-7" : "col-md-10")">
+<section class="workspace-card mb-4" aria-label="Bộ lọc sản phẩm">
+<form asp-action="Index" method="get" class="row g-3 align-items-end">
+    <div class="col-lg">
         <label asp-for="Keyword" class="form-label">Tìm sản phẩm</label>
         <input asp-for="Keyword" class="form-control" placeholder="Nhập mã, tên hoặc model" />
     </div>
     @if (Model.CanFilterWarehouse)
     {
-        <div class="col-md-3">
+        <div class="col-lg-2">
             <label asp-for="WarehouseId" class="form-label">Kho</label>
             <select asp-for="WarehouseId" asp-items="Model.Warehouses" class="form-select">
                 <option value="">Tất cả kho</option>
             </select>
         </div>
     }
-    <div class="col-md-2 align-self-end">
-        <button type="submit" class="btn btn-primary w-100">Tìm kiếm</button>
+    <div class="col-lg-2">
+        <label asp-for="Status" class="form-label">Trạng thái</label>
+        <select asp-for="Status" class="form-select">
+            <option value="">Tất cả trạng thái</option>
+            <option value="ACTIVE">Đang hoạt động</option>
+            <option value="INACTIVE">Ngừng hoạt động</option>
+        </select>
+    </div>
+    <div class="col-lg-auto d-flex flex-wrap gap-2">
+        <button type="submit" class="btn btn-primary rounded-pill px-4">Tìm kiếm</button>
+        <a asp-action="Index" class="btn btn-outline-secondary rounded-pill px-4">
+            <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i> Xóa lọc
+        </a>
     </div>
 </form>
+</section>
 
+<section class="workspace-card" aria-label="Danh sách sản phẩm">
 <p class="small text-muted">
     Tổng tồn gồm hàng tốt và hàng hỏng đang trong kho. Hàng hỏng là một phần của tổng tồn.
     Số liệu này chưa phải lượng hàng có thể xuất.
 </p>
 
-<div class="table-responsive">
-    <table class="table table-striped align-middle">
+<div class="table-wrap" tabindex="0" role="region" aria-label="Bảng sản phẩm, có thể cuộn ngang">
+    <table class="workspace-table">
         <thead>
             <tr>
                 <th scope="col">Mã</th>
@@ -58,7 +72,7 @@
                 <th scope="col" class="text-end">Tổng tồn</th>
                 <th scope="col" class="text-end">Hàng hỏng</th>
                 <th scope="col">Trạng thái</th>
-                <th scope="col"><span class="visually-hidden">Thao tác</span></th>
+                <th scope="col">Thao tác</th>
             </tr>
         </thead>
         <tbody>
@@ -90,8 +104,12 @@
                             _ => product.Status
                         })
                     </td>
-                    <td>
+                    <td class="text-nowrap">
                         <a asp-action="Details" asp-route-id="@product.ProductId">Chi tiết</a>
+                        @if (User.IsInRole("PURCHASING_STAFF"))
+                        {
+                            <a asp-action="Edit" asp-route-id="@product.ProductId" class="ms-3">Sửa</a>
+                        }
                     </td>
                 </tr>
             }
@@ -101,5 +119,6 @@
 
 @if (Model.Items.Count == 0)
 {
-    <p>Không tìm thấy sản phẩm phù hợp.</p>
+    <p class="text-muted mt-3 mb-0">Không tìm thấy sản phẩm phù hợp.</p>
 }
+</section>

@@ -6,7 +6,7 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="mb-0">Theo dõi chuyển kho</h1>
-    <a asp-controller="Transfer" asp-action="Create" class="btn btn-primary">
+    <a asp-controller="Transfer" asp-action="Create" class="btn btn-primary rounded-pill">
         <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> Tạo lệnh chuyển kho
     </a>
 </div>
@@ -29,8 +29,8 @@
             </select>
         </div>
         <div class="col-md-auto">
-            <button type="submit" class="btn btn-primary"><i class="bi bi-funnel me-1" aria-hidden="true"></i> Tìm</button>
-            <a asp-action="Index" class="btn btn-outline-secondary"><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i> Xóa lọc</a>
+            <button type="submit" class="btn btn-primary rounded-pill"><i class="bi bi-funnel me-1" aria-hidden="true"></i> Tìm</button>
+            <a asp-action="Index" class="btn btn-outline-secondary rounded-pill"><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i> Xóa lọc</a>
         </div>
     </form>
 </section>
@@ -49,8 +49,8 @@
     }
     else
     {
-        <div class="table-responsive">
-            <table class="table table-hover align-middle">
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Danh sách lệnh chuyển kho, có thể cuộn ngang">
+            <table class="workspace-table">
                 <thead>
                     <tr>
                         <th>Mã lệnh</th>
