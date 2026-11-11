@@ -19,15 +19,15 @@
 
     @if (TempData["Error"] != null)
     {
-        <div class="alert alert-danger mb-0" role="alert">
-            <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>
+        <div class="outbound-notice outbound-notice-danger" role="alert">
+            <i class="bi bi-exclamation-triangle-fill flex-shrink-0" aria-hidden="true"></i>
             <span>@TempData["Error"]</span>
         </div>
     }
     @if (TempData["Success"] != null)
     {
-        <div class="alert alert-success mb-0" role="alert">
-            <i class="bi bi-check-circle-fill me-1" aria-hidden="true"></i>
+        <div class="outbound-notice outbound-notice-success" role="alert">
+            <i class="bi bi-check-circle-fill flex-shrink-0" aria-hidden="true"></i>
             <span>@TempData["Success"]</span>
         </div>
     }
@@ -35,9 +35,9 @@
     @if (Model.EligibleOrders.Count == 0)
     {
         <div class="workspace-card text-center py-5">
-            <i class="bi bi-inbox fs-1 text-muted d-block mb-3" aria-hidden="true"></i>
-            <h3 class="h5 fw-bold text-dark">Không có đơn bán hàng nào cần xuất kho</h3>
-            <p class="text-muted mb-3" style="font-size: 14px;">
+            <i class="bi bi-inbox fs-1 muted d-block mb-3" aria-hidden="true"></i>
+            <h2 class="h5 fw-bold text-dark">Không có đơn bán hàng nào cần xuất kho</h2>
+            <p class="muted mb-3" style="font-size: 14px;">
                 Hiện tại tất cả các đơn bán hàng thuộc kho làm việc đã hoàn tất xuất kho hoặc chưa có đơn nào được duyệt.
             </p>
             <a class="workspace-button sales-button-secondary" asp-action="Index">Quay về danh sách phiếu xuất</a>
@@ -50,37 +50,37 @@
             {
                 var isSelected = Model.SelectedSalesOrderId == order.SalesOrderId;
 
-                <div class="workspace-card p-4 @(order.IsPickingActive ? "border-warning-subtle" : isSelected ? "border-primary shadow-sm" : "")">
+                <div class="workspace-card p-4 @(isSelected ? "border-primary shadow-sm" : "")">
                     <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
                         <div>
                             <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-                                <h3 class="h5 mb-0 fw-bold text-dark">@order.Socode</h3>
-                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                                <h2 class="h5 mb-0 fw-bold text-dark">@order.Socode</h2>
+                                <span class="outbound-badge outbound-badge-done">
                                     Đã xác nhận
                                 </span>
                                 @if (order.IsPickingActive)
                                 {
-                                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1">
+                                    <span class="outbound-badge outbound-badge-picking">
                                         <i class="bi bi-clock-history me-1"></i>Đang nhặt: @order.ActiveIssueCode
                                     </span>
                                 }
                                 else
                                 {
-                                    <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle px-2 py-1">
+                                    <span class="outbound-badge outbound-badge-ready">
                                         Chờ xuất hàng
                                     </span>
                                 }
                                 @if (order.HasShortage)
                                 {
-                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+                                    <span class="outbound-badge outbound-badge-cancelled">
                                         Thiếu hàng
                                     </span>
                                 }
                             </div>
-                            <p class="text-muted mb-1" style="font-size: 13.5px;">
+                            <p class="muted mb-1" style="font-size: 13.5px;">
                                 Khách hàng: <strong class="text-dark">@order.CustomerName</strong> · Số điện thoại: @(order.CustomerPhone ?? "—")
                             </p>
-                            <p class="text-muted mb-0" style="font-size: 13px;">
+                            <p class="muted mb-0" style="font-size: 13px;">
                                 Địa chỉ giao: @(order.ShippingAddress ?? "—")
                             </p>
                         </div>
@@ -88,12 +88,12 @@
                         <div class="text-end">
                             @if (order.IsPickingActive)
                             {
-                                <a asp-action="Picking" asp-route-id="@order.ActiveOutboundId" class="workspace-button" style="background: #0d6efd; color: #ffffff; border-color: #0d6efd; font-weight: 600;" title="Mở lại bàn nhặt hàng của phiếu @order.ActiveIssueCode">
+                                <a asp-action="Picking" asp-route-id="@order.ActiveOutboundId" class="workspace-button sales-button-small" title="Mở lại bàn nhặt hàng của phiếu @order.ActiveIssueCode">
                                     <i class="bi bi-box-arrow-in-right me-1"></i> Tiếp tục nhặt hàng
                                 </a>
                                 @if (!string.IsNullOrEmpty(order.ActivePickerName))
                                 {
-                                    <small class="text-muted d-block mt-2" style="font-size: 12px;">
+                                    <small class="muted d-block mt-2" style="font-size: 12px;">
                                         Phụ trách: <strong class="text-dark">@order.ActivePickerName</strong>
                                     </small>
                                 }
@@ -103,12 +103,12 @@
                                 <form asp-action="StartPicking" method="post">
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="salesOrderId" value="@order.SalesOrderId" />
-                                    <button type="submit" class="workspace-button" style="background: #0e733b; color: #ffffff; border-color: #0e733b; font-weight: 600;">
+                                    <button type="submit" class="workspace-button sales-button-small">
                                         <i class="bi bi-box-arrow-in-right me-1"></i> Bắt đầu lấy hàng
                                     </button>
                                 </form>
                             }
-                            <small class="text-muted d-block mt-2" style="font-size: 12px;">
+                            <small class="muted d-block mt-2" style="font-size: 12px;">
                                 Hẹn giao: @(order.RequestedDate?.ToString("dd/MM/yyyy") ?? "Không yêu cầu")
                             </small>
                         </div>
@@ -121,21 +121,21 @@
                             <span class="fw-semibold text-dark" style="font-size: 13.5px;">
                                 Danh sách mặt hàng · Còn lại cần xuất: <strong class="text-danger">@order.TotalRemaining</strong> · Đã đặt: @order.TotalRequested
                             </span>
-                            <span class="badge bg-light text-dark border px-2 py-1">
+                            <span class="outbound-badge outbound-badge-draft">
                                 Đã giữ chỗ: @order.TotalReserved
                             </span>
                         </div>
 
-                        <div class="table-responsive">
-                            <table class="table table-sm table-bordered align-middle mb-0" style="font-size: 13px;">
-                                <thead class="table-light">
+                        <div class="table-wrap">
+                            <table class="workspace-table">
+                                <thead>
                                     <tr>
                                         <th>Mã sản phẩm</th>
                                         <th>Tên sản phẩm</th>
-                                        <th class="text-center">Số lượng đặt</th>
-                                        <th class="text-center">Đã xuất</th>
-                                        <th class="text-center">Còn lại cần xuất</th>
-                                        <th class="text-center">Đang giữ chỗ</th>
+                                        <th style="text-align: center;">Số lượng đặt</th>
+                                        <th style="text-align: center;">Đã xuất</th>
+                                        <th style="text-align: center;">Còn lại cần xuất</th>
+                                        <th style="text-align: center;">Đang giữ chỗ</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -144,12 +144,12 @@
                                         <tr>
                                             <td class="fw-bold text-dark">@line.ProductCode</td>
                                             <td>@line.ProductName</td>
-                                            <td class="text-center">@line.RequestedQuantity @line.Unit</td>
-                                            <td class="text-center text-success">@line.DoneQuantity @line.Unit</td>
-                                            <td class="text-center fw-bold @(line.RemainingQuantity > 0 ? "text-danger" : "text-muted")">
+                                            <td style="text-align: center;">@line.RequestedQuantity @line.Unit</td>
+                                            <td style="text-align: center;" class="text-success">@line.DoneQuantity @line.Unit</td>
+                                            <td style="text-align: center;" class="fw-bold @(line.RemainingQuantity > 0 ? "text-danger" : "muted")">
                                                 @line.RemainingQuantity @line.Unit
                                             </td>
-                                            <td class="text-center">@line.ReservedBalance @line.Unit</td>
+                                            <td style="text-align: center;">@line.ReservedBalance @line.Unit</td>
                                         </tr>
                                     }
                                 </tbody>
