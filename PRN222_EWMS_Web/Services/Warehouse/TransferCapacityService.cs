@@ -112,13 +112,12 @@ public class TransferCapacityService(EwmsDbContext db, TimeProvider clock)
             .Select(l => new { l.ProductId, Qty = (long)l.RequestedQuantity - l.CancelledQuantity
                 - db.ReturnReceiptItems.LongCount(i => i.ReturnLineId == l.ReturnLineId && i.IsActive && i.ReturnReceipt.Status == "DONE") }).ToListAsync();
         arrivals.AddRange(returns.Select(l => new CapacityLoad(Profile(l.ProductId), "GOOD", Math.Max(0, l.Qty))));
-        if (returns.Any(l => l.Qty > 0)) result.Warnings.Add("Có lệnh khách trả chưa nhận và chưa có ETA/tình trạng dự kiến; dự báo đang dự phòng phần còn lại ở khu GOOD.");
+        if (returns.Any(l => l.Qty > 0)) result.Warnings.Add("Kho đích đang có hàng khách trả chờ nhận, đã dự phòng sức chứa tương ứng.");
         var futureAwaiting = serials.Where(s => s.CurrentLocationId == null && !leaving.Contains(s.SerialItemId))
             .GroupBy(s => new { s.ProductId, s.ItemCondition }).Select(g => new CapacityLoad(Profile(g.Key.ProductId), g.Key.ItemCondition, g.LongCount()));
         var forecastSlots = Slots(leaving);
         var forecastErrors = TransferCapacityPlanner.Allocate(forecastSlots, futureAwaiting.Concat(arrivals).Concat(demand));
         result.ForecastCapacity = $"Dự báo đến {horizon:dd/MM/yyyy}: " + (forecastErrors.Count == 0 ? "đủ chỗ cho toàn bộ lệnh." : string.Join(" ", forecastErrors));
         if (forecastErrors.Count > 0) result.Errors.Add(result.ForecastCapacity);
-        if (model.ExpectedDate == null) result.Warnings.Add("Chưa có ngày dự kiến đến; dự báo tạm tính tại hôm nay. Cần kiểm tra lại khi phát hành.");
     }
 }

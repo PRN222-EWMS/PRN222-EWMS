@@ -90,11 +90,11 @@ public class TransferDispatchSummaryDto
 
 public class CreateTransferOrderViewModel
 {
-    [Range(1, int.MaxValue, ErrorMessage = "Hãy chọn kho nguồn.")]
+    [Range(1, int.MaxValue, ErrorMessage = "Vui lòng chọn kho nguồn.")]
     public int FromWarehouseId { get; set; }
-    [Range(1, int.MaxValue, ErrorMessage = "Hãy chọn kho đích.")]
+    [Range(1, int.MaxValue, ErrorMessage = "Vui lòng chọn kho đích.")]
     public int ToWarehouseId { get; set; }
-    [RegularExpression("^(GOOD|DAMAGED)$", ErrorMessage = "Tình trạng hàng không hợp lệ.")]
+    [RegularExpression("^(GOOD|DAMAGED)$", ErrorMessage = "Tình trạng hàng hóa không hợp lệ.")]
     public string ItemCondition { get; set; } = "GOOD";
     public DateOnly? DispatchDate { get; set; }
     public DateOnly? ExpectedDate { get; set; }
@@ -124,7 +124,7 @@ public class CreateTransferOrderViewModel
 public class CreateTransferOrderLineInput
 {
     public long TransferLineId { get; set; }
-    [Range(1, int.MaxValue, ErrorMessage = "Hãy chọn sản phẩm.")]
+    [Range(1, int.MaxValue, ErrorMessage = "Vui lòng chọn sản phẩm.")]
     public int ProductId { get; set; }
     [Range(1, 1000000, ErrorMessage = "Số lượng phải là số nguyên từ 1 đến 1.000.000.")]
     public int Quantity { get; set; }
@@ -151,6 +151,7 @@ public sealed class TransferAssessment
 {
     public List<string> Errors { get; set; } = [];
     public List<string> Warnings { get; set; } = [];
+    public Dictionary<string, string> FieldErrors { get; set; } = new(StringComparer.Ordinal);
     public string? CurrentCapacity { get; set; }
     public string? ForecastCapacity { get; set; }
     public bool CanRelease => Errors.Count == 0;
