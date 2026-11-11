@@ -17,64 +17,96 @@ public class PutawayRepository(EwmsDbContext db) : IPutawayRepository
 
     private IQueryable<SerialItem> Pending(int warehouseId) => db.SerialItems.AsNoTracking()
         .Where(s => s.CurrentWarehouseId == warehouseId && s.StockState == "IN_WAREHOUSE" && s.CurrentLocationId == null
+            && s.CurrentSupplyState == "PHYSICAL"
             && s.CurrentSupplySource != null && s.CurrentSupplySource.WarehouseId == warehouseId
-            && s.CurrentSupplySource.SupplyState == "PHYSICAL"
+            && s.CurrentSupplySource.SupplyState == "PHYSICAL" && s.CurrentSupplySource.ProductId == s.ProductId
+            && s.CurrentSupplySource.ItemCondition == s.ItemCondition
             && ((s.CurrentSupplySource.SourceType == "INBOUND" && s.CurrentSupplySource.Inbound != null
                     && s.CurrentSupplySource.Inbound.Status == "DONE"
                     && s.CurrentSupplySource.Inbound.PurchaseOrder.WarehouseId == warehouseId)
                 || (s.CurrentSupplySource.SourceType == "RETURN" && s.CurrentSupplySource.ReturnReceipt != null
                     && s.CurrentSupplySource.ReturnReceipt.Status == "DONE"
-                    && s.CurrentSupplySource.ReturnReceipt.ReturnOrder.WarehouseId == warehouseId)));
+                    && s.CurrentSupplySource.ReturnReceipt.ReturnOrder.WarehouseId == warehouseId)
+                || (s.CurrentSupplySource.SourceType == "TRANSFER_RECEIPT" && s.CurrentSupplySource.TransferReceipt != null
+                    && s.CurrentSupplySource.TransferReceipt.Status == "DONE"
+                    && s.CurrentSupplySource.TransferReceipt.TransferOrder.ToWarehouseId == warehouseId)));
 
     public async Task<PutawayQueueViewModel> GetQueueAsync(int warehouseId, PutawayFilter filter, CancellationToken ct)
     {
-        var sourceType = filter.Source == "RETURN" ? "RETURN" : "INBOUND";
-        var query = Pending(warehouseId).Where(s => s.CurrentSupplySource!.SourceType == sourceType);
+        var sourceType = filter.Source switch
+        {
+            "PURCHASE" => "INBOUND",
+            "RETURN" => "RETURN",
+            "TRANSFER_RECEIPT" => "TRANSFER_RECEIPT",
+            _ => throw new PutawayException("Nguồn hàng không hợp lệ.", 400)
+        };
+        var query = Pending(warehouseId).Where(s => s.CurrentSupplySource!.SourceType == sourceType)
+            .Select(s => new
+            {
+                Id = s.SerialItemId, Serial = s.SerialNumber, s.Product.ProductCode, s.Product.ProductName,
+                Category = s.Product.Category.CategoryName, Brand = s.Product.Brand.BrandName,
+                Condition = s.ItemCondition, Quarantined = s.IsQuarantined,
+                ReceiptId = sourceType == "RETURN" ? s.CurrentSupplySource!.ReturnReceiptId!.Value
+                    : sourceType == "TRANSFER_RECEIPT" ? s.CurrentSupplySource!.TransferReceiptId!.Value
+                    : s.CurrentSupplySource!.InboundId!.Value,
+                ReceiptCode = sourceType == "RETURN" ? s.CurrentSupplySource!.ReturnReceipt!.ReceiptCode
+                    : sourceType == "TRANSFER_RECEIPT" ? s.CurrentSupplySource!.TransferReceipt!.ReceiptCode
+                    : s.CurrentSupplySource!.Inbound!.ReceiptCode,
+                ReceivedAt = (sourceType == "RETURN" ? s.CurrentSupplySource!.ReturnReceipt!.CompletedAt
+                    : sourceType == "TRANSFER_RECEIPT" ? s.CurrentSupplySource!.TransferReceipt!.CompletedAt
+                    : s.CurrentSupplySource!.Inbound!.CompletedAt) ?? s.RegisteredAt,
+                TransferOrderId = sourceType == "TRANSFER_RECEIPT" ? (long?)s.CurrentSupplySource!.TransferReceipt!.TransferOrderId : null,
+                TransferCode = sourceType == "TRANSFER_RECEIPT" ? s.CurrentSupplySource!.TransferReceipt!.TransferOrder.TransferCode : null,
+                FromWarehouseName = sourceType == "TRANSFER_RECEIPT"
+                    ? s.CurrentSupplySource!.TransferReceipt!.TransferOrder.FromWarehouse.WarehouseName : null
+            });
         var receiptRows = await query.GroupBy(s => new
             {
-                Id = sourceType == "RETURN" ? s.CurrentSupplySource!.ReturnReceiptId : s.CurrentSupplySource!.InboundId,
-                Code = sourceType == "RETURN" ? s.CurrentSupplySource!.ReturnReceipt!.ReceiptCode : s.CurrentSupplySource!.Inbound!.ReceiptCode
+                Id = s.ReceiptId, Code = s.ReceiptCode, s.TransferCode, s.FromWarehouseName
             })
-            .Select(g => new { Id = g.Key.Id!.Value, g.Key.Code, PendingCount = g.Count() })
+            .Select(g => new { g.Key.Id, g.Key.Code, PendingCount = g.Count(), g.Key.TransferCode, g.Key.FromWarehouseName })
             .OrderByDescending(r => r.Id).ToListAsync(ct);
-        var receipts = receiptRows.Select(r => new PutawayReceiptOption(r.Id, r.Code, r.PendingCount)).ToList();
+        var receipts = receiptRows.Select(r => new PutawayReceiptOption(r.Id, r.Code, r.PendingCount, r.TransferCode, r.FromWarehouseName)).ToList();
 
         if (filter.ReceiptId is long receiptId)
         {
             if (receipts.All(r => r.Id != receiptId))
             {
                 // Retain an explicitly selected, now-empty DONE receipt when another operator finishes it.
-                var code = sourceType == "RETURN"
-                    ? await db.ReturnReceipts.AsNoTracking().Where(r => r.ReturnReceiptId == receiptId
-                        && r.ReturnOrder.WarehouseId == warehouseId && r.Status == "DONE").Select(r => r.ReceiptCode).SingleOrDefaultAsync(ct)
-                    : await db.Inbounds.AsNoTracking().Where(r => r.InboundId == receiptId
-                        && r.PurchaseOrder.WarehouseId == warehouseId && r.Status == "DONE").Select(r => r.ReceiptCode).SingleOrDefaultAsync(ct);
-                if (code is null) throw new PutawayException("Phiếu đã chọn không thuộc nguồn hàng hoặc kho được giao, hoặc chưa DONE.", 404);
-                receipts.Insert(0, new PutawayReceiptOption(receiptId, code, 0));
+                var receipt = sourceType switch
+                {
+                    "RETURN" => await db.ReturnReceipts.AsNoTracking().Where(r => r.ReturnReceiptId == receiptId
+                        && r.ReturnOrder.WarehouseId == warehouseId && r.Status == "DONE")
+                        .Select(r => new PutawayReceiptOption(r.ReturnReceiptId, r.ReceiptCode, 0, null, null)).SingleOrDefaultAsync(ct),
+                    "TRANSFER_RECEIPT" => await db.TransferReceipts.AsNoTracking().Where(r => r.TransferReceiptId == receiptId
+                        && r.TransferOrder.ToWarehouseId == warehouseId && r.Status == "DONE")
+                        .Select(r => new PutawayReceiptOption(r.TransferReceiptId, r.ReceiptCode, 0,
+                            r.TransferOrder.TransferCode, r.TransferOrder.FromWarehouse.WarehouseName)).SingleOrDefaultAsync(ct),
+                    _ => await db.Inbounds.AsNoTracking().Where(r => r.InboundId == receiptId
+                        && r.PurchaseOrder.WarehouseId == warehouseId && r.Status == "DONE")
+                        .Select(r => new PutawayReceiptOption(r.InboundId, r.ReceiptCode, 0, null, null)).SingleOrDefaultAsync(ct)
+                };
+                if (receipt is null) throw new PutawayException("Phiếu đã chọn không thuộc nguồn hàng hoặc kho được giao, hoặc chưa hoàn tất.", 404);
+                receipts.Insert(0, receipt);
             }
-            query = sourceType == "RETURN"
-                ? query.Where(s => s.CurrentSupplySource!.ReturnReceiptId == receiptId)
-                : query.Where(s => s.CurrentSupplySource!.InboundId == receiptId);
+            query = query.Where(s => s.ReceiptId == receiptId);
         }
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
             var search = filter.Search;
-            query = query.Where(s => s.SerialNumber.Contains(search) || s.Product.ProductCode.Contains(search)
-                || s.Product.ProductName.Contains(search)
-                || (sourceType == "RETURN" ? s.CurrentSupplySource!.ReturnReceipt!.ReceiptCode : s.CurrentSupplySource!.Inbound!.ReceiptCode).Contains(search));
+            query = query.Where(s => s.Serial.Contains(search) || s.ProductCode.Contains(search)
+                || s.ProductName.Contains(search) || s.ReceiptCode.Contains(search)
+                || (s.TransferCode != null && s.TransferCode.Contains(search))
+                || (s.FromWarehouseName != null && s.FromWarehouseName.Contains(search)));
         }
-        if (!string.IsNullOrWhiteSpace(filter.Condition)) query = query.Where(s => s.ItemCondition == filter.Condition);
+        if (!string.IsNullOrWhiteSpace(filter.Condition)) query = query.Where(s => s.Condition == filter.Condition);
         var count = await query.CountAsync(ct);
         filter.Page = Math.Clamp(filter.Page, 1, Math.Max(1, (count + PutawayQueueViewModel.PageSize - 1) / PutawayQueueViewModel.PageSize));
-        var items = await query.OrderBy(s => (sourceType == "RETURN"
-                ? s.CurrentSupplySource!.ReturnReceipt!.CompletedAt
-                : s.CurrentSupplySource!.Inbound!.CompletedAt) ?? s.RegisteredAt).ThenBy(s => s.SerialItemId)
+        var items = await query.OrderBy(s => s.ReceivedAt).ThenBy(s => s.Id)
             .Skip((filter.Page - 1) * PutawayQueueViewModel.PageSize).Take(PutawayQueueViewModel.PageSize)
-            .Select(s => new PutawayPendingItem(s.SerialItemId, s.SerialNumber, s.Product.ProductCode, s.Product.ProductName,
-                s.Product.Category.CategoryName, s.Product.Brand.BrandName, s.ItemCondition, s.IsQuarantined,
-                sourceType == "RETURN" ? s.CurrentSupplySource!.ReturnReceiptId!.Value : s.CurrentSupplySource!.InboundId!.Value,
-                sourceType == "RETURN" ? s.CurrentSupplySource!.ReturnReceipt!.ReceiptCode : s.CurrentSupplySource!.Inbound!.ReceiptCode,
-                (sourceType == "RETURN" ? s.CurrentSupplySource!.ReturnReceipt!.CompletedAt : s.CurrentSupplySource!.Inbound!.CompletedAt) ?? s.RegisteredAt))
+            .Select(s => new PutawayPendingItem(s.Id, s.Serial, s.ProductCode, s.ProductName,
+                s.Category, s.Brand, s.Condition, s.Quarantined, s.ReceiptId, s.ReceiptCode, s.ReceivedAt,
+                s.TransferOrderId, s.TransferCode, s.FromWarehouseName))
             .ToListAsync(ct);
         return new PutawayQueueViewModel
         {
@@ -92,6 +124,7 @@ public class PutawayRepository(EwmsDbContext db) : IPutawayRepository
             .Include(s => s.Product).ThenInclude(p => p.Brand)
             .Include(s => s.CurrentSupplySource).ThenInclude(s => s!.Inbound).ThenInclude(i => i!.PurchaseOrder)
             .Include(s => s.CurrentSupplySource).ThenInclude(s => s!.ReturnReceipt).ThenInclude(r => r!.ReturnOrder)
+            .Include(s => s.CurrentSupplySource).ThenInclude(s => s!.TransferReceipt).ThenInclude(r => r!.TransferOrder).ThenInclude(o => o.FromWarehouse)
             .AsSplitQuery().SingleOrDefaultAsync(ct);
     }
 

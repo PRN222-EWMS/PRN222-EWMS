@@ -6,9 +6,34 @@
 }
 <div data-putaway-serial data-id="@Model.Id" data-serial="@Model.Serial" data-source="@Model.Source" data-receipt-id="@Model.ReceiptId" data-version="@Model.RowVersion" data-product="@Model.ProductCode — @Model.ProductName" data-condition="@Model.Condition" data-quarantined="@(Model.Quarantined ? "true" : "false")">
     <section class="workspace-card putaway-profile">
-        <p class="eyebrow">SERIAL ĐÃ CHỌN · @(Model.Source == "RETURN" ? "HÀNG KHÁCH TRẢ" : "HÀNG MUA")</p>
+        <p class="eyebrow">SERIAL ĐÃ CHỌN · @Model.SourceLabel.ToUpperInvariant()</p>
         <h2>@Model.Serial</h2><h3>@Model.ProductCode — @Model.ProductName</h3>
-        <dl class="putaway-info-grid"><div><dt>Kho</dt><dd>@Model.WarehouseName</dd></div><div><dt>Loại / Hãng</dt><dd>@Model.Category / @Model.Brand</dd></div><div><dt>Kích thước kiện</dt><dd>@N(Model.LengthCm) × @N(Model.WidthCm) × @N(Model.HeightCm) cm</dd></div><div><dt>Khối lượng</dt><dd>@N(Model.WeightKg) kg</dd></div><div><dt>Tình trạng</dt><dd>@(Model.Condition == "DAMAGED" ? "Hàng hỏng" : "Hàng tốt")</dd></div><div><dt>Phiếu nhận hiện tại</dt><dd>@if (Model.ReceiptId.HasValue) { <a asp-controller="@(Model.Source == "RETURN" ? "ReturnReceive" : "Inbound")" asp-action="Details" asp-route-id="@Model.ReceiptId">@Model.ReceiptCode</a> } else { @Model.ReceiptCode }</dd></div></dl>
+        <dl class="putaway-info-grid">
+            <div><dt>Kho</dt><dd>@Model.WarehouseName</dd></div>
+            <div><dt>Loại / Hãng</dt><dd>@Model.Category / @Model.Brand</dd></div>
+            <div><dt>Kích thước kiện</dt><dd>@N(Model.LengthCm) × @N(Model.WidthCm) × @N(Model.HeightCm) cm</dd></div>
+            <div><dt>Khối lượng</dt><dd>@N(Model.WeightKg) kg</dd></div>
+            <div><dt>Tình trạng</dt><dd>@(Model.Condition == "DAMAGED" ? "Hàng hỏng" : "Hàng tốt")</dd></div>
+            <div>
+                <dt>Phiếu nhận hiện tại</dt>
+                <dd>
+                    @if (Model.Source == "TRANSFER_RECEIPT" && Model.TransferOrderId.HasValue)
+                    {
+                        <a asp-controller="WarehouseTransfer" asp-action="Details" asp-route-id="@Model.TransferOrderId">@Model.ReceiptCode</a>
+                    }
+                    else if (Model.Source != "TRANSFER_RECEIPT" && Model.ReceiptId.HasValue)
+                    {
+                        <a asp-controller="@(Model.Source == "RETURN" ? "ReturnReceive" : "Inbound")" asp-action="Details" asp-route-id="@Model.ReceiptId">@Model.ReceiptCode</a>
+                    }
+                    else { @Model.ReceiptCode }
+                </dd>
+            </div>
+            @if (Model.Source == "TRANSFER_RECEIPT")
+            {
+                <div><dt>Kho gửi</dt><dd>@Model.FromWarehouseName</dd></div>
+                <div><dt>Lệnh chuyển kho</dt><dd>@Model.TransferCode</dd></div>
+            }
+        </dl>
         @if (Model.Quarantined) { <p class="putaway-note">Hàng đang cách ly. Xếp kho giữ nguyên tình trạng và cờ cách ly.</p> }
         @if (Model.CurrentLocationPath is not null) { <p class="putaway-note">Đã xếp tại <strong>@Model.CurrentLocationPath</strong>.</p> }
         @if (Model.UnavailableReason is not null) { <p class="putaway-error" role="alert">@Model.UnavailableReason</p> }
