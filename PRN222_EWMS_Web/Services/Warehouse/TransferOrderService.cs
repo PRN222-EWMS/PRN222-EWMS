@@ -58,16 +58,33 @@ public class TransferOrderService(EwmsDbContext db, TransferStockService stock, 
     public async Task<TransferAssessment> AssessAsync(CreateTransferOrderViewModel model, long? orderId = null, bool forceRelease = false)
     {
         bool release = forceRelease || model.IsRelease;
-        var result = new TransferAssessment { Errors = TransferPolicy.Validate(model, TransferPolicy.Today(clock), release) };
+        var (policyErrors, fieldErrors) = TransferPolicy.ValidateWithFields(model, TransferPolicy.Today(clock), release);
+        var result = new TransferAssessment { Errors = policyErrors, FieldErrors = fieldErrors };
         var warehouses = await db.Warehouses.AsNoTracking().Where(w => w.WarehouseId == model.FromWarehouseId || w.WarehouseId == model.ToWarehouseId).ToListAsync();
-        if (warehouses.Count != 2 || warehouses.Any(w => w.Status != "ACTIVE")) result.Errors.Add("Kho nguồn và kho đích phải tồn tại và đang hoạt động.");
+        if (warehouses.Count != 2 || warehouses.Any(w => w.Status != "ACTIVE"))
+        {
+            const string whMsg = "Kho nguồn và kho đích phải tồn tại và đang hoạt động.";
+            result.Errors.Add(whMsg);
+            result.FieldErrors.TryAdd(nameof(model.ToWarehouseId), whMsg);
+        }
         var destination = warehouses.FirstOrDefault(w => w.WarehouseId == model.ToWarehouseId);
         if (destination?.WarehouseType == "RENTED")
         {
             string? rentalError = destination.RentalStartDate == null || destination.RentalEndDate == null ? "Kho đích chưa có kỳ thuê hợp lệ."
                 : model.ExpectedDate is DateOnly eta && (eta < destination.RentalStartDate || eta > destination.RentalEndDate)
-                    ? "Ngày dự kiến đến phải nằm trong kỳ thuê của kho đích (được nhận đúng ngày hết hạn)." : null;
-            if (rentalError != null) { if (release) result.Errors.Add(rentalError); else result.Warnings.Add(rentalError); }
+                    ? "Ngày dự kiến đến phải nằm trong kỳ thuê của kho đích." : null;
+            if (rentalError != null)
+            {
+                if (release)
+                {
+                    result.Errors.Add(rentalError);
+                    result.FieldErrors.TryAdd(nameof(model.ExpectedDate), rentalError);
+                }
+                else
+                {
+                    result.Warnings.Add(rentalError);
+                }
+            }
         }
         if (result.Errors.Count > 0) return result;
         var ids = model.Lines.Select(l => l.ProductId).ToArray();
@@ -75,15 +92,24 @@ public class TransferOrderService(EwmsDbContext db, TransferStockService stock, 
             .Select(p => new { p.ProductId, p.ProductCode, p.ProductName }).ToListAsync();
         if (validProducts.Count != ids.Length) { result.Errors.Add("Có sản phẩm không tồn tại hoặc đã ngừng hoạt động. Hãy chọn lại sản phẩm."); return result; }
         var sources = await stock.GetSourcesAsync(model.FromWarehouseId, model.ItemCondition, orderId);
-        foreach (var line in model.Lines)
+        for (int i = 0; i < model.Lines.Count; i++)
         {
+            var line = model.Lines[i];
             long available = sources.Where(s => s.ProductId == line.ProductId).Sum(s => s.FreeQuantity);
             line.AvailableQuantity = available;
             if (line.Quantity > available)
             {
                 var product = validProducts.Single(p => p.ProductId == line.ProductId);
-                string message = $"{product.ProductCode} — {product.ProductName}: yêu cầu {line.Quantity:N0}, tồn PHYSICAL có thể giữ chỗ {available:N0}.";
-                if (release) result.Errors.Add(message); else result.Warnings.Add(message);
+                string message = $"{product.ProductCode} — {product.ProductName}: yêu cầu {line.Quantity:N0}, tồn khả dụng {available:N0}.";
+                if (release)
+                {
+                    result.Errors.Add(message);
+                    result.FieldErrors.TryAdd($"Lines[{i}].Quantity", $"Vượt tồn khả dụng ({available:N0}).");
+                }
+                else
+                {
+                    result.Warnings.Add(message);
+                }
             }
         }
         var capacityResult = new TransferAssessment();
@@ -92,7 +118,6 @@ public class TransferOrderService(EwmsDbContext db, TransferStockService stock, 
         result.ForecastCapacity = capacityResult.ForecastCapacity;
         result.Warnings.AddRange(capacityResult.Warnings);
         if (release) result.Errors.AddRange(capacityResult.Errors); else result.Warnings.AddRange(capacityResult.Errors);
-        if (!release && (model.DispatchDate == null || model.ExpectedDate == null)) result.Warnings.Add("Bản nháp chưa có đủ hai ngày dự kiến; cần bổ sung khi phát hành.");
         return result;
     }
 
@@ -177,7 +202,7 @@ public class TransferOrderService(EwmsDbContext db, TransferStockService stock, 
 
     public async Task<(bool Success, string? Error)> UpdateTransferOrderAsync(EditTransferOrderViewModel model, int userId)
     {
-        if (await expiry.CancelIfExpiredAsync(model.TransferOrderId)) return (false, "Lệnh đã quá ETA và được tự động hủy. Hãy tạo lệnh khác.");
+        if (await expiry.CancelIfExpiredAsync(model.TransferOrderId)) return (false, "Lệnh đã quá ngày dự kiến đến và được tự động hủy. Hãy tạo lệnh khác.");
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
         {

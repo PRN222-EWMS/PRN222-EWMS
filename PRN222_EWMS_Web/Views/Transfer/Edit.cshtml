@@ -1,30 +1,151 @@
 @model PRN222_EWMS_Web.ViewModels.Transfer.EditTransferOrderViewModel
-@{ ViewData["Title"] = "Lệnh chuyển " + Model.TransferCode; }
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h1>@Model.TransferCode <span class="badge bg-secondary fs-6">@Model.Status</span></h1>
-    <a asp-controller="ManagerTransfer" asp-action="Details" asp-route-id="@Model.TransferOrderId" class="btn btn-outline-secondary">Chi tiết lệnh</a>
-</div>
-@if (!Model.CanEdit) { <div class="alert alert-warning" role="alert">@Model.LockReason</div> }
-@if (TempData["TransferWarnings"] is string warning && !string.IsNullOrWhiteSpace(warning))
-{ <div class="alert alert-warning" role="status" style="white-space:pre-line">@warning</div> }
-<form asp-action="Edit" asp-route-id="@Model.TransferOrderId" method="post" id="transfer-form" data-preview-url="@Url.Action("Preview")" data-products-url="@Url.Action("GetAvailableProducts")" data-order-id="@Model.TransferOrderId" data-released="@(Model.Status == "RELEASED" ? "true" : "false")">
-    <input asp-for="TransferOrderId" type="hidden" />
-    <input asp-for="RowVersionBase64" type="hidden" />
-    <fieldset disabled="@(!Model.CanEdit)">
-        <partial name="_Form" model="Model" />
-        @if (Model.CanEdit)
-        {
-            <div class="d-flex gap-2 my-3">
-                @if (Model.Status == "DRAFT") { <button type="submit" name="IsRelease" value="false" class="btn btn-outline-primary">Lưu nháp</button> }
-                <button type="submit" name="IsRelease" value="true" class="btn btn-primary">@(Model.Status == "DRAFT" ? "Phát hành và giữ chỗ" : "Lưu thay đổi và giữ chỗ lại")</button>
+@{
+    ViewData["Title"] = "Chỉnh sửa lệnh " + Model.TransferCode;
+    var statusBadgeClass = Model.Status switch
+    {
+        "DRAFT" => "transfer-badge-draft",
+        "RELEASED" => "transfer-badge-released",
+        "IN_PROGRESS" => "transfer-badge-in_progress",
+        "COMPLETED" => "transfer-badge-completed",
+        "CANCELLED" => "transfer-badge-cancelled",
+        "CLOSED" => "transfer-badge-closed",
+        _ => "transfer-badge-draft"
+    };
+    var statusText = Model.Status switch
+    {
+        "DRAFT" => "Bản nháp",
+        "RELEASED" => "Đã phát hành",
+        "IN_PROGRESS" => "Đang chuyển",
+        "COMPLETED" => "Hoàn tất",
+        "CANCELLED" => "Đã hủy",
+        "CLOSED" => "Đã đóng",
+        _ => Model.Status
+    };
+}
+
+<div class="transfer-page">
+    <div class="workspace-heading">
+        <div>
+            <p class="eyebrow">CHUYỂN KHO / CHỈNH SỬA</p>
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <h1 class="mb-0">@Model.TransferCode</h1>
+                <span class="transfer-badge @statusBadgeClass">@statusText</span>
             </div>
-        }
-    </fieldset>
-</form>
+            <p class="muted mt-2 mb-0">Cập nhật thông tin điều chuyển và danh sách sản phẩm khi lệnh chưa phát sinh phiếu gửi/nhận.</p>
+        </div>
+        <div class="transfer-toolbar">
+            <a class="workspace-button sales-button-secondary sales-button-small" asp-controller="ManagerTransfer" asp-action="Details" asp-route-id="@Model.TransferOrderId">
+                <i class="bi bi-eye" aria-hidden="true"></i> Xem chi tiết
+            </a>
+            <a class="workspace-button sales-button-secondary sales-button-small" asp-controller="ManagerTransfer" asp-action="Index">
+                <i class="bi bi-arrow-left" aria-hidden="true"></i> Quay lại danh sách
+            </a>
+        </div>
+    </div>
+
+    @if (TempData["Success"] is string success && !string.IsNullOrWhiteSpace(success))
+    {
+        <div class="transfer-notice transfer-notice-success" role="status">
+            <i class="bi bi-check-circle-fill flex-shrink-0" aria-hidden="true"></i>
+            <span>@success</span>
+        </div>
+    }
+
+    @if (TempData["Error"] is string error && !string.IsNullOrWhiteSpace(error))
+    {
+        <div class="transfer-notice transfer-notice-danger" role="alert">
+            <i class="bi bi-exclamation-triangle-fill flex-shrink-0" aria-hidden="true"></i>
+            <span>@error</span>
+        </div>
+    }
+
+    @if (!Model.CanEdit)
+    {
+        <div class="transfer-notice transfer-notice-warning" role="alert">
+            <i class="bi bi-lock-fill flex-shrink-0" aria-hidden="true"></i>
+            <span>@Model.LockReason</span>
+        </div>
+    }
+
+    @if (TempData["TransferWarnings"] is string warning && !string.IsNullOrWhiteSpace(warning))
+    {
+        <div class="transfer-notice transfer-notice-warning" role="status" style="white-space: pre-line;">
+            <i class="bi bi-exclamation-triangle flex-shrink-0" aria-hidden="true"></i>
+            <span>@warning</span>
+        </div>
+    }
+
+    <form asp-action="Edit" asp-route-id="@Model.TransferOrderId" method="post" id="transfer-form" novalidate
+          data-preview-url="@Url.Action("Preview")"
+          data-products-url="@Url.Action("GetAvailableProducts")"
+          data-order-id="@Model.TransferOrderId"
+          data-released="@(Model.Status == "RELEASED" ? "true" : "false")">
+        <input asp-for="TransferOrderId" type="hidden" />
+        <input asp-for="RowVersionBase64" type="hidden" />
+
+        <fieldset disabled="@(!Model.CanEdit)">
+            <partial name="_Form" model="Model" />
+
+            @if (Model.CanEdit)
+            {
+                <div class="transfer-actions-bar @(Model.CanCancel ? "has-cancel" : "") mt-4">
+                    @if (Model.CanCancel)
+                    {
+                        <button type="button" class="workspace-button sales-button-danger" data-bs-toggle="modal" data-bs-target="#cancelTransferModal">
+                            <i class="bi bi-x-circle" aria-hidden="true"></i> Hủy lệnh chuyển
+                        </button>
+                    }
+                    <div class="transfer-actions-group">
+                        <a class="workspace-button sales-button-secondary" asp-controller="ManagerTransfer" asp-action="Index">Quay lại</a>
+                        @if (Model.Status == "DRAFT")
+                        {
+                            <button type="submit" name="IsRelease" value="false" class="workspace-button sales-button-secondary">
+                                <i class="bi bi-file-earmark" aria-hidden="true"></i> Lưu bản nháp
+                            </button>
+                        }
+                        <button type="submit" name="IsRelease" value="true" class="workspace-button">
+                            <i class="bi bi-check-circle" aria-hidden="true"></i> @(Model.Status == "DRAFT" ? "Lưu & Phát hành" : "Lưu cập nhật")
+                        </button>
+                    </div>
+                </div>
+            }
+        </fieldset>
+    </form>
+</div>
+
 @if (Model.CanCancel)
 {
-    <form asp-action="Cancel" asp-route-id="@Model.TransferOrderId" method="post" class="mt-3" onsubmit="return confirm('Hủy lệnh và giải phóng toàn bộ giữ chỗ?')">
-        <button type="submit" class="btn btn-outline-danger">Hủy lệnh</button>
-    </form>
+    <div class="modal fade transfer-modal" id="cancelTransferModal" tabindex="-1" aria-labelledby="cancelTransferModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold text-dark" id="cancelTransferModalLabel">
+                        <i class="bi bi-exclamation-triangle text-danger me-2" aria-hidden="true"></i> Xác nhận hủy lệnh chuyển kho
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3">Bạn có chắc chắn muốn hủy lệnh chuyển kho <strong>@Model.TransferCode</strong>?</p>
+                    <div class="transfer-notice transfer-notice-warning" style="font-size: 13px;">
+                        <i class="bi bi-info-circle flex-shrink-0" aria-hidden="true"></i>
+                        <span>Toàn bộ phần tồn kho đã giữ chỗ cho lệnh này (nếu có) sẽ được giải phóng ngay lập tức.</span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="workspace-button sales-button-secondary sales-button-small" data-bs-dismiss="modal">Đóng</button>
+                    <form asp-action="Cancel" asp-route-id="@Model.TransferOrderId" method="post" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="workspace-button sales-button-small sales-button-danger">Xác nhận hủy lệnh</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
 }
-@section Scripts { @if (Model.CanEdit) { <script src="~/js/transfer-form.js" asp-append-version="true"></script> } }
+
+@section Scripts {
+    @if (Model.CanEdit)
+    {
+        <script src="~/js/transfer-form.js" asp-append-version="true"></script>
+    }
+}

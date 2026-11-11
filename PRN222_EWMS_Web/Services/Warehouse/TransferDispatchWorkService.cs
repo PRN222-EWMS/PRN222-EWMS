@@ -26,7 +26,7 @@ public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService
         if (await expiry.CancelLockedAsync(order))
         {
             await transaction.CommitAsync();
-            return (false, "Lệnh đã quá ETA và tự động hủy. Không thể tạo phiếu gửi; hãy yêu cầu quản lý tạo lệnh mới.");
+            return (false, "Lệnh đã quá ngày dự kiến đến và tự động hủy. Không thể tạo phiếu gửi; hãy yêu cầu quản lý tạo lệnh mới.");
         }
         if (order.Status is not ("RELEASED" or "IN_PROGRESS"))
             return (false, "Trạng thái hiện tại của lệnh chưa cho phép nhận việc xuất.");

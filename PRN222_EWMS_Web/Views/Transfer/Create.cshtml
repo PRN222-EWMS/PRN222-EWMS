@@ -1,14 +1,39 @@
 @model PRN222_EWMS_Web.ViewModels.Transfer.CreateTransferOrderViewModel
-@{ ViewData["Title"] = "Tạo lệnh chuyển kho"; }
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h1>Tạo lệnh chuyển kho</h1>
-    <a asp-controller="ManagerTransfer" asp-action="Index" class="btn btn-outline-secondary">Danh sách</a>
-</div>
-<form asp-action="Create" method="post" id="transfer-form" data-preview-url="@Url.Action("Preview")" data-products-url="@Url.Action("GetAvailableProducts")">
-    <partial name="_Form" model="Model" />
-    <div class="d-flex gap-2 my-3">
-        <button type="submit" name="IsRelease" value="false" class="btn btn-outline-primary">Lưu nháp</button>
-        <button type="submit" name="IsRelease" value="true" class="btn btn-primary">Phát hành và giữ chỗ</button>
+@{
+    ViewData["Title"] = "Tạo lệnh chuyển kho";
+}
+
+<div class="transfer-page">
+    <div class="workspace-heading">
+        <div>
+            <p class="eyebrow">CHUYỂN KHO / TẠO MỚI</p>
+            <h1>Tạo lệnh chuyển kho</h1>
+            <p class="muted">Tạo lệnh điều chuyển hàng hóa giữa các kho nội bộ trong hệ thống.</p>
+        </div>
+        <div class="transfer-toolbar">
+            <a class="workspace-button sales-button-secondary sales-button-small" asp-controller="ManagerTransfer" asp-action="Index">
+                <i class="bi bi-arrow-left" aria-hidden="true"></i> Quay lại danh sách
+            </a>
+        </div>
     </div>
-</form>
-@section Scripts { <script src="~/js/transfer-form.js" asp-append-version="true"></script> }
+
+    <form asp-action="Create" method="post" id="transfer-form" novalidate
+          data-preview-url="@Url.Action("Preview")"
+          data-products-url="@Url.Action("GetAvailableProducts")">
+        <partial name="_Form" model="Model" />
+
+        <div class="transfer-actions-bar mt-4">
+            <a class="workspace-button sales-button-secondary" asp-controller="ManagerTransfer" asp-action="Index">Hủy bỏ</a>
+            <button type="submit" name="IsRelease" value="false" class="workspace-button sales-button-secondary">
+                <i class="bi bi-file-earmark" aria-hidden="true"></i> Lưu bản nháp
+            </button>
+            <button type="submit" name="IsRelease" value="true" class="workspace-button">
+                <i class="bi bi-check-circle" aria-hidden="true"></i> Lưu &amp; Phát hành
+            </button>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script src="~/js/transfer-form.js" asp-append-version="true"></script>
+}

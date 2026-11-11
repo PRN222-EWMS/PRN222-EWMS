@@ -31,7 +31,7 @@ public class TransferExpiryService(EwmsDbContext db, TimeProvider clock, ILogger
             .Select(u => u.UserId).ToListAsync(ct);
         foreach (var userId in recipients) db.Notices.Add(new Notice
         {
-            UserId = userId, Title = "Lệnh chuyển kho tự hủy do quá ETA", NoticeType = "WARNING", CreatedAt = now,
+            UserId = userId, Title = "Lệnh chuyển kho tự hủy do quá ngày dự kiến đến", NoticeType = "WARNING", CreatedAt = now,
             Content = $"{order.TransferCode}: quá ngày đến {order.ExpectedDate:dd/MM/yyyy}, chưa có phiếu gửi/nhận. Giữ chỗ đã được giải phóng. Hãy tạo lệnh mới nếu vẫn cần chuyển.",
             RelatedUrl = $"/Transfer/Edit/{order.TransferOrderId}"
         });
