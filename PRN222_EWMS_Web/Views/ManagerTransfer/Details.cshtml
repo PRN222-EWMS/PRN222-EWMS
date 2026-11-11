@@ -16,7 +16,9 @@
     <dd>@Model.ItemCondition</dd>
     <dt>Người phụ trách lệnh</dt>
     <dd>@(Model.AssignedTo ?? "Chưa phân công")</dd>
-    <dt>Ngày dự kiến</dt>
+    <dt>Ngày chuyển đi</dt>
+    <dd>@(Model.DispatchDate?.ToString("dd/MM/yyyy") ?? "Chưa có")</dd>
+    <dt>Ngày dự kiến nhận</dt>
     <dd>@(Model.ExpectedDate?.ToString("dd/MM/yyyy") ?? "Chưa có")</dd>
     @if (!string.IsNullOrWhiteSpace(Model.Note))
     {

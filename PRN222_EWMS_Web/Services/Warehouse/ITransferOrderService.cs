@@ -20,6 +20,8 @@ public interface ITransferOrderService
 
     Task<CreateTransferOrderViewModel> GetCreateFormAsync();
 
+    Task<List<ProductLookupDto>> GetAvailableProductsAsync(int warehouseId, string itemCondition = "GOOD");
+
     Task<(bool Success, string? Error, long TransferOrderId)> CreateTransferOrderAsync(
         CreateTransferOrderViewModel model,
         int userId);

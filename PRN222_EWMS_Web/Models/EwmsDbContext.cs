@@ -2473,6 +2473,7 @@ public partial class EwmsDbContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasPrecision(3)
                 .HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.DispatchDate).HasColumnName("DispatchDate");
             entity.Property(e => e.CreatedByUserId).HasColumnName("CreatedByUserID");
             entity.Property(e => e.FromWarehouseId).HasColumnName("FromWarehouseID");
             entity.Property(e => e.ItemCondition)
