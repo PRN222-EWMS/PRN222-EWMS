@@ -2,6 +2,11 @@
 @using PRN222_EWMS_Web.ViewModels.Shared
 
 @{
+    static string ConditionText(string? value) => value switch
+    {
+        "GOOD" => "Tốt", "DAMAGED" => "Hư hỏng", null => "Chưa ghi nhận", _ => value
+    };
+
     ViewData["Title"] = $"Lệnh điều chuyển {Model.Code}";
 }
 
@@ -34,7 +39,7 @@
         </div>
         <div>
             <dt class="small text-muted fw-normal mb-2">Tình trạng hàng yêu cầu</dt>
-            <dd class="mb-0">@(Model.ItemCondition switch { "GOOD" => "Tốt", "DAMAGED" => "Hư hỏng", _ => Model.ItemCondition })</dd>
+            <dd class="mb-0">@ConditionText(Model.ItemCondition)</dd>
         </div>
         <div>
             <dt class="small text-muted fw-normal mb-2">Việc của kho</dt>
@@ -144,7 +149,9 @@
             <summary class="fw-semibold">Gợi ý vị trí và serial để lấy hàng</summary>
             @if (Model.DispatchSerialOptions.Count == 0)
             {
-                <p class="text-muted mt-3 mb-0">Không còn serial đủ điều kiện để gợi ý cho phiếu này.</p>
+                <p class="text-muted mt-3 mb-0">@(Model.IsDispatchQuantityCovered
+                    ? "Đã chọn đủ số lượng cần xuất cho lệnh này."
+                    : "Lệnh vẫn còn hàng cần lấy, nhưng hiện chưa có serial đủ điều kiện để gợi ý.")</p>
             }
             else
             {
@@ -154,22 +161,29 @@
                         <table class="workspace-table">
                             <thead>
                                 <tr>
+                                    <th scope="col">STT</th>
+                                    <th scope="col">Mã serial</th>
                                     <th scope="col">Sản phẩm</th>
-                                    <th scope="col">Serial</th>
+                                    <th scope="col">Tháng/năm SX</th>
                                     <th scope="col">Vị trí lấy hàng</th>
+                                    <th scope="col">Tình trạng</th>
                                     <th scope="col">Thao tác</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var option in Model.DispatchSerialOptions)
+                                @for (var i = 0; i < Model.DispatchSerialOptions.Count; i++)
                                 {
+                                    var option = Model.DispatchSerialOptions[i];
                                     <tr>
+                                        <td>@(i + 1)</td>
+                                        <td class="text-nowrap">@option.SerialNumber</td>
                                         <td>
                                             <strong>@option.ProductCode</strong>
                                             <div class="small text-muted">@option.ProductName</div>
                                         </td>
-                                        <td class="text-nowrap">@option.SerialNumber</td>
+                                        <td>@option.ManufacturingDateDisplay</td>
                                         <td>@option.Location</td>
+                                        <td>@ConditionText(option.ItemCondition)</td>
                                         <td>
                                             <button type="submit" name="serialNumber" value="@option.SerialNumber"
                                                     class="workspace-button workspace-button-small"
@@ -219,6 +233,10 @@
                 <tr>
                     <th>Mã sản phẩm</th>
                     <th>Serial</th>
+                    @if (Model.IsSource)
+                    {
+                        <th>Vị trí lấy hàng</th>
+                    }
                     <th>@(Model.IsSource ? "Tình trạng lúc xuất" : "Tình trạng thực nhận")</th>
                     @if (!Model.IsSource)
                     {
@@ -236,7 +254,11 @@
                     <tr>
                         <td>@item.ProductCode</td>
                         <td>@item.SerialNumber</td>
-                        <td>@(item.Condition ?? "Chưa ghi nhận")</td>
+                        @if (Model.IsSource)
+                        {
+                            <td>@(item.LocationId is int id && Model.PickLocations.TryGetValue(id, out var path) ? path : "Chưa xác định vị trí")</td>
+                        }
+                        <td>@ConditionText(item.Condition)</td>
                         @if (!Model.IsSource)
                         {
                             <td>@item.ConditionNote</td>
