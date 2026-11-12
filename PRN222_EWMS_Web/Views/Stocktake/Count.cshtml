@@ -91,7 +91,7 @@
         </section>
     }
     else { <div class="alert alert-info" role="status">Nhiệm vụ hiện không cho phép ghi nhận thêm. Vui lòng xem trạng thái tại trang chi tiết.</div> }
-    <section class="workspace-card"><h2>Tiến độ ghi nhận</h2><p class="muted">@Model.Observations.Count(o => o.ScannedAt.HasValue) dòng đã được ghi nhận trong dữ liệu hiển thị.</p><div class="table-wrap"><table class="workspace-table"><thead><tr><th>Serial / sản phẩm</th><th>Vòng</th><th>Tình trạng thực tế</th><th>Vị trí thực tế</th><th>Kết quả / ghi chú</th></tr></thead><tbody>
+    <section class="workspace-card"><h2>@(Model.IsShortageSearch ? "Serial cần tìm trong toàn kho" : "Tiến độ ghi nhận")</h2><p class="muted">@(Model.IsShortageSearch ? $"{Model.Observations.Count(o => o.ScannedAt.HasValue)}/{Model.Observations.Count} serial đã tìm thấy." : $"{Model.Observations.Count(o => o.ScannedAt.HasValue)} dòng đã được ghi nhận trong dữ liệu hiển thị.")</p><div class="table-wrap"><table class="workspace-table"><thead><tr><th>Serial / sản phẩm</th><th>Vòng</th><th>Tình trạng thực tế</th><th>Vị trí thực tế</th><th>Kết quả / ghi chú</th></tr></thead><tbody>
     @foreach (var row in Model.Observations.OrderByDescending(o => o.ScannedAt).ThenBy(o => o.ScannedSerial))
     {
         var handling = Model.Handling.FirstOrDefault(h => h.ScannedSerial == row.ScannedSerial);
@@ -102,7 +102,7 @@
     @if (Model.Handling.Any(h => h.Status == "WAITING" && h.RecordedByUserId == Model.ActorId)) { <div class="alert alert-warning" role="status">Còn hàng chờ chuyển đến vị trí hợp lệ. Xử lý xong trước khi gửi kết quả.</div> }
     @if (Model.CanSubmit)
     {
-        <section class="workspace-card"><h2>Gửi kết quả cho Manager</h2><p>Sau khi gửi, bạn không thể sửa kết quả đếm.</p><form asp-action="Submit" method="post" onsubmit="return confirm('Bạn đã kiểm tra xong toàn bộ phạm vi được giao và muốn gửi kết quả?');">@Html.AntiForgeryToken()<input type="hidden" name="Id" value="@Model.Plan.StocktakeId" /><input type="hidden" name="Version" value="@Model.Version" /><input type="hidden" name="RecountRequestId" value="@Model.RecountRequestId" /><button class="workspace-button" type="submit">Xác nhận gửi kết quả</button></form></section>
+        <section class="workspace-card"><h2>Gửi kết quả cho Manager</h2><p>Sau khi gửi, bạn không thể sửa kết quả đếm.</p><form asp-action="Submit" method="post" onsubmit="return confirm(this.dataset.confirmMessage);" data-confirm-message="@(Model.IsShortageSearch ? "Bạn đã tìm các serial được giao trong toàn kho, kể cả khu hàng chờ xếp?" : "Bạn đã kiểm tra xong toàn bộ phạm vi được giao và muốn gửi kết quả?")">@Html.AntiForgeryToken()<input type="hidden" name="Id" value="@Model.Plan.StocktakeId" /><input type="hidden" name="Version" value="@Model.Version" /><input type="hidden" name="RecountRequestId" value="@Model.RecountRequestId" /><button class="workspace-button" type="submit">Xác nhận gửi kết quả</button></form></section>
     }
 </div>
 

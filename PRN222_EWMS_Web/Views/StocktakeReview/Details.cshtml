@@ -40,7 +40,14 @@
             @if (canReview)
             {
                 <a asp-action="Recount" asp-route-id="@Model.Plan.StocktakeId" class="workspace-button workspace-button-secondary">Yêu cầu đếm lại</a>
-                <a asp-action="Adjustment" asp-route-id="@Model.Plan.StocktakeId" class="workspace-button">Đề nghị điều chỉnh tồn kho</a>
+                @if (Model.SearchableShortageIds.Count > 0)
+                {
+                    <a href="#shortage-search" class="workspace-button">Tìm serial thiếu trong toàn kho</a>
+                }
+                @if (Model.Observations.Any(o => Model.ConfirmedShortageIds.Contains(o.ObservationId) && o.ReviewStatus != "RESOLVED"))
+                {
+                    <a asp-action="Adjustment" asp-route-id="@Model.Plan.StocktakeId" class="workspace-button">Đề nghị giảm tồn kho</a>
+                }
             }
         </div>
     </header>
@@ -68,23 +75,75 @@
         }
         </tbody></table></div></section>
     }
+    @if (Model.SearchableShortageIds.Count > 0 || Model.Investigations.Any(i => i.ShortageObservationIds.Count > 0)) {
+        <section id="shortage-search" class="workspace-card">
+            <h2>Tìm serial thiếu trong toàn kho</h2>
+            @if (Model.SearchableShortageIds.Count > 0) {
+                <form asp-action="CreateInvestigation" method="post" class="workspace-form mt-0">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="Id" value="@Model.Plan.StocktakeId" />
+                    <input type="hidden" name="Version" value="@Model.Version" />
+                    <fieldset>
+                        <legend class="fs-6">Serial vẫn thiếu sau khi đếm lại</legend>
+                        @foreach (var row in Model.Observations.Where(o => Model.SearchableShortageIds.Contains(o.ObservationId)).OrderBy(o => o.ScannedSerial)) {
+                            <label class="d-flex gap-2 align-items-center mb-2">
+                                <input type="checkbox" name="ShortageObservationIds" value="@row.ObservationId" />
+                                <span>@row.ScannedSerial · @Product(row.ProductId) · @Location(row.ExpectedLocationId)</span>
+                            </label>
+                        }
+                    </fieldset>
+                    <div>
+                        <label for="shortage-staff">Nhân viên tìm serial *</label>
+                        <select id="shortage-staff" name="AssignedToUserId" required>
+                            <option value="">Chọn nhân viên</option>
+                            @foreach (var staff in Model.Staff) { <option value="@staff.UserId">@staff.FullName</option> }
+                        </select>
+                    </div>
+                    <div>
+                        <label for="shortage-reason">Lý do giao tìm *</label>
+                        <textarea id="shortage-reason" name="Reason" maxlength="1000" rows="3" class="form-control" required></textarea>
+                    </div>
+                    <button type="submit" class="workspace-button">Giao tìm toàn kho</button>
+                </form>
+            }
+            @foreach (var search in Model.Investigations.Where(i => i.ShortageObservationIds.Count > 0).OrderByDescending(i => i.RequestedAt)) {
+                <p class="mt-3 mb-1">
+                    <a asp-action="Details" asp-route-id="@search.InvestigationStocktakeId">Nhiệm vụ #@search.InvestigationStocktakeId</a>
+                    · @(search.ClosedAt.HasValue ? "Đã chốt" : "Chưa chốt")
+                </p>
+                @if (search.ClosedAt.HasValue) {
+                    <ul>
+                        @foreach (var row in Model.History.Where(o => search.ShortageObservationIds.Contains(o.ObservationId))) {
+                            <li>@row.ScannedSerial · @(search.StillMissingObservationIds.Contains(row.ObservationId) ? "Vẫn thiếu" : "Đã tìm thấy")</li>
+                        }
+                    </ul>
+                }
+            }
+        </section>
+    }
     @if (Model.InvestigationContext is not null) {
         var investigation = Model.InvestigationContext;
-        <section class="workspace-card"><h2>Đối soát toàn kho</h2>
-            <p><a asp-action="Details" asp-route-id="@investigation.StocktakeId">Về đợt phát hiện serial lạ</a></p>
+        var shortageSearch = investigation.ShortageObservationIds.Count > 0;
+        <section class="workspace-card"><h2>@(shortageSearch ? "Kết luận tìm serial thiếu" : "Đối soát toàn kho")</h2>
+            <p><a asp-action="Details" asp-route-id="@investigation.StocktakeId">Về đợt kiểm kê gốc</a></p>
             @if (investigation.ClosedAt.HasValue) {
-                <p><strong>Kết luận:</strong> @(investigation.Outcome == "CONFIRMED_SURPLUS" ? "Đã xác minh thừa hàng" : "Cần tiếp tục xác minh")</p><p>@investigation.Conclusion</p><p class="muted mb-0">@StocktakeDisplay.Time(investigation.ClosedAt)</p>
+                <p><strong>Kết luận:</strong> @(shortageSearch ? $"Vẫn thiếu {investigation.StillMissingObservationIds.Count}/{investigation.ShortageObservationIds.Count} serial" : investigation.Outcome == "CONFIRMED_SURPLUS" ? "Đã xác minh thừa hàng" : "Cần tiếp tục xác minh")</p><p>@investigation.Conclusion</p><p class="muted mb-0">@StocktakeDisplay.Time(investigation.ClosedAt)</p>
             } else if (Model.Plan.Status == "REVIEWING" && Model.Rounds.All(r => r.Status != "OPEN") && Model.Assignments.All(a => a.Status is "DONE" or "CANCELLED")) {
                 <form asp-action="FinishInvestigation" method="post" class="workspace-form mt-0" onsubmit="return confirm('Chốt kết quả đối soát toàn kho? Thao tác này không thay đổi số lượng tồn.');">@Html.AntiForgeryToken()
                     <input type="hidden" name="Id" value="@Model.Plan.StocktakeId" /><input type="hidden" name="Version" value="@Model.Version" />
-                    <div><label for="Outcome">Kết quả xác minh *</label><select id="Outcome" name="Outcome" required><option value="NEEDS_REVIEW">Cần tiếp tục xác minh nguồn gốc</option></select></div>
+                    @if (shortageSearch) {
+                        <input type="hidden" name="Outcome" value="SHORTAGE_SEARCH_COMPLETED" />
+                        <p>Đã tìm thấy @Model.Observations.Count(o => o.ActualQuantity == 1) serial. Vẫn thiếu @Model.Observations.Count(o => o.ActualQuantity == 0) serial.</p>
+                    } else {
+                        <div><label for="Outcome">Kết quả xác minh *</label><select id="Outcome" name="Outcome" required><option value="NEEDS_REVIEW">Cần tiếp tục xác minh nguồn gốc</option></select></div>
+                    }
                     <div><label for="Conclusion">Căn cứ và kết luận *</label><textarea id="Conclusion" name="Conclusion" maxlength="1000" rows="3" class="form-control" required></textarea></div>
                     <button type="submit" class="workspace-button">Chốt kết quả đối soát</button>
                 </form>
             } else { <p class="muted mb-0">Chờ hoàn tất các phần đếm toàn kho.</p> }
         </section>
     }
-    @if (Model.InvestigationContext is null && (Model.Investigations.Count > 0 || Model.SourceDecisions.Count > 0 || Model.Observations.Any(o => o.ExpectedQuantity == 0 && o.ActualQuantity == 1 && o.ReviewStatus != "RESOLVED"))) {
+    @if (Model.InvestigationContext is null && (Model.Investigations.Any(i => i.ShortageObservationIds.Count == 0) || Model.SourceDecisions.Count > 0 || Model.Observations.Any(o => o.ExpectedQuantity == 0 && o.ActualQuantity == 1 && o.ReviewStatus != "RESOLVED"))) {
         <section class="workspace-card"><h2>Xác minh serial lạ</h2>
         @if (canReview) {
             @foreach (var unknown in Model.Observations.Where(o => o.ExpectedQuantity == 0 && o.ActualQuantity == 1 && o.ReviewStatus != "RESOLVED").OrderBy(o => o.ScannedSerial)) {
@@ -155,9 +214,9 @@
                 <p class="mb-1">@decision.Reason</p><small>@decision.ActorUser?.FullName · @StocktakeDisplay.Time(decision.OccurredAt)</small>
             </div>
         }
-        @if (Model.Investigations.Count > 0) {
+        @if (Model.Investigations.Any(i => i.ShortageObservationIds.Count == 0)) {
             <div class="table-wrap"><table class="workspace-table"><thead><tr><th>Đợt đối soát</th><th>Ngày yêu cầu</th><th>Kết quả</th><th>Kết luận</th></tr></thead><tbody>
-            @foreach (var investigation in Model.Investigations.OrderByDescending(i => i.RequestedAt)) {
+            @foreach (var investigation in Model.Investigations.Where(i => i.ShortageObservationIds.Count == 0).OrderByDescending(i => i.RequestedAt)) {
                 <tr><td><a asp-action="Details" asp-route-id="@investigation.InvestigationStocktakeId">Xem kết quả đối soát #@investigation.InvestigationStocktakeId</a><small class="d-block"><a asp-controller="ManagerStocktake" asp-action="Details" asp-route-id="@investigation.InvestigationStocktakeId">Kế hoạch và phân công</a></small></td><td>@StocktakeDisplay.Time(investigation.RequestedAt)</td><td>@(!investigation.ClosedAt.HasValue ? "Chưa hoàn tất" : investigation.Outcome == "CONFIRMED_SURPLUS" ? "Xác nhận thừa" : "Cần xác minh tiếp")<small class="d-block muted">@StocktakeDisplay.Time(investigation.ClosedAt)</small></td><td>@investigation.Conclusion</td></tr>
             }
             </tbody></table></div>
