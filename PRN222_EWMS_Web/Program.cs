@@ -46,6 +46,11 @@ builder.Services.AddScoped<PRN222_EWMS_Web.Services.Warehouse.IOutboundService, 
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Warehouse.IOutboundRepository, PRN222_EWMS_Web.Repositories.Warehouse.OutboundRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Warehouse.IOutboundSupplyService, PRN222_EWMS_Web.Services.Warehouse.OutboundSupplyService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Warehouse.ITransferOrderService, PRN222_EWMS_Web.Services.Warehouse.TransferOrderService>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<TransferStockService>();
+builder.Services.AddScoped<TransferCapacityService>();
+builder.Services.AddScoped<TransferExpiryService>();
+builder.Services.AddHostedService<TransferExpiryWorker>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAdminDashboardRepository, AdminDashboardRepository>();
 builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();

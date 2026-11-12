@@ -1,5 +1,5 @@
 /* ==========================================================================
-   EWMS - TRANSFER ORDER STYLES (SYNCHRONIZED WITH PURCHASING & WORKSPACE)
+   EWMS - TRANSFER ORDER STYLES (SYNCHRONIZED WITH NOTION DESIGN SYSTEM)
    ========================================================================== */
 
 .transfer-page {
@@ -21,16 +21,37 @@
 
 .transfer-toolbar {
     display: flex;
-    gap: 12px;
+    gap: 10px;
     align-items: center;
     flex-wrap: wrap;
 }
 
+.transfer-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.transfer-card-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #000000;
+    margin: 0 0 18px;
+}
+
+.transfer-card-header .transfer-card-title {
+    margin-bottom: 0;
+}
+
+/* Status badges - Notion sticker pills */
 .transfer-badge {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    border-radius: 999px;
+    border-radius: 9999px;
     padding: 4px 12px;
     font-size: 12px;
     font-weight: 600;
@@ -63,82 +84,355 @@
 
 .transfer-badge-cancelled,
 .transfer-badge-closed {
-    color: #c92a2a;
-    background: #fff5f5;
-    border: 1px solid #ffc9c9;
+    color: #b42318;
+    background: #fff3f2;
+    border: 1px solid #f3cbc7;
 }
 
-/* Stock Badges (Synchronized with SO) */
-.stock-badge {
-    display: inline-block;
-    padding: 3px 8px;
-    border-radius: 5px;
-    font-size: 12px;
-    font-weight: 500;
-}
-.badge-stock {
-    background: #f1f5f9;
-    color: #475569;
-}
-.badge-stock-ok {
-    background: #dcfce7;
-    color: #15803d;
-}
-.badge-stock-zero {
-    background: #fee2e2;
-    color: #b91c1c;
-}
-
-/* Transfer Form Grid & Table (Notion Design Guidelines) */
-.transfer-form-grid {
+/* Info Grid */
+.transfer-info-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 24px;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 18px 20px;
 }
-@media (max-width: 900px) {
-    .transfer-form-grid {
+
+.transfer-col-2 {
+    grid-column: span 2;
+}
+
+.transfer-col-3 {
+    grid-column: span 3;
+}
+
+.transfer-col-full {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 960px) {
+    .transfer-info-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .transfer-col-2,
+    .transfer-col-3 {
+        grid-column: span 1;
+    }
+}
+
+@media (max-width: 600px) {
+    .transfer-info-grid {
         grid-template-columns: 1fr;
     }
 }
 
-.transfer-lines-table th {
-    background: #f6f5f4;
+.transfer-label {
+    display: block;
     font-size: 13px;
-    font-weight: 600;
-    color: var(--workspace-muted);
-}
-.transfer-lines-table td {
-    vertical-align: middle;
-}
-.transfer-lines-table .form-select,
-.transfer-lines-table .form-control {
-    font-size: 14px;
+    font-weight: 500;
+    color: #31302e;
+    margin-bottom: 6px;
 }
 
-.transfer-form-actions {
-    display: flex !important;
-    gap: 12px;
+/* Form controls - Notion 4px crisp corners */
+.transfer-page .form-control,
+.transfer-page .form-select {
+    border-radius: 4px;
+    border: 1px solid #d4d3d1;
+    background-color: #ffffff;
+    color: #31302e;
+    font-size: 14px;
+    padding: 8px 12px;
+    min-height: 40px;
+}
+
+.transfer-page textarea.form-control {
+    min-height: 76px;
+}
+
+.transfer-page .form-control:focus,
+.transfer-page .form-select:focus {
+    border-color: var(--workspace-blue, #0075de);
+    box-shadow: 0 0 0 3px rgba(0, 117, 222, 0.12);
+    outline: none;
+}
+
+.transfer-page fieldset:disabled .form-control,
+.transfer-page fieldset:disabled .form-select,
+.transfer-page .form-control:disabled,
+.transfer-page .form-select:disabled {
+    background-color: #f6f5f4;
+    color: var(--workspace-muted, #615d59);
+}
+
+/* Field-level inline error span */
+.transfer-field-error {
+    display: block;
+    color: #b42318;
+    font-size: 12.5px;
+    font-weight: 400;
+    margin-top: 5px;
+    line-height: 1.35;
+}
+
+.transfer-field-error.field-validation-valid:empty {
+    display: none;
+}
+
+.transfer-page .input-validation-error {
+    border-color: #b42318 !important;
+}
+
+.transfer-page .input-validation-error:focus {
+    box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.12) !important;
+}
+
+/* Stock Badges */
+.stock-badge {
+    display: inline-flex;
     align-items: center;
-    justify-content: flex-end !important;
+    justify-content: center;
+    min-width: 44px;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    font-size: 12.5px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.badge-stock {
+    background: #f6f5f4;
+    color: #615d59;
+    border: 1px solid #e6e6e6;
+}
+
+.badge-stock-ok {
+    background: #eaf6ee;
+    color: #25633a;
+    border: 1px solid #b2f2bb;
+}
+
+.badge-stock-zero {
+    background: #fff3f2;
+    color: #b42318;
+    border: 1px solid #f3cbc7;
+}
+
+/* Lines table - Notion data table */
+.transfer-lines-table {
+    min-width: 760px;
+}
+
+.transfer-lines-table th {
+    background: #f6f5f4;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--workspace-muted, #615d59);
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--workspace-line, #e6e6e6);
+    white-space: nowrap;
+}
+
+.transfer-lines-table td {
+    padding: 12px 14px;
+    vertical-align: top;
+    border-bottom: 1px solid var(--workspace-line, #e6e6e6);
+}
+
+.transfer-row-num,
+.transfer-unit {
+    display: inline-block;
+    padding-top: 9px;
+    font-size: 13.5px;
+}
+
+.transfer-lines-table .stock-badge {
+    margin-top: 6px;
+}
+
+.transfer-lines-table .sales-danger-icon {
+    margin-top: 3px;
+}
+
+.transfer-table-total td {
+    background: #faf9f8;
+    font-weight: 600;
+    color: #31302e;
+    border-bottom: 0;
+    padding: 14px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Notices - Notion callouts */
+.transfer-notice {
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    line-height: 1.45;
+}
+
+.transfer-notice-success {
+    background: #eaf6ee;
+    border: 1px solid #b2f2bb;
+    color: #25633a;
+}
+
+.transfer-notice-warning {
+    background: #fff8e1;
+    border: 1px solid #ffe082;
+    color: #793400;
+}
+
+.transfer-notice-danger {
+    background: #fff3f2;
+    border: 1px solid #f3cbc7;
+    color: #b42318;
+}
+
+.transfer-notice ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.transfer-notice.validation-summary-valid {
+    display: none;
+}
+
+#transfer-feedback:empty {
+    display: none;
+}
+
+#transfer-feedback {
+    display: grid;
+    gap: 8px;
+}
+
+/* Action bar & Notion buttons (scoped cleanly over product-transfer.css) */
+.transfer-actions-bar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
     flex-wrap: wrap;
-    margin-top: 24px;
+}
+
+.transfer-actions-bar.has-cancel {
+    justify-content: space-between;
+}
+
+.transfer-actions-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-left: auto;
+}
+
+.ewms-content .transfer-page .workspace-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 8px 20px;
+    border-radius: 9999px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.25;
+    background: var(--workspace-blue, #0075de);
+    color: #ffffff;
+    border: 1px solid var(--workspace-blue, #0075de);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.ewms-content .transfer-page .workspace-button:hover {
+    background: #005bab;
+    border-color: #005bab;
+    color: #ffffff;
+}
+
+.ewms-content .transfer-page .workspace-button.sales-button-secondary {
+    background: #ffffff !important;
+    color: #31302e !important;
+    border: 1px solid #d4d3d1 !important;
+}
+
+.ewms-content .transfer-page .workspace-button.sales-button-secondary:hover {
+    background: #f6f5f4 !important;
+    color: #000000 !important;
+    border-color: #a39e98 !important;
+}
+
+.ewms-content .transfer-page .workspace-button.sales-button-small {
+    border-radius: 8px;
+    min-height: 34px;
+    padding: 6px 14px;
+    font-size: 13px;
+}
+
+.ewms-content .transfer-page .workspace-button.sales-button-danger {
+    background: #ffffff !important;
+    color: #b42318 !important;
+    border: 1px solid #f3cbc7 !important;
+}
+
+.ewms-content .transfer-page .workspace-button.sales-button-danger:hover {
+    background: #fff3f2 !important;
+    color: #912018 !important;
+    border-color: #e4a39c !important;
 }
 
 .sales-danger-icon {
     background: transparent;
-    border: 1px solid #fed7aa;
-    color: #e11d48;
-    padding: 6px 10px;
-    border-radius: 6px;
+    border: 1px solid var(--workspace-line, #e6e6e6);
+    color: var(--workspace-muted, #615d59);
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.15s ease;
     font-size: 14px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
-.sales-danger-icon:hover {
-    background: #fff1f2;
-    border-color: #fca5a5;
-    color: #be123c;
+
+.sales-danger-icon:hover:not(:disabled) {
+    background: #fff3f2;
+    border-color: #f3cbc7;
+    color: #b42318;
+}
+
+.sales-danger-icon:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Modal styling matching Notion ex-modal-card */
+.transfer-modal .modal-content {
+    background: #ffffff;
+    border: 1px solid var(--workspace-line, #e6e6e6);
+    border-radius: 16px;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+}
+
+.transfer-modal .modal-header {
+    border-bottom: 1px solid var(--workspace-line, #e6e6e6);
+    padding: 20px 24px;
+}
+
+.transfer-modal .modal-body {
+    padding: 24px;
+    color: #31302e;
+}
+
+.transfer-modal .modal-footer {
+    border-top: 1px solid var(--workspace-line, #e6e6e6);
+    padding: 16px 24px;
+    background: #faf9f8;
 }
