@@ -36,12 +36,37 @@ public partial class StocktakeReviewService
             var rounds = await repo.Query<StocktakeRound>().AsNoTracking().Where(r => r.StocktakeId == parent.StocktakeId).ToListAsync(token);
             var recounts = await repo.Query<StocktakeRecountRequest>().AsNoTracking().Where(r => r.StocktakeId == parent.StocktakeId).ToListAsync(token);
             var observations = await repo.Query<StocktakeObservation>().AsNoTracking().Where(o => o.StocktakeId == parent.StocktakeId).ToListAsync(token);
-            var observation = StocktakeScopeRules.EffectiveObservations(observations, rounds, recounts)
-                .SingleOrDefault(o => o.ObservationId == input.ObservationId);
-            if (observation is null || observation.ExpectedQuantity != 0 || observation.ActualQuantity != 1
-                || observation.SerialItemId.HasValue || observation.ProductId is null || observation.ReviewStatus == "RESOLVED")
-                throw new StocktakeWorkflowException("Chỉ đối soát serial lạ hiện hành đã ghi nhận sản phẩm và chưa được giải quyết.");
-            await StocktakeUnknownSerialRules.EnsureNoReceivingContextAsync(repo, observation.ScannedSerial, token);
+            var effective = StocktakeScopeRules.EffectiveObservations(observations, rounds, recounts);
+            var shortageIds = input.ShortageObservationIds.Distinct().ToList();
+            var observationId = input.ObservationId;
+            if (shortageIds.Count > 0)
+            {
+                var confirmed = (await repo.InvestigationsAsync(parent.StocktakeId, token))
+                    .SelectMany(i => i.StillMissingObservationIds).ToHashSet();
+                var applied = await repo.Query<InventoryAdjustmentLine>().Where(l => l.StocktakeId == parent.StocktakeId
+                    && l.IsActive && l.Adjustment.Status == "APPLIED").Select(l => l.ScannedSerial).ToListAsync(token);
+                var eligible = effective.Where(o => CanSearchShortage(o, rounds, recounts)
+                    && !confirmed.Contains(o.ObservationId) && !applied.Contains(o.ScannedSerial, StringComparer.OrdinalIgnoreCase))
+                    .Where(o => shortageIds.Contains(o.ObservationId)).ToList();
+                if (eligible.Count != shortageIds.Count)
+                    throw new StocktakeWorkflowException("Chỉ tìm toàn kho các serial còn thiếu sau vòng đếm lại đã gửi.");
+                var serialIds = eligible.Select(o => o.SerialItemId!.Value).ToArray();
+                var stock = await repo.Query<SerialItem>().AsNoTracking()
+                    .Where(s => serialIds.Contains(s.SerialItemId)).ToDictionaryAsync(s => s.SerialItemId, token);
+                if (eligible.Any(o => !stock.TryGetValue(o.SerialItemId!.Value, out var item)
+                    || !StocktakeReceivingEvidence.IsInWarehouse(item, warehouseId) || item.ProductId != o.ProductId
+                    || item.CurrentLocationId != o.ExpectedLocationId || item.ItemCondition != o.ExpectedCondition))
+                    throw new StocktakeWorkflowException("Dữ liệu sổ kho của serial cần tìm đã thay đổi. Kiểm tra lại trước khi giao tìm.");
+                observationId = shortageIds[0];
+            }
+            else
+            {
+                var observation = effective.SingleOrDefault(o => o.ObservationId == observationId);
+                if (observation is null || observation.ExpectedQuantity != 0 || observation.ActualQuantity != 1
+                    || observation.SerialItemId.HasValue || observation.ProductId is null || observation.ReviewStatus == "RESOLVED")
+                    throw new StocktakeWorkflowException("Chọn serial cần đối soát.");
+                await StocktakeUnknownSerialRules.EnsureNoReceivingContextAsync(repo, observation.ScannedSerial, token);
+            }
             var staff = await repo.Query<User>().AsNoTracking().SingleOrDefaultAsync(u => u.UserId == input.AssignedToUserId
                 && u.Status == "ACTIVE" && u.WarehouseId == warehouseId && u.Role.RoleName == "WAREHOUSE_STAFF", token);
             if (staff is null) throw new StocktakeWorkflowException("Chọn nhân viên kho đang hoạt động trong cùng kho để đối soát.");
@@ -57,7 +82,7 @@ public partial class StocktakeReviewService
             repo.Add(new StocktakeAssignment { StocktakeId = child.StocktakeId, UserId = staff.UserId,
                 WarehouseId = warehouseId, ScopeKind = "ALL_SCOPE", Status = "ASSIGNED", AssignedAt = now });
             repo.Record(new StocktakeInvestigation { StocktakeInvestigationId = -child.StocktakeId,
-                StocktakeId = parent.StocktakeId, ObservationId = observation.ObservationId,
+                StocktakeId = parent.StocktakeId, ObservationId = observationId, ShortageObservationIds = shortageIds,
                 InvestigationStocktakeId = child.StocktakeId, RequestedByUserId = actorId, RequestedAt = now }, actorId, isNew: true);
             parent.Status = "REVIEWING";
             repo.TouchPlan(parent); await repo.SaveAsync(token);
@@ -68,19 +93,20 @@ public partial class StocktakeReviewService
     public async Task FinishInvestigationAsync(int actorId, StocktakeInvestigationConclusionInput input, CancellationToken ct)
     {
         var conclusion = Reason(input.Conclusion);
-        if (input.Outcome != "NEEDS_REVIEW")
-            throw new StocktakeWorkflowException("Chọn kết luận cần tiếp tục xác minh nguồn gốc.");
         var warehouseId = await WarehouseAsync(actorId, input.Id, ct);
         await repo.TransactionAsync(actorId, warehouseId, async token =>
         {
             await RequireManagerAsync(actorId, token);
             var child = await PlanAsync(input.Id, input.Version, token);
             var investigation = await repo.InvestigationForAsync(child.StocktakeId, token)
-                ?? throw new StocktakeWorkflowException("Đợt này không phải cuộc đối soát serial lạ.", 404);
+                ?? throw new StocktakeWorkflowException("Không tìm thấy nhiệm vụ đối soát.", 404);
+            var shortageSearch = investigation.ShortageObservationIds.Count > 0;
+            if (input.Outcome != (shortageSearch ? "SHORTAGE_SEARCH_COMPLETED" : "NEEDS_REVIEW"))
+                throw new StocktakeWorkflowException("Kết luận không phù hợp với nhiệm vụ đối soát.");
             if (investigation.ClosedAt.HasValue) throw new StocktakeWorkflowException("Cuộc đối soát đã được kết luận.", 409);
             if (child.Status != "REVIEWING") throw new StocktakeWorkflowException("Cần gửi xong toàn bộ kết quả đối soát trước khi kết luận.");
             if (child.ScopeType != "WHOLE_WAREHOUSE" || !child.IncludeAwaitingPutaway)
-                throw new StocktakeWorkflowException("Phạm vi đối soát không còn là toàn kho, không thể dùng làm căn cứ xác nhận thừa.");
+                throw new StocktakeWorkflowException("Phạm vi đối soát phải là toàn kho và bao gồm hàng chờ xếp.");
             await RequireNoOpenRoundAsync(child.StocktakeId, token);
             await RequireNoPendingAdjustmentAsync(child.StocktakeId, token);
             if (await repo.Query<StocktakeAssignment>().AnyAsync(a => a.StocktakeId == child.StocktakeId && a.Status != "DONE" && a.Status != "CANCELLED", token)
@@ -92,6 +118,35 @@ public partial class StocktakeReviewService
             if (parent.WarehouseId != warehouseId || parent.Status is not ("REVIEWING" or "PENDING_APPROVAL"))
                 throw new StocktakeWorkflowException("Đợt kiểm kê gốc không còn ở trạng thái rà soát.", 409);
             var now = DateTime.UtcNow;
+            if (shortageSearch)
+            {
+                var sourceRows = await repo.Query<StocktakeObservation>().Where(o => o.StocktakeId == parent.StocktakeId
+                    && investigation.ShortageObservationIds.Contains(o.ObservationId)).ToListAsync(token);
+                var findings = await repo.Query<StocktakeObservation>().AsNoTracking()
+                    .Where(o => o.StocktakeId == child.StocktakeId && o.RoundNumber == 1).ToListAsync(token);
+                if (sourceRows.Count != investigation.ShortageObservationIds.Count
+                    || (await repo.HandlingAsync(child.StocktakeId, token)).Any(h => h.Status == "WAITING"))
+                    throw new StocktakeWorkflowException("Cần xử lý xong các ghi nhận trước khi chốt tìm kiếm.");
+                foreach (var source in sourceRows)
+                {
+                    var finding = findings.SingleOrDefault(o => o.SerialItemId == source.SerialItemId && o.ProductId == source.ProductId);
+                    if (finding is null || source.ReviewStatus == "RESOLVED")
+                        throw new StocktakeWorkflowException("Dữ liệu serial đã thay đổi. Cần kiểm tra lại trước khi chốt.");
+                    if (finding.ActualQuantity == 1 && finding.ScannedAt.HasValue)
+                    {
+                        var foundAtExpectedLocationWithConditionNote = finding.ExpectedCondition == "DAMAGED"
+                            && finding.ActualCondition == "GOOD" && finding.ExpectedLocationId == finding.ActualLocationId;
+                        if (finding.DifferenceType != "MATCHED" && finding.ReviewStatus != "RESOLVED"
+                            && !foundAtExpectedLocationWithConditionNote)
+                            throw new StocktakeWorkflowException($"Cần xử lý chênh lệch của {source.ScannedSerial} trước khi chốt.");
+                        source.ReviewStatus = "RESOLVED";
+                    }
+                    else
+                    {
+                        investigation.StillMissingObservationIds.Add(source.ObservationId);
+                    }
+                }
+            }
             investigation.Outcome = input.Outcome; investigation.Conclusion = conclusion;
             investigation.ClosedAt = now; investigation.ClosedByUserId = actorId;
             repo.Record(investigation, actorId, isNew: false);
@@ -103,6 +158,12 @@ public partial class StocktakeReviewService
         }, ct);
     }
 
+    private static bool CanSearchShortage(StocktakeObservation row, List<StocktakeRound> rounds,
+        List<StocktakeRecountRequest> requests) =>
+        row.DifferenceType == "MISSING" && row.ExpectedQuantity == 1 && row.ActualQuantity == 0
+        && row.ReviewStatus != "RESOLVED" && row.SerialItemId.HasValue && row.ProductId.HasValue
+        && rounds.Any(r => r.RoundNumber == row.RoundNumber && r.Status == "CLOSED"
+            && requests.Any(request => request.ResultRoundId == r.RoundId && request.Status == "SUBMITTED"));
 }
 
 internal static class StocktakeUnknownSerialRules

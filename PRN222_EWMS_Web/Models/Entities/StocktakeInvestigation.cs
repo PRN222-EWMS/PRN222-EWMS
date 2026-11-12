@@ -6,6 +6,8 @@ public class StocktakeInvestigation
     public long StocktakeInvestigationId { get; set; }
     public long StocktakeId { get; set; }
     public long ObservationId { get; set; }
+    public List<long> ShortageObservationIds { get; set; } = [];
+    public List<long> StillMissingObservationIds { get; set; } = [];
     public long InvestigationStocktakeId { get; set; }
     public int RequestedByUserId { get; set; }
     public DateTime RequestedAt { get; set; }

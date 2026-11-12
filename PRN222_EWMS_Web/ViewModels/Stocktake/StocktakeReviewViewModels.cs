@@ -20,6 +20,8 @@ public class StocktakeReviewViewModel
     public List<StocktakeRecountChoice> RecountChoices { get; set; } = [];
     public List<StocktakeInvestigation> Investigations { get; set; } = [];
     public StocktakeInvestigation? InvestigationContext { get; set; }
+    public HashSet<long> SearchableShortageIds { get; set; } = [];
+    public HashSet<long> ConfirmedShortageIds { get; set; } = [];
     public List<AuditLog> NoSurplusDecisions { get; set; } = [];
     public List<AuditLog> SourceDecisions { get; set; } = [];
     public Dictionary<long, List<StocktakeSourceReceipt>> CompletedSources { get; set; } = [];
@@ -42,7 +44,8 @@ public class StocktakeNoSurplusInput : StocktakeActionInput
 
 public class StocktakeInvestigationInput : StocktakeActionInput
 {
-    [Range(1, long.MaxValue)] public long ObservationId { get; set; }
+    public long ObservationId { get; set; }
+    public List<long> ShortageObservationIds { get; set; } = [];
     [Range(1, int.MaxValue)] public int AssignedToUserId { get; set; }
     [Required, StringLength(1000)] public string Reason { get; set; } = "";
 }

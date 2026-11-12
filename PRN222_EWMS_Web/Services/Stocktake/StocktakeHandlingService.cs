@@ -115,8 +115,11 @@ public class StocktakeHandlingService(IStocktakeRepository repo) : IStocktakeHan
         var ids = otherPlans.Select(p => p.StocktakeId).ToArray();
         var scopes = await repo.Query<StocktakeScope>().AsNoTracking().Where(s => ids.Contains(s.StocktakeId)).ToListAsync(ct);
         var blocked = new HashSet<int>();
+        var investigation = await repo.InvestigationForAsync(plan.StocktakeId, ct);
         foreach (var other in otherPlans)
         {
+            if (investigation?.ShortageObservationIds.Count > 0 && investigation.StocktakeId == other.StocktakeId)
+                continue;
             var locked = StocktakeScopeRules.PlanLocations(other, scopes.Where(s => s.StocktakeId == other.StocktakeId).ToList(), locations);
             if (StocktakeScopeRules.InPlan(other, locked, item.CurrentLocationId)) return [];
             blocked.UnionWith(locked);
