@@ -61,6 +61,12 @@ public partial class StocktakeReviewService(IStocktakeRepository repo) : IStockt
             && rounds.All(r => r.Status != "OPEN")
             && model.Investigations.All(i => i.ClosedAt.HasValue)
             && model.Adjustments.All(a => a.Status is not ("DRAFT" or "SUBMITTED" or "APPROVED"));
+        model.ConfirmedShortageIds = model.Investigations.SelectMany(i => i.StillMissingObservationIds).ToHashSet();
+        if (canRequest && model.InvestigationContext is null && requests.All(r => r.Status is not ("REQUESTED" or "IN_PROGRESS"))
+            && model.Handling.All(h => h.Status != "WAITING"))
+            model.SearchableShortageIds = model.Observations.Where(o => CanSearchShortage(o, rounds, requests)
+                && !model.ConfirmedShortageIds.Contains(o.ObservationId)
+                && !applied.Contains(o.ScannedSerial, StringComparer.OrdinalIgnoreCase)).Select(o => o.ObservationId).ToHashSet();
         if (canRequest)
         {
             var proofCandidates = model.Investigations.Where(i => i.ClosedAt.HasValue && i.Outcome == "NEEDS_REVIEW").ToList();
@@ -229,6 +235,11 @@ public partial class StocktakeReviewService(IStocktakeRepository repo) : IStockt
                 || o.ExpectedQuantity != 1 || o.ActualQuantity != 0 || o.ReviewStatus == "RESOLVED"
                 || o.ProductId is null || o.SerialItemId is null))
                 throw new StocktakeWorkflowException("Chỉ gửi CEO đề nghị giảm tồn cho serial thiếu đã xác minh.");
+
+            var confirmed = (await repo.InvestigationsAsync(plan.StocktakeId, token))
+                .SelectMany(i => i.StillMissingObservationIds).ToHashSet();
+            if (!confirmed.IsSupersetOf(ids))
+                throw new StocktakeWorkflowException("Chỉ gửi CEO sau khi Manager chốt vẫn thiếu qua bước tìm serial toàn kho.");
 
             var oldLines = await repo.Query<InventoryAdjustmentLine>().Include(l => l.Adjustment)
                 .Where(l => l.StocktakeId == input.Id && l.IsActive).ToListAsync(token);

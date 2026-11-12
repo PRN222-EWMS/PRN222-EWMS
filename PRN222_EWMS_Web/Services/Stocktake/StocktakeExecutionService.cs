@@ -32,6 +32,8 @@ public class StocktakeExecutionService(IStocktakeRepository repo) : IStocktakeEx
             : task.Rounds.Single(r => r.RoundNumber == 1);
         var observation = await repo.Query<StocktakeObservation>().AsNoTracking()
             .SingleOrDefaultAsync(o => o.StocktakeId == id && o.RoundNumber == round.RoundNumber && o.ScannedSerial == serial, ct);
+        if (task.IsShortageSearch && observation?.SerialItemId != item?.SerialItemId)
+            throw new StocktakeWorkflowException("Serial này không nằm trong danh sách cần tìm.", 403);
         if (recountRequestId is null && (await repo.HandlingAsync(id, ct)).Any(h => SameSerial(h.ScannedSerial, serial) && h.Status == "MOVED"))
             throw new StocktakeWorkflowException("Serial đã được xác nhận chuyển trong đợt này. Không đếm lại ở ô nhận hàng; xem lịch sử xử lý.", 409);
         if (observation?.ScannedAt is not null && observation.ScannedByUserId != actorId)
@@ -123,7 +125,9 @@ public class StocktakeExecutionService(IStocktakeRepository repo) : IStocktakeEx
             .ToList();
         var ownRunning = request is null ? assignments.Any(a => a.Status == "IN_PROGRESS") : request.Status == "IN_PROGRESS";
         var canCount = current?.Status == "OPEN" && ownRunning && plan.Status == (request is null ? "COUNTING" : "RECOUNTING");
+        var investigation = await repo.InvestigationForAsync(id, ct);
         return new StocktakeExecutionViewModel { Plan = plan, Assignments = assignments,
+            IsShortageSearch = investigation?.ShortageObservationIds.Count > 0,
             Handling = (await repo.HandlingAsync(id, ct)).Where(h => h.RecordedByUserId == actorId).ToList(),
             Requests = request is null ? [] : [request], Rounds = rounds, Observations = observations,
             Locations = locations,
@@ -201,6 +205,18 @@ public class StocktakeExecutionService(IStocktakeRepository repo) : IStocktakeEx
                     await repo.SaveAsync(token);
                     var physical = await repo.Query<SerialItem>().AsNoTracking()
                         .Where(s => s.CurrentWarehouseId == plan.WarehouseId && s.StockState == "IN_WAREHOUSE").ToListAsync(token);
+                    var investigation = await repo.InvestigationForAsync(plan.StocktakeId, token);
+                    if (investigation is not null && investigation.ShortageObservationIds.Count > 0)
+                    {
+                        var targets = await repo.Query<StocktakeObservation>().AsNoTracking()
+                            .Where(o => o.StocktakeId == investigation.StocktakeId
+                                && investigation.ShortageObservationIds.Contains(o.ObservationId)).ToListAsync(token);
+                        physical = physical.Where(s => targets.Any(o => o.SerialItemId == s.SerialItemId
+                            && o.ProductId == s.ProductId && o.ExpectedLocationId == s.CurrentLocationId
+                            && o.ExpectedCondition == s.ItemCondition)).ToList();
+                        if (physical.Count != investigation.ShortageObservationIds.Count)
+                            throw new StocktakeWorkflowException("Dữ liệu sổ kho của serial cần tìm đã thay đổi. Báo Manager kiểm tra.");
+                    }
                     foreach (var item in physical.Where(s => StocktakeScopeRules.InPlan(plan, planLocations, s.CurrentLocationId)))
                         repo.Add(new StocktakeObservation { StocktakeId = plan.StocktakeId, SerialItemId = item.SerialItemId,
                             ProductId = item.ProductId, ScannedSerial = item.SerialNumber, RoundNumber = 1,
@@ -251,6 +267,10 @@ public class StocktakeExecutionService(IStocktakeRepository repo) : IStocktakeEx
                 throw new StocktakeWorkflowException(StocktakeReceivingEvidence.BlockedMessage(item, receipts));
             }
             var productId = item!.ProductId;
+            var investigation = await repo.InvestigationForAsync(plan.StocktakeId, token);
+            var shortageSearch = investigation?.ShortageObservationIds.Count > 0;
+            if (shortageSearch && observation?.SerialItemId != item.SerialItemId)
+                throw new StocktakeWorkflowException("Serial này không nằm trong danh sách cần tìm.", 403);
             var previousProduct = observation?.ProductId ?? allPrevious.FirstOrDefault()?.ProductId;
             if (previousProduct.HasValue && previousProduct != productId)
                 throw new StocktakeWorkflowException("Sản phẩm trong lần ghi nhận trước khác với serial trong sổ kho. Manager cần xác minh.");
@@ -293,11 +313,12 @@ public class StocktakeExecutionService(IStocktakeRepository repo) : IStocktakeEx
                     observation.ReviewStatus = "RESOLVED"; // Proven receipt registered after the unknown observation: never add it twice.
             }
             await repo.SaveAsync(token);
-            // Investigation counts collect evidence only; do not move stock while comparing the whole warehouse.
-            var investigationOnly = await repo.InvestigationForAsync(plan.StocktakeId, token) is not null;
+            var investigationOnly = investigation is not null && investigation.ShortageObservationIds.Count == 0;
+            // Finding a missing serial does not authorize changing its condition from damaged to good.
+            var moveCondition = shortageSearch && item?.ItemCondition == "DAMAGED" ? "DAMAGED" : input.Condition;
             if (!investigationOnly && item is not null && item.CurrentWarehouseId == plan.WarehouseId && item.StockState == "IN_WAREHOUSE"
-                && !(item.ItemCondition == "DAMAGED" && input.Condition == "GOOD")
-                && (item.CurrentLocationId != input.LocationId || item.ItemCondition != input.Condition))
+                && !(item.ItemCondition == "DAMAGED" && moveCondition == "GOOD")
+                && (item.CurrentLocationId != input.LocationId || item.ItemCondition != moveCondition))
             {
                 var isNewHandling = handling is null;
                 if (handling is null)
@@ -309,7 +330,7 @@ public class StocktakeExecutionService(IStocktakeRepository repo) : IStocktakeEx
                 }
                 handling.Status = "WAITING"; handling.ObservationId = observation.ObservationId;
                 handling.RecordedByUserId = actorId;
-                handling.FoundLocationId = input.LocationId; handling.ActualCondition = input.Condition; handling.Note = observation.Note;
+                handling.FoundLocationId = input.LocationId; handling.ActualCondition = moveCondition; handling.Note = observation.Note;
                 repo.Record(handling, actorId, isNewHandling);
             }
             else if (handling is { Status: "WAITING" })

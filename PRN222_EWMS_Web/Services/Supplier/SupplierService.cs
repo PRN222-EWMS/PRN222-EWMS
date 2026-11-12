@@ -1,4 +1,6 @@
 using System.Text.RegularExpressions;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Repositories.Supplier;
 using PRN222_EWMS_Web.ViewModels.Supplier;
 using SupplierEntity = PRN222_EWMS_Web.Models.Supplier;
@@ -127,7 +129,15 @@ public class SupplierService(ISupplierRepository repo) : ISupplierService
             Status = "ACTIVE"
         };
 
-        await repo.AddAsync(supplier);
+        try
+        {
+            await repo.AddAsync(supplier);
+        }
+        catch (DbUpdateException ex) when (IsDuplicateEmail(ex))
+        {
+            errors[nameof(model.Email)] = "Email này đã được sử dụng bởi một nhà cung cấp khác.";
+            return (null, errors);
+        }
         return (supplier.SupplierId, errors);
     }
 
@@ -138,7 +148,7 @@ public class SupplierService(ISupplierRepository repo) : ISupplierService
         var supplier = await repo.FindByIdAsync(supplierId);
         if (supplier is null)
         {
-            errors["General"] = "Không tìm thấy nhà cung cấp.";
+            errors[string.Empty] = "Không tìm thấy nhà cung cấp.";
             return errors;
         }
 
@@ -171,22 +181,19 @@ public class SupplierService(ISupplierRepository repo) : ISupplierService
         }
 
         // Q30: If phone is unchanged, do not warn / require checkbox.
-        if (!string.IsNullOrWhiteSpace(phone))
+        if (!string.IsNullOrWhiteSpace(phone)
+            && !string.Equals(supplier.Phone?.Trim(), phone, StringComparison.Ordinal))
         {
             if (!PhoneRegex.IsMatch(phone))
             {
                 errors[nameof(model.Phone)] = "Số điện thoại không hợp lệ (phải gồm đúng 10 chữ số và bắt đầu bằng số 0).";
             }
-            else
+            else if (await repo.PhoneExistsAsync(phone, supplierId))
             {
-                var isPhoneChanged = !string.Equals(supplier.Phone?.Trim(), phone, StringComparison.Ordinal);
-                if (isPhoneChanged && await repo.PhoneExistsAsync(phone, supplierId))
+                model.HasDuplicatePhoneWarning = true;
+                if (!model.ConfirmDuplicatePhone)
                 {
-                    model.HasDuplicatePhoneWarning = true;
-                    if (!model.ConfirmDuplicatePhone)
-                    {
-                        errors[nameof(model.ConfirmDuplicatePhone)] = "Số điện thoại này đã tồn tại ở một nhà cung cấp khác. Vui lòng tích chọn xác nhận tiếp tục sử dụng số này nếu muốn lưu.";
-                    }
+                    errors[nameof(model.ConfirmDuplicatePhone)] = "Số điện thoại này đã tồn tại ở một nhà cung cấp khác. Vui lòng tích chọn xác nhận tiếp tục sử dụng số này nếu muốn lưu.";
                 }
             }
         }
@@ -203,7 +210,14 @@ public class SupplierService(ISupplierRepository repo) : ISupplierService
         supplier.Email = email;
         supplier.Status = string.Equals(model.Status, "INACTIVE", StringComparison.OrdinalIgnoreCase) ? "INACTIVE" : "ACTIVE";
 
-        await repo.UpdateAsync(supplier);
+        try
+        {
+            await repo.UpdateAsync(supplier);
+        }
+        catch (DbUpdateException ex) when (IsDuplicateEmail(ex))
+        {
+            errors[nameof(model.Email)] = "Email này đã được sử dụng bởi một nhà cung cấp khác.";
+        }
         return errors;
     }
 
@@ -217,10 +231,14 @@ public class SupplierService(ISupplierRepository repo) : ISupplierService
         return true;
     }
 
+    private static bool IsDuplicateEmail(DbUpdateException exception) =>
+        exception.InnerException is SqlException sql
+        && sql.Number is 2601 or 2627
+        && sql.Message.Contains("'UX_Supplier_Email'", StringComparison.OrdinalIgnoreCase);
+
     private static string? CleanString(string? input)
     {
         if (string.IsNullOrWhiteSpace(input)) return null;
-        var trimmed = input.Trim();
-        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
+        return input.Trim();
     }
 }

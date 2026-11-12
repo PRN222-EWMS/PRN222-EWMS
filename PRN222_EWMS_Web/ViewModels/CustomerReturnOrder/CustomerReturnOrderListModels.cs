@@ -45,19 +45,17 @@ public class ReturnOrderListRowViewModel
 {
     public long Id { get; set; }
     public string ReturnCode { get; set; } = "";
-    public long SalesOrderId { get; set; }
-    public string SalesOrderCode { get; set; } = "";
+    public byte[] RowVersion { get; set; } = [];
     public string CustomerName { get; set; } = "";
-    public int WarehouseId { get; set; }
     public string WarehouseName { get; set; } = "";
     public DateTime CreatedAt { get; set; }
-    public int CreatedByUserId { get; set; }
     public string CreatedByName { get; set; } = "";
     public string Status { get; set; } = "";
-    public int LinesCount { get; set; }
     public int TotalRequestedQuantity { get; set; }
     public int CompletedReceivedQuantity { get; set; }
-    public string? Reason { get; set; }
+    public int RemainingQuantity => Status is "CANCELLED" or "CLOSED"
+        ? 0
+        : Math.Max(0, TotalRequestedQuantity - CompletedReceivedQuantity);
     public bool CanEdit { get; set; }
     public bool CanCancel { get; set; }
     public bool CanReceive { get; set; }
@@ -78,19 +76,14 @@ public record ReturnOrderFilterDto(
 public record ReturnOrderListRowDto(
     long ReturnOrderId,
     string ReturnCode,
-    long SalesOrderId,
-    string SalesOrderCode,
     string CustomerName,
-    int WarehouseId,
     string WarehouseName,
     DateTime CreatedAt,
-    int CreatedByUserId,
     string CreatedByName,
     string Status,
-    int LinesCount,
     int TotalRequestedQuantity,
     int CompletedReceivedQuantity,
     bool HasReturnReceipts,
-    string? Reason
+    byte[] RowVersion
 );
 

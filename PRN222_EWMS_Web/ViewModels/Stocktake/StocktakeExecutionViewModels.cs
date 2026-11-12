@@ -26,6 +26,7 @@ public class StocktakeTaskRow
 
 public class StocktakeExecutionViewModel
 {
+    public bool IsShortageSearch { get; set; }
     public Models.Stocktake Plan { get; set; } = null!;
     public List<StocktakeAssignment> Assignments { get; set; } = [];
     public List<StocktakeRecountRequest> Requests { get; set; } = [];
