@@ -136,7 +136,6 @@ public class CustomerReturnOrderService(
         }
 
         var lineReceivedCounts = await repo.GetLineReceivedCountsAsync(returnOrderId, cancellationToken);
-        var receiptHistory = await repo.GetReturnReceiptHistoryAsync(returnOrderId, cancellationToken);
 
         var lines = order.CustomerReturnOrderLineReturnOrders
             .OrderBy(line => line.ReturnLineId)
@@ -146,9 +145,6 @@ public class CustomerReturnOrderService(
             int remainingQty = Math.Max(0, line.RequestedQuantity - line.CancelledQuantity - receivedQty);
             return new ReturnOrderDetailLineViewModel
             {
-                ReturnLineId = line.ReturnLineId,
-                SolineId = line.SolineId,
-                ProductId = line.ProductId,
                 ProductCode = line.Soline?.Product?.ProductCode ?? string.Empty,
                 ProductName = line.Soline?.Product?.ProductName ?? string.Empty,
                 Unit = line.Soline?.Product?.Unit,
@@ -162,21 +158,6 @@ public class CustomerReturnOrderService(
         int totalRequested = lines.Sum(l => l.RequestedQuantity);
         int totalCancelled = lines.Sum(l => l.CancelledQuantity);
         int totalReceived = lines.Sum(l => l.ReceivedQuantity);
-        int totalRemaining = lines.Sum(l => l.RemainingQuantity);
-        int progressPercentage = totalRequested > 0 ? Math.Clamp((int)Math.Round((double)totalReceived * 100 / totalRequested), 0, 100) : 0;
-
-        var receipts = receiptHistory.Select(r => new ReturnReceiptHistoryItemViewModel
-        {
-            ReturnReceiptId = r.ReturnReceiptId,
-            ReceiptCode = r.ReceiptCode,
-            ReceiptDate = r.ReceiptDate,
-            Status = r.Status,
-            CreatedAt = r.CreatedAt,
-            CompletedAt = r.CompletedAt,
-            PerformedByName = r.PerformedByName,
-            ActiveItemCount = r.ActiveItemCount,
-            Note = r.Note
-        }).ToList();
 
         return new ReturnOrderDetailViewModel
         {
@@ -188,26 +169,17 @@ public class CustomerReturnOrderService(
             CloseReason = order.CloseReason,
             ClosedAt = order.ClosedAt,
 
-            SalesOrderId = order.SalesOrderId,
             SalesOrderCode = order.SalesOrder?.Socode ?? string.Empty,
             CustomerName = order.SalesOrder?.Customer?.CustomerName ?? "Khách lẻ",
-            WarehouseId = order.WarehouseId,
             WarehouseName = order.Warehouse?.WarehouseName ?? string.Empty,
-            CreatedByUserId = order.CreatedByUserId,
             CreatedByName = order.CreatedByUser?.FullName ?? string.Empty,
 
-            TotalRequestedQuantity = totalRequested,
             TotalCancelledQuantity = totalCancelled,
-            TotalReceivedQuantity = totalReceived,
-            TotalRemainingQuantity = totalRemaining,
-            ProgressPercentage = progressPercentage,
 
-            IsWarehouseStaff = isWarehouseStaff,
             CanEdit = isSalesStaff && order.Status == "DRAFT",
             CanReceive = isWarehouseStaff && (order.Status is "OPEN" or "PARTIALLY_RECEIVED") && totalReceived < totalRequested,
 
-            Lines = lines,
-            Receipts = receipts
+            Lines = lines
         };
     }
 
@@ -256,29 +228,21 @@ public class CustomerReturnOrderService(
             Action = "SaveDraft"
         };
 
-        await PopulateFormOptionsAsync(model, cancellationToken);
-
-        // Map existing lines
-        var eligibleLines = await repo.GetEligibleSalesOrderLinesAsync(order.SalesOrderId, order.ReturnOrderId, cancellationToken);
-        var eligibleMap = eligibleLines.ToDictionary(l => l.SolineId);
-
         foreach (var line in order.CustomerReturnOrderLineReturnOrders.OrderBy(l => l.ReturnLineId))
         {
-            eligibleMap.TryGetValue(line.SolineId, out var eligibleDto);
             model.Lines.Add(new ReturnOrderLineItemModel
             {
                 ReturnLineId = line.ReturnLineId,
                 SolineId = line.SolineId,
                 ProductId = line.ProductId,
-                ProductCode = eligibleDto?.ProductCode ?? line.Soline?.Product?.ProductCode,
-                ProductName = eligibleDto?.ProductName ?? line.Soline?.Product?.ProductName,
-                Unit = eligibleDto?.Unit ?? line.Soline?.Product?.Unit,
-                ShippedQuantity = eligibleDto?.ShippedQuantity ?? 0,
-                EligibleQuantity = eligibleDto?.EligibleQuantity ?? 0,
+                ProductCode = line.Soline?.Product?.ProductCode,
+                ProductName = line.Soline?.Product?.ProductName,
+                Unit = line.Soline?.Product?.Unit,
                 RequestedQuantity = line.RequestedQuantity
             });
         }
 
+        await PopulateFormOptionsAsync(model, cancellationToken);
         return model;
     }
 
@@ -402,12 +366,12 @@ public class CustomerReturnOrderService(
                 if (isConfirm)
                 {
                     await repo.ConfirmOrderAsync(order, orderLines, model.RowVersion, actorId, cancellationToken);
-                    return (model.ReturnCode ?? $"RO-{returnOrderId}", "OPEN");
+                    return (order.ReturnCode, "OPEN");
                 }
                 else
                 {
                     await repo.UpdateDraftAsync(order, orderLines, model.RowVersion, actorId, cancellationToken);
-                    return (model.ReturnCode ?? $"RO-{returnOrderId}", "DRAFT");
+                    return (order.ReturnCode, "DRAFT");
                 }
             });
 
@@ -495,7 +459,10 @@ public class CustomerReturnOrderService(
                 if (!freshMap.TryGetValue(inputLine.SolineId, out var fresh) || fresh.EligibleQuantity < inputLine.RequestedQuantity)
                 {
                     int available = fresh?.EligibleQuantity ?? 0;
-                    throw new InvalidOperationException($"Số lượng yêu cầu của sản phẩm '{inputLine.ProductName ?? inputLine.ProductCode}' ({inputLine.RequestedQuantity}) vượt quá số lượng khả dụng được phép trả ({available}).");
+                    var productName = fresh?.ProductName;
+                    if (string.IsNullOrWhiteSpace(productName)) productName = fresh?.ProductCode;
+                    if (string.IsNullOrWhiteSpace(productName)) productName = $"dòng #{inputLine.SolineId}";
+                    throw new InvalidOperationException($"Số lượng yêu cầu của sản phẩm '{productName}' ({inputLine.RequestedQuantity}) vượt quá số lượng khả dụng được phép trả ({available}).");
                 }
             }
         }
@@ -511,6 +478,17 @@ public class CustomerReturnOrderService(
         if (model.SalesOrderId > 0)
         {
             model.AvailableLines = await repo.GetEligibleSalesOrderLinesAsync(model.SalesOrderId, model.ReturnOrderId, cancellationToken);
+            var eligibleMap = model.AvailableLines.ToDictionary(line => line.SolineId);
+            foreach (var line in model.Lines)
+            {
+                if (!eligibleMap.TryGetValue(line.SolineId, out var eligible)) continue;
+                line.ProductId = eligible.ProductId;
+                line.ProductCode = eligible.ProductCode;
+                line.ProductName = eligible.ProductName;
+                line.Unit = eligible.Unit;
+                line.ShippedQuantity = eligible.ShippedQuantity;
+                line.EligibleQuantity = eligible.EligibleQuantity;
+            }
             if (string.IsNullOrEmpty(model.CustomerName))
             {
                 var so = await repo.GetSalesOrderDetailsAsync(model.SalesOrderId, cancellationToken);

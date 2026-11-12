@@ -3,6 +3,7 @@
     ViewData["Title"] = "Nhà cung cấp";
 }
 
+<div class="sales-page">
 <div class="workspace-heading">
     <div>
         <p class="eyebrow">MUA HÀNG</p>
@@ -75,7 +76,7 @@
                         <th scope="col">Số điện thoại</th>
                         <th scope="col">Email</th>
                         <th scope="col">Trạng thái</th>
-                        <th scope="col" class="text-end">Thao tác</th>
+                        <th scope="col" class="sales-actions-cell" style="white-space: nowrap;">Thao tác</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -104,31 +105,33 @@
                                     </form>
                                 </div>
                             </td>
-                            <td class="text-end" style="white-space: nowrap;">
-                                <a class="workspace-button sales-button-small" asp-controller="Supplier" asp-action="Details"
-                                   asp-route-id="@supplier.SupplierId"
-                                   asp-route-search="@Model.Search"
-                                   asp-route-status="@Model.Status"
-                                   asp-route-page="@Model.Page" title="Xem chi tiết nhà cung cấp">
-                                    <i class="bi bi-eye me-1" aria-hidden="true"></i> Chi tiết
-                                </a>
-                                @if (supplier.IsActive)
-                                {
-                                    <a class="workspace-button sales-button-secondary sales-button-small ms-1" asp-controller="Supplier" asp-action="Edit"
+                            <td class="sales-actions-cell" style="white-space: nowrap;">
+                                <div class="sales-row-actions">
+                                    <a class="workspace-button sales-button-small" asp-controller="Supplier" asp-action="Details"
                                        asp-route-id="@supplier.SupplierId"
                                        asp-route-search="@Model.Search"
                                        asp-route-status="@Model.Status"
-                                       asp-route-page="@Model.Page" title="Chỉnh sửa nhà cung cấp">
-                                        <i class="bi bi-pencil-square me-1" aria-hidden="true"></i> Sửa
+                                       asp-route-page="@Model.Page" title="Xem chi tiết nhà cung cấp">
+                                        <i class="bi bi-eye me-1" aria-hidden="true"></i> Chi tiết
                                     </a>
-                                }
-                                else
-                                {
-                                    <button type="button" class="workspace-button sales-button-small po-btn-disabled ms-1" disabled
-                                            title="Cần kích hoạt nhà cung cấp trước khi chỉnh sửa">
-                                        <i class="bi bi-pencil-square me-1" aria-hidden="true"></i> Sửa
-                                    </button>
-                                }
+                                    @if (supplier.IsActive)
+                                    {
+                                        <a class="workspace-button sales-button-small sales-button-secondary" asp-controller="Supplier" asp-action="Edit"
+                                           asp-route-id="@supplier.SupplierId"
+                                           asp-route-search="@Model.Search"
+                                           asp-route-status="@Model.Status"
+                                           asp-route-page="@Model.Page" title="Chỉnh sửa nhà cung cấp">
+                                            <i class="bi bi-pencil-square me-1" aria-hidden="true"></i> Sửa
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="workspace-button sales-button-small sales-button-secondary disabled" disabled
+                                                title="Cần kích hoạt nhà cung cấp trước khi chỉnh sửa">
+                                            <i class="bi bi-pencil-square me-1" aria-hidden="true"></i> Sửa
+                                        </button>
+                                    }
+                                </div>
                             </td>
                         </tr>
                     }
@@ -167,6 +170,7 @@
         }
     }
 </section>
+</div>
 
 <!-- Modal Xác nhận Đổi Trạng thái -->
 <div class="modal fade" id="toggleStatusModal" tabindex="-1" aria-labelledby="toggleStatusModalLabel" aria-hidden="true">

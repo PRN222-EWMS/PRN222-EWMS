@@ -322,6 +322,7 @@ public class CustomerReturnOrderRepository(EwmsDbContext db) : ICustomerReturnOr
         db.Entry(currentOrder).Property(e => e.RowVersion).OriginalValue = originalRowVersion;
 
         // 4. Only update approved editable fields, preserving immutable fields (SalesOrderId, ReturnCode, CreatedByUserId, CreatedAt)
+        order.ReturnCode = currentOrder.ReturnCode;
         currentOrder.WarehouseId = order.WarehouseId;
         currentOrder.Reason = order.Reason;
         currentOrder.Status = "DRAFT";
@@ -397,6 +398,7 @@ public class CustomerReturnOrderRepository(EwmsDbContext db) : ICustomerReturnOr
             db.Entry(currentOrder).Property(e => e.RowVersion).OriginalValue = originalRowVersion;
 
             // 4. Update approved editable fields and set Status = OPEN, preserving immutable fields (SalesOrderId, ReturnCode, CreatedByUserId, CreatedAt)
+            order.ReturnCode = currentOrder.ReturnCode;
             currentOrder.WarehouseId = order.WarehouseId;
             currentOrder.Reason = order.Reason;
             currentOrder.Status = "OPEN";
@@ -429,6 +431,8 @@ public class CustomerReturnOrderRepository(EwmsDbContext db) : ICustomerReturnOr
     {
         if (originalRowVersion is not { Length: 8 })
             throw new InvalidOperationException("Thông tin phiên bản dữ liệu không hợp lệ. Vui lòng tải lại trang trước khi hủy.");
+        if (cancelReason?.Trim().Length > 1000)
+            throw new InvalidOperationException("Lý do hủy không được vượt quá 1000 ký tự.");
 
         if (db.Database.CurrentTransaction == null)
             throw new InvalidOperationException("Thao tác hủy đơn trả hàng yêu cầu một giao dịch đang hoạt động (InTransactionAsync).");
@@ -452,20 +456,10 @@ public class CustomerReturnOrderRepository(EwmsDbContext db) : ICustomerReturnOr
         db.Entry(currentOrder).Property(e => e.RowVersion).OriginalValue = originalRowVersion;
 
         currentOrder.Status = "CANCELLED";
-        if (!string.IsNullOrWhiteSpace(cancelReason))
-        {
-            var trimmed = cancelReason.Trim();
-            currentOrder.Reason = string.IsNullOrWhiteSpace(currentOrder.Reason)
-                ? $"[Lý do hủy]: {trimmed}"
-                : $"{currentOrder.Reason} | [Lý do hủy]: {trimmed}";
-            if (currentOrder.Reason.Length > 1000)
-            {
-                currentOrder.Reason = currentOrder.Reason[..1000];
-            }
-        }
+        currentOrder.CloseReason = string.IsNullOrWhiteSpace(cancelReason) ? null : cancelReason.Trim();
+        currentOrder.ClosedAt = DateTime.UtcNow;
 
         db.Entry(currentOrder).Property(x => x.Status).IsModified = true;
-        db.Entry(currentOrder).Property(x => x.Reason).IsModified = true;
 
         foreach (var line in currentOrder.CustomerReturnOrderLineReturnOrders)
         {
@@ -614,26 +608,6 @@ public class CustomerReturnOrderRepository(EwmsDbContext db) : ICustomerReturnOr
             .Select(u => new { u.WarehouseId, WarehouseName = u.Warehouse != null ? u.Warehouse.WarehouseName : null, RoleName = u.Role != null ? u.Role.RoleName : null })
             .FirstOrDefaultAsync(cancellationToken);
         return (user?.WarehouseId, user?.WarehouseName, user?.RoleName);
-    }
-
-    public virtual async Task<List<ReturnReceiptHistoryDto>> GetReturnReceiptHistoryAsync(
-        long returnOrderId, CancellationToken cancellationToken = default)
-    {
-        return await db.ReturnReceipts.AsNoTracking()
-            .Where(rr => rr.ReturnOrderId == returnOrderId)
-            .OrderByDescending(rr => rr.CreatedAt)
-            .Select(rr => new ReturnReceiptHistoryDto(
-                rr.ReturnReceiptId,
-                rr.ReceiptCode,
-                rr.ReceiptDate,
-                rr.Status,
-                rr.CreatedAt,
-                rr.CompletedAt,
-                rr.PerformedByUser != null ? rr.PerformedByUser.FullName : rr.CreatedByUser.FullName,
-                db.ReturnReceiptItems.Count(i => i.ReturnReceiptId == rr.ReturnReceiptId && i.IsActive),
-                rr.Note
-            ))
-            .ToListAsync(cancellationToken);
     }
 
     public virtual async Task<Dictionary<long, int>> GetLineReceivedCountsAsync(

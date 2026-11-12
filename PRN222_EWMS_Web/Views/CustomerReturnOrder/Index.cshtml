@@ -14,52 +14,19 @@
         return local.ToString("dd/MM/yyyy HH:mm");
     }
 
-    public static (string Text, string Class) GetStatusBadge(string status) => status switch
+    public static string GetStatusText(string status) => status switch
     {
-        "DRAFT" => ("Bản nháp", "badge bg-secondary"),
-        "OPEN" => ("Đã xác nhận", "badge bg-primary"),
-        "PARTIALLY_RECEIVED" => ("Nhận một phần", "badge bg-warning text-dark"),
-        "RECEIVED" => ("Đã nhận đủ", "badge bg-success"),
-        "CLOSED" => ("Đã đóng", "badge bg-dark"),
-        "CANCELLED" => ("Đã hủy", "badge bg-danger"),
-        _ => (status, "badge bg-secondary")
+        "DRAFT" => "Bản nháp",
+        "OPEN" => "Đã xác nhận",
+        "PARTIALLY_RECEIVED" => "Nhận một phần",
+        "RECEIVED" => "Đã nhận đủ",
+        "CLOSED" => "Đã đóng",
+        "CANCELLED" => "Đã hủy",
+        _ => status
     };
 }
 
 <style>
-    .return-action-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 34px;
-        height: 34px;
-        border-radius: 6px;
-        background: none;
-        border: 1px solid transparent;
-        padding: 0;
-        font-size: 16px;
-        line-height: 1;
-        text-decoration: none;
-        vertical-align: middle;
-        box-sizing: border-box;
-        transition: all 0.15s ease-in-out;
-    }
-    .return-action-active {
-        color: #0075de !important;
-        cursor: pointer;
-    }
-    .return-action-active:hover {
-        background-color: #eff6ff;
-        border-color: #bfdbfe;
-        color: #005bab !important;
-    }
-    .return-action-disabled,
-    .return-action-disabled:disabled {
-        color: #94a3b8 !important;
-        cursor: not-allowed !important;
-        opacity: 0.6;
-        pointer-events: auto !important;
-    }
     .filter-action-btn {
         width: 130px;
         min-height: 42px;
@@ -75,6 +42,7 @@
     }
 </style>
 
+<div class="sales-page">
 <div class="workspace-heading">
     <div>
         <p class="eyebrow">BÁN HÀNG / TRẢ HÀNG</p>
@@ -207,14 +175,13 @@
                         <th scope="col" style="white-space: nowrap; width: 140px;">Ngày tạo</th>
                         <th scope="col">Người tạo</th>
                         <th scope="col" style="white-space: nowrap;">Đã nhận</th>
-                        <th scope="col" class="text-center" style="white-space: nowrap; width: 130px;">Trạng thái</th>
-                        <th scope="col" class="text-end" style="white-space: nowrap; min-width: 220px;">Thao tác</th>
+                        <th scope="col" style="white-space: nowrap; width: 130px;">Trạng thái</th>
+                        <th scope="col" class="sales-actions-cell" style="white-space: nowrap;">Thao tác</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var order in Model.Items)
                     {
-                        var statusInfo = GetStatusBadge(order.Status);
                         <tr>
                             <td style="white-space: nowrap; font-weight: 600;">
                                 @order.ReturnCode
@@ -226,11 +193,11 @@
                             <td style="white-space: nowrap;" title="Đã nhận / Còn lại">
                                 <span class="fw-semibold text-success">@order.CompletedReceivedQuantity</span>/@order.RemainingQuantity
                             </td>
-                            <td class="text-center" style="white-space: nowrap;">
-                                <span class="@statusInfo.Class">@statusInfo.Text</span>
+                            <td style="white-space: nowrap;">
+                                @GetStatusText(order.Status)
                             </td>
-                            <td class="text-end text-nowrap">
-                                <div class="d-inline-flex align-items-center justify-content-end gap-1">
+                            <td class="sales-actions-cell" style="white-space: nowrap;">
+                                <div class="sales-row-actions">
                                     <a class="workspace-button sales-button-small" asp-action="Details" asp-route-id="@order.Id" title="Chi tiết" aria-label="Chi tiết">
                                         <i class="bi bi-eye me-1" aria-hidden="true"></i> Chi tiết
                                     </a>
@@ -239,16 +206,16 @@
                                         @if (order.CanReceive)
                                         {
                                             <a href="/ReturnReceive?search=@order.ReturnCode" 
-                                               class="return-action-btn return-action-active text-primary" 
+                                               class="workspace-button sales-button-small sales-button-secondary"
                                                title="Nhận hàng" 
                                                aria-label="Nhận hàng">
-                                                <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>
+                                                <i class="bi bi-box-arrow-in-down me-1" aria-hidden="true"></i> Nhận hàng
                                             </a>
                                         }
                                         else
                                         {
-                                            <button type="button" class="return-action-btn return-action-disabled" disabled title="Nhận hàng" aria-label="Nhận hàng">
-                                                <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>
+                                            <button type="button" class="workspace-button sales-button-small sales-button-secondary disabled" disabled title="Nhận hàng" aria-label="Nhận hàng">
+                                                <i class="bi bi-box-arrow-in-down me-1" aria-hidden="true"></i> Nhận hàng
                                             </button>
                                         }
                                     }
@@ -256,13 +223,13 @@
                                     {
                                         @if (order.CanEdit)
                                         {
-                                            <a class="workspace-button sales-button-secondary sales-button-small" asp-action="Edit" asp-route-id="@order.Id" title="Chỉnh sửa" aria-label="Chỉnh sửa">
+                                            <a class="workspace-button sales-button-small sales-button-secondary" asp-action="Edit" asp-route-id="@order.Id" title="Chỉnh sửa" aria-label="Chỉnh sửa">
                                                 <i class="bi bi-pencil-square me-1" aria-hidden="true"></i> Sửa
                                             </a>
                                         }
                                         else
                                         {
-                                            <button type="button" class="workspace-button sales-button-small" disabled title="Chỉnh sửa" aria-label="Chỉnh sửa">
+                                            <button type="button" class="workspace-button sales-button-small sales-button-secondary disabled" disabled title="Chỉnh sửa" aria-label="Chỉnh sửa">
                                                 <i class="bi bi-pencil-square me-1" aria-hidden="true"></i> Sửa
                                             </button>
                                         }
@@ -273,14 +240,14 @@
                                                 <form method="post" asp-action="Cancel" asp-route-id="@order.Id" class="d-inline m-0 p-0">
                                                     @Html.AntiForgeryToken()
                                                     <input type="hidden" name="rowVersion" value="@Convert.ToBase64String(order.RowVersion)" />
-                                                    <button type="submit" class="workspace-button sales-button-secondary sales-button-small text-danger" style="border-color: #fca5a5;" title="Hủy" aria-label="Hủy">
+                                                    <button type="submit" class="workspace-button sales-button-small sales-button-secondary" title="Hủy" aria-label="Hủy">
                                                         <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Hủy
                                                     </button>
                                                 </form>
                                             }
                                             else
                                             {
-                                                <button type="button" class="workspace-button sales-button-secondary sales-button-small text-danger" style="border-color: #fca5a5;"
+                                                <button type="button" class="workspace-button sales-button-small sales-button-secondary"
                                                         data-bs-toggle="modal" 
                                                         data-bs-target="#indexCancelModal" 
                                                         data-return-id="@order.Id" 
@@ -294,7 +261,7 @@
                                         }
                                         else
                                         {
-                                            <button type="button" class="workspace-button sales-button-small" disabled title="Hủy" aria-label="Hủy">
+                                            <button type="button" class="workspace-button sales-button-small sales-button-secondary disabled" disabled title="Hủy" aria-label="Hủy">
                                                 <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Hủy
                                             </button>
                                         }
@@ -350,6 +317,7 @@
         }
     }
 </section>
+</div>
 
 @if (!Model.IsWarehouseStaff)
 {

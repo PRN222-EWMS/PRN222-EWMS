@@ -4,15 +4,16 @@
         const body = () => document.getElementById("returnLinesBody");
         const alertBox = () => document.getElementById("noLinesAlert");
 
-        function toast(msg) {
-            const c = document.querySelector(".toast-container") || document.body;
+        function showWarning(msg) {
+            document.getElementById("returnOrderWarning")?.remove();
             const el = document.createElement("div");
-            el.className = "toast align-items-center border-0 shadow bg-white";
-            el.innerHTML = `<div class="d-flex border-start border-danger border-4 rounded-start"><div class="toast-body d-flex align-items-center gap-2"><i class="bi bi-exclamation-triangle-fill text-danger"></i><span></span></div><button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button></div>`;
-            el.querySelector(".toast-body span").textContent = msg;
-            c.appendChild(el);
-            new bootstrap.Toast(el, { delay: 3000 }).show();
-            el.addEventListener("hidden.bs.toast", () => el.remove());
+            el.id = "returnOrderWarning";
+            el.className = "alert alert-warning alert-dismissible pe-auto mb-3";
+            el.setAttribute("role", "alert");
+            el.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i><span></span><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng thông báo"></button>`;
+            el.querySelector("span").textContent = msg;
+            document.getElementById("inlineNotifications").appendChild(el);
+            el.scrollIntoView({ behavior: "instant", block: "nearest" });
         }
 
         function selectedIds() {
@@ -23,7 +24,7 @@
             const used = selectedIds();
             body().querySelectorAll(".soline-select").forEach(sel => {
                 Array.from(sel.options).forEach(opt => {
-                    if (opt.value) opt.disabled = opt.value !== sel.value && used.includes(opt.value);
+                    if (opt.value) opt.disabled = Number(opt.dataset.eligible) <= 0 || (opt.value !== sel.value && used.includes(opt.value));
                 });
             });
         }
@@ -52,10 +53,11 @@
         }
 
         function addRow(lines) {
-            if (!lines?.length) return toast("Đơn bán hàng không còn mặt hàng đủ điều kiện trả.");
+            lines = (lines || []).filter(line => line.eligibleQuantity > 0);
+            if (!lines.length) return showWarning("Đơn bán hàng không còn mặt hàng đủ điều kiện trả.");
             const used = selectedIds();
             const avail = lines.filter(l => !used.includes(l.solineId.toString()));
-            if (!avail.length) return toast("Tất cả mặt hàng đủ điều kiện đã được thêm.");
+            if (!avail.length) return showWarning("Tất cả mặt hàng đủ điều kiện đã được thêm.");
 
             const idx = body().children.length;
             const tr = document.createElement("tr");
@@ -103,59 +105,41 @@
             const btnAdd = document.getElementById("btnAddLine");
             if (btnAdd) btnAdd.onclick = () => addRow(lines);
 
-            const btnOpenConfirm = document.getElementById("btnOpenConfirmModal");
-            const modalEl = document.getElementById("confirmReturnModal");
-            const btnSubmitConfirm = document.getElementById("btnSubmitConfirmOrder");
-
-            if (btnOpenConfirm && modalEl) {
-                const modal = new bootstrap.Modal(modalEl);
-                btnOpenConfirm.onclick = () => {
-                    const form = btnOpenConfirm.closest("form");
-                    if (form && !form.reportValidity()) return;
-                    if (!body().children.length) return toast("Vui lòng thêm ít nhất một mặt hàng hoàn trả.");
-                    modal.show();
-                };
-
-                if (btnSubmitConfirm) {
-                    btnSubmitConfirm.onclick = () => {
-                        modal.hide();
-                        const form = btnOpenConfirm.closest("form");
-                        let actionInp = form.querySelector("input[name='Action']");
-                        if (!actionInp) {
-                            actionInp = document.createElement("input");
-                            actionInp.type = "hidden";
-                            actionInp.name = "Action";
-                            form.appendChild(actionInp);
-                        }
-                        actionInp.value = "SaveAndConfirm";
-                        form.submit();
-                    };
-                }
-            }
-
             const soSelect = document.getElementById("salesOrderSelect");
             if (isCreate && soSelect) {
+                let loadId = 0;
                 soSelect.onchange = async function () {
+                    const requestId = ++loadId;
+                    const salesOrderId = this.value;
                     const opt = this.options[this.selectedIndex];
                     const cust = document.getElementById("customerNameDisplay");
                     const wh = document.getElementById("warehouseSelect");
-                    if (!this.value) {
+                    document.getElementById("returnOrderWarning")?.remove();
+                    lines = [];
+                    body().replaceChildren();
+                    btnAdd.style.display = "none";
+                    reindex();
+                    if (!salesOrderId) {
                         if (cust) cust.value = "Chưa chọn đơn bán hàng";
-                        lines = []; body().innerHTML = ""; btnAdd.style.display = "none"; reindex();
                         return;
                     }
                     if (cust) cust.value = opt.getAttribute("data-customer") || "Khách lẻ";
                     const defaultWh = opt.getAttribute("data-default-warehouse");
                     if (defaultWh && wh && !wh.value) wh.value = defaultWh;
                     try {
-                        const res = await fetch(`${fetchUrl}?salesOrderId=${this.value}`);
-                        lines = res.ok ? await res.json() : [];
-                        body().innerHTML = "";
-                        btnAdd.style.display = lines.length ? "inline-block" : "none";
+                        const res = await fetch(`${fetchUrl}?salesOrderId=${salesOrderId}`);
+                        if (!res.ok) throw new Error("Không thể tải mặt hàng.");
+                        const loadedLines = await res.json();
+                        if (requestId !== loadId) return;
+                        lines = loadedLines;
+                        btnAdd.style.display = lines.some(line => line.eligibleQuantity > 0) ? "inline-block" : "none";
                         if (lines.length) addRow(lines); else reindex();
-                    } catch (err) { console.error(err); }
+                    } catch {
+                        if (requestId === loadId) showWarning("Không thể tải mặt hàng của đơn bán hàng. Vui lòng chọn lại đơn để thử lại.");
+                    }
                 };
             }
+            syncDropdowns();
         }
 
         return { initCreate: (url, l) => init(true, url, l), initEdit: (l) => init(false, null, l) };
