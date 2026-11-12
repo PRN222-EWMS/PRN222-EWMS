@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using PRN222_EWMS_Web.Services.Warehouse;
 using PRN222_EWMS_Web.ViewModels.Transfer;
 
@@ -9,105 +10,51 @@ namespace PRN222_EWMS_Web.Controllers.Warehouse;
 [Authorize(Roles = "MANAGER,WAREHOUSE_STAFF")]
 [Route("Transfer")]
 [Route("TransferOrder")]
-public class TransferController : Controller
+public class TransferController(ITransferOrderService transfers) : Controller
 {
-    private readonly ITransferOrderService _transferService;
-    private readonly ILogger<TransferController> _logger;
-
-    public TransferController(ITransferOrderService transferService, ILogger<TransferController> logger)
-    {
-        _transferService = transferService;
-        _logger = logger;
-    }
-
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-    private string CurrentUserRole => User.IsInRole("MANAGER") ? "MANAGER" : "WAREHOUSE_STAFF";
 
-    // =========================================================================
-    // 1. DANH SÁCH LỆNH CHUYỂN KHO (MÀN HÌNH NÀY DO THÀNH VIÊN KHÁC PHỤ TRÁCH)
-    // =========================================================================
     [HttpGet("")]
     [HttpGet("Index")]
-    public IActionResult Index()
-    {
-        // Điều hướng sang màn hình theo dõi chuyển kho của Quản lý
-        return RedirectToAction("Index", "ManagerTransfer");
-    }
+    public IActionResult Index() => RedirectToAction("Index", "ManagerTransfer");
 
-    // =========================================================================
-    // 2. CHI TIẾT LỆNH CHUYỂN KHO (MÀN HÌNH NÀY DO THÀNH VIÊN KHÁC PHỤ TRÁCH)
-    // =========================================================================
     [HttpGet("Details/{id:long}")]
-    public IActionResult Details(long id)
-    {
-        // Màn hình Details thuộc phạm vi của đồng đội. Tạm thời điều hướng vào Edit.
-        return RedirectToAction(nameof(Edit), new { id });
-    }
+    public IActionResult Details(long id) => RedirectToAction(nameof(Edit), new { id });
 
-    // =========================================================================
-    // 3. CHỨC NĂNG 37: TẠO LỆNH CHUYỂN KHO (MANAGER ONLY)
-    // =========================================================================
     [HttpGet("Create")]
     [Authorize(Roles = "MANAGER")]
-    public async Task<IActionResult> Create()
-    {
-        var model = await _transferService.GetCreateFormAsync();
-        return View(model);
-    }
+    public async Task<IActionResult> Create() => View(await transfers.GetCreateFormAsync());
 
     [HttpPost("Create")]
     [Authorize(Roles = "MANAGER")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(CreateTransferOrderViewModel model)
     {
-        var result = await _transferService.CreateTransferOrderAsync(model, CurrentUserId);
-
-        if (!result.Success)
+        NormalizeBindingErrors(ModelState);
+        if (ModelState.IsValid)
         {
-            TempData["Error"] = result.Error;
-            var form = await _transferService.GetCreateFormAsync();
-            form.FromWarehouseId = model.FromWarehouseId;
-            form.ToWarehouseId = model.ToWarehouseId;
-            form.ItemCondition = model.ItemCondition;
-            form.DispatchDate = model.DispatchDate;
-            form.ExpectedDate = model.ExpectedDate;
-            form.AssignedToUserId = model.AssignedToUserId;
-            form.Note = model.Note;
-            form.Lines = model.Lines;
-            return View(form);
+            var result = await transfers.CreateTransferOrderAsync(model, CurrentUserId);
+            if (result.Success)
+            {
+                TempData["Success"] = model.IsRelease
+                    ? "Đã phát hành lệnh chuyển kho và giữ chỗ tồn nguồn."
+                    : "Đã lưu bản nháp lệnh chuyển kho.";
+                return RedirectToAction(nameof(Edit), new { id = result.TransferOrderId });
+            }
+
+            ApplyServiceErrors(ModelState, model.Assessment, result.Error);
         }
 
-        TempData["Success"] = model.IsRelease 
-            ? "Đã tạo và phát hành (RELEASED) lệnh chuyển kho thành công! Nguồn tồn đã được giữ chỗ."
-            : "Đã lưu bản nháp (DRAFT) lệnh chuyển kho thành công!";
-
-        return RedirectToAction(nameof(Edit), new { id = result.TransferOrderId });
+        await transfers.PopulateFormAsync(model);
+        return View(model);
     }
 
-    [HttpGet("GetAvailableProducts")]
-    [Authorize(Roles = "MANAGER,WAREHOUSE_STAFF")]
-    public async Task<IActionResult> GetAvailableProducts(int warehouseId, string itemCondition = "GOOD")
-    {
-        var products = await _transferService.GetAvailableProductsAsync(warehouseId, itemCondition);
-        return Json(products);
-    }
-
-    // =========================================================================
-    // 4. CHỨC NĂNG 36: CHỈNH SỬA LỆNH CHUYỂN KHO (MANAGER ONLY)
-    // =========================================================================
     [HttpGet("Edit/{id:long}")]
     [Authorize(Roles = "MANAGER")]
     public async Task<IActionResult> Edit(long id)
     {
-        var model = await _transferService.GetEditFormAsync(id, CurrentUserId);
-
-        if (model == null)
-        {
-            TempData["Error"] = "Lệnh chuyển kho không tồn tại hoặc đã ở trạng thái không thể chỉnh sửa.";
-            return RedirectToAction(nameof(Index));
-        }
-
-        return View(model);
+        var model = await transfers.GetEditFormAsync(id, CurrentUserId);
+        return model == null ? NotFound() : View(model);
     }
 
     [HttpPost("Edit/{id:long}")]
@@ -115,40 +62,80 @@ public class TransferController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(long id, EditTransferOrderViewModel model)
     {
-        if (id != model.TransferOrderId)
+        if (id != model.TransferOrderId) return BadRequest();
+        NormalizeBindingErrors(ModelState);
+
+        if (ModelState.IsValid)
         {
-            return BadRequest();
+            var result = await transfers.UpdateTransferOrderAsync(model, CurrentUserId);
+            if (result.Success)
+            {
+                TempData["Success"] = "Đã cập nhật lệnh chuyển kho thành công.";
+                return RedirectToAction(nameof(Edit), new { id });
+            }
+
+            ApplyServiceErrors(ModelState, model.Assessment, result.Error);
         }
 
-        var result = await _transferService.UpdateTransferOrderAsync(model, CurrentUserId);
-
-        if (!result.Success)
+        var current = await transfers.GetEditFormAsync(id, CurrentUserId);
+        if (current == null) return NotFound();
+        if (!current.CanEdit)
         {
-            TempData["Error"] = result.Error;
-            var form = await _transferService.GetEditFormAsync(id, CurrentUserId);
-            if (form == null) return RedirectToAction(nameof(Index));
-
-            form.DispatchDate = model.DispatchDate;
-            form.ExpectedDate = model.ExpectedDate;
-            form.AssignedToUserId = model.AssignedToUserId;
-            form.Note = model.Note;
-            form.Lines = model.Lines;
-            return View(form);
+            ModelState.Clear();
+            return View(current);
         }
 
-        TempData["Success"] = "Cập nhật lệnh chuyển kho thành công!";
-        return RedirectToAction(nameof(Edit), new { id = model.TransferOrderId });
+        model.TransferCode = current.TransferCode;
+        model.Status = current.Status;
+        model.CanEdit = current.CanEdit;
+        model.CanCancel = current.CanCancel;
+        model.LockReason = current.LockReason;
+        await transfers.PopulateFormAsync(model, id);
+        return View(model);
     }
 
-    // =========================================================================
-    // 5. HỦY LỆNH CHUYỂN KHO (MANAGER ONLY)
-    // =========================================================================
+    [HttpGet("GetAvailableProducts")]
+    public async Task<IActionResult> GetAvailableProducts(int warehouseId, string itemCondition = "GOOD", long? transferOrderId = null)
+    {
+        if (warehouseId <= 0 || itemCondition is not ("GOOD" or "DAMAGED")) return BadRequest();
+        return Json(await transfers.GetAvailableProductsAsync(warehouseId, itemCondition, transferOrderId));
+    }
+
+    [HttpPost("Preview")]
+    [Authorize(Roles = "MANAGER")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Preview(CreateTransferOrderViewModel model, long? transferOrderId = null)
+    {
+        model.IsRelease = false;
+        NormalizeBindingErrors(ModelState);
+
+        // Ignore incomplete line rows during live background preview
+        if (model.Lines != null)
+        {
+            model.Lines = model.Lines.Where(l => l.ProductId > 0 && l.Quantity > 0).ToList();
+        }
+
+        if (model.FromWarehouseId <= 0 || model.ToWarehouseId <= 0 || model.Lines == null || model.Lines.Count == 0)
+        {
+            return Json(new TransferAssessment());
+        }
+
+        if (transferOrderId.HasValue)
+        {
+            var current = await transfers.GetEditFormAsync(transferOrderId.Value, CurrentUserId);
+            if (current == null || !current.CanEdit)
+                return Conflict(new { message = current?.LockReason ?? "Lệnh không tồn tại." });
+        }
+
+        return Json(await transfers.AssessAsync(model, transferOrderId, forceRelease: false));
+    }
+
     [HttpPost("Cancel/{id:long}")]
     [Authorize(Roles = "MANAGER")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Cancel(long id)
     {
-        var result = await _transferService.CancelTransferOrderAsync(id, CurrentUserId);
+        var result = await transfers.CancelTransferOrderAsync(id, CurrentUserId);
 
         if (!result.Success)
         {
@@ -156,7 +143,58 @@ public class TransferController : Controller
             return RedirectToAction(nameof(Edit), new { id });
         }
 
-        TempData["Success"] = "Đã hủy lệnh chuyển kho thành công!";
+        TempData["Success"] = "Đã hủy lệnh chuyển kho thành công.";
         return RedirectToAction(nameof(Edit), new { id });
+    }
+
+    private static void NormalizeBindingErrors(ModelStateDictionary modelState)
+    {
+        foreach (var (key, entry) in modelState.ToList())
+        {
+            if (entry is null || entry.Errors.Count == 0) continue;
+
+            var hasRawBindingError = entry.Errors.Any(e =>
+                e.ErrorMessage.Contains("is invalid", StringComparison.OrdinalIgnoreCase) ||
+                e.ErrorMessage.Contains("is required", StringComparison.OrdinalIgnoreCase));
+
+            if (!hasRawBindingError) continue;
+
+            modelState.Remove(key);
+            if (key == nameof(CreateTransferOrderViewModel.FromWarehouseId))
+                modelState.AddModelError(key, "Vui lòng chọn kho nguồn.");
+            else if (key == nameof(CreateTransferOrderViewModel.ToWarehouseId))
+                modelState.AddModelError(key, "Vui lòng chọn kho đích.");
+            else if (key.EndsWith(".ProductId", StringComparison.Ordinal))
+                modelState.AddModelError(key, "Vui lòng chọn sản phẩm.");
+            else if (key.EndsWith(".Quantity", StringComparison.Ordinal))
+                modelState.AddModelError(key, "Số lượng phải là số nguyên từ 1 đến 1.000.000.");
+            else
+                modelState.AddModelError(key, "Giá trị nhập không hợp lệ.");
+        }
+    }
+
+    private static void ApplyServiceErrors(ModelStateDictionary modelState, TransferAssessment? assessment, string? fallbackError)
+    {
+        if (assessment != null && assessment.FieldErrors.Count > 0)
+        {
+            foreach (var (key, message) in assessment.FieldErrors)
+            {
+                modelState.AddModelError(key, message);
+            }
+
+            var nonFieldErrors = assessment.Errors
+                .Where(e => !assessment.FieldErrors.Values.Contains(e))
+                .ToList();
+            foreach (var err in nonFieldErrors)
+            {
+                modelState.AddModelError("", err);
+            }
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(fallbackError))
+        {
+            modelState.AddModelError("", fallbackError);
+        }
     }
 }

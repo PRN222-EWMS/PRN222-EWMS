@@ -337,7 +337,7 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
 
         await repository.AddOrderAsync(order);
 
-        order.HasShortage = await AllocateReservationsAsync(order, isSubmit);
+        order.HasShortage = await ValidateDemandAvailabilityAsync(order);
 
         await repository.SaveChangesWithActorAsync(actorId);
         return order.SalesOrderId;
@@ -429,7 +429,7 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
             });
         }
 
-        order.HasShortage = await AllocateReservationsAsync(order, isSubmit);
+        order.HasShortage = await ValidateDemandAvailabilityAsync(order);
 
         await repository.SaveChangesWithActorAsync(actorId);
         return true;
@@ -495,13 +495,21 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
     public Task<List<ProductStockLookupDto>> GetAvailableProductsAsync(int warehouseId) =>
         repository.GetAvailableProductsAsync(warehouseId);
 
-    private async Task<bool> AllocateReservationsAsync(SalesOrder order, bool isSubmit)
+    private async Task<bool> ValidateDemandAvailabilityAsync(SalesOrder order)
     {
         var heldBySource = await repository.Reservations
-            .Where(r => r.Status == "ACTIVE" && r.WarehouseId == order.WarehouseId)
+            .Where(r => r.Status == "ACTIVE" && r.WarehouseId == order.WarehouseId && r.TransferOrderId != null)
             .GroupBy(r => r.SupplySourceId)
             .Select(g => new { SupplySourceId = g.Key, ReservedBalance = g.Sum(r => (long)r.ReservedQuantity - r.ConsumedQuantity - r.ReleasedQuantity) })
             .ToDictionaryAsync(x => x.SupplySourceId, x => x.ReservedBalance);
+
+        var claimsBySource = await repository.SupplySources.Where(s => s.WarehouseId == order.WarehouseId)
+            .Select(s => new
+            {
+                s.SupplySourceId,
+                Sales = s.SerialItemCurrentSupplySources.Count(i => i.PickingClaim != null && i.PickingClaim.OutboundId != null),
+                Transfer = s.SerialItemCurrentSupplySources.Count(i => i.PickingClaim != null && i.PickingClaim.DispatchId != null)
+            }).ToDictionaryAsync(s => s.SupplySourceId);
 
         var rawSources = await repository.SupplySources
             .Where(s => s.WarehouseId == order.WarehouseId && s.ItemCondition == "GOOD")
@@ -510,7 +518,9 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
         var sources = rawSources
             .Select(s =>
             {
-                var reserved = heldBySource.TryGetValue(s.SupplySourceId, out var b) ? b : 0;
+                var transferHeld = heldBySource.TryGetValue(s.SupplySourceId, out var b) ? b : 0;
+                claimsBySource.TryGetValue(s.SupplySourceId, out var claims);
+                var reserved = Math.Max(transferHeld, claims?.Transfer ?? 0) + (claims?.Sales ?? 0);
                 return new
                 {
                     s.SupplySourceId,
@@ -552,28 +562,8 @@ public class SalesService(ISalesRepository repository, IUserRepository users) : 
                 sourcePool[src.SupplySourceId] -= take;
                 needed -= take;
 
-                if (isSubmit)
-                {
-                    var reservation = new Reservation
-                    {
-                        SupplySourceId = src.SupplySourceId,
-                        Soline = line,
-                        SalesOrder = order,
-                        ProductId = line.ProductId,
-                        WarehouseId = order.WarehouseId,
-                        ItemCondition = "GOOD",
-                        SupplyState = src.SupplyState,
-                        ReservedQuantity = (int)take,
-                        ConsumedQuantity = 0,
-                        ReleasedQuantity = 0,
-                        Status = "ACTIVE",
-                        CreatedAt = DateTime.UtcNow
-                    };
-                    if (line.SolineId > 0) reservation.SolineId = line.SolineId;
-                    if (order.SalesOrderId > 0) reservation.SalesOrderId = order.SalesOrderId;
-
-                    order.Reservations.Add(reservation);
-                }
+                // SO records demand. Serial claims and physical consumption holds are
+                // created only when warehouse staff actually select goods for an Outbound.
 
                 if (needed == 0) break;
             }

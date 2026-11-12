@@ -1,0 +1,156 @@
+@using Microsoft.AspNetCore.Mvc.Rendering
+@model PRN222_EWMS_Web.ViewModels.Transfer.CreateTransferOrderViewModel
+
+<div asp-validation-summary="ModelOnly" class="transfer-notice transfer-notice-danger mb-4" role="alert"></div>
+
+<section class="workspace-card mb-4">
+    <h2 class="transfer-card-title">1. Thông tin điều chuyển</h2>
+    <div class="transfer-info-grid">
+        <div class="transfer-col-2">
+            <label asp-for="FromWarehouseId" class="transfer-label">
+                Kho nguồn <span class="text-danger">*</span>
+            </label>
+            <select asp-for="FromWarehouseId" asp-items="@(new SelectList(Model.Warehouses, "Id", "Name"))" class="form-select">
+                <option value="">-- Chọn kho nguồn --</option>
+            </select>
+            <span asp-validation-for="FromWarehouseId" class="transfer-field-error"></span>
+        </div>
+
+        <div class="transfer-col-2">
+            <label asp-for="ToWarehouseId" class="transfer-label">
+                Kho đích <span class="text-danger">*</span>
+            </label>
+            <select asp-for="ToWarehouseId" asp-items="@(new SelectList(Model.Warehouses, "Id", "Name"))" class="form-select">
+                <option value="">-- Chọn kho đích --</option>
+            </select>
+            <span asp-validation-for="ToWarehouseId" class="transfer-field-error"></span>
+        </div>
+
+        <div class="transfer-col-2">
+            <label asp-for="ItemCondition" class="transfer-label">
+                Tình trạng hàng hóa <span class="text-danger">*</span>
+            </label>
+            <select asp-for="ItemCondition" class="form-select">
+                <option value="GOOD">Hàng tốt (GOOD)</option>
+                <option value="DAMAGED">Hàng hỏng (DAMAGED)</option>
+            </select>
+            <span asp-validation-for="ItemCondition" class="transfer-field-error"></span>
+        </div>
+
+        <div class="transfer-col-3">
+            <label asp-for="DispatchDate" class="transfer-label">
+                Ngày dự kiến gửi <span class="text-danger transfer-release-req">*</span>
+            </label>
+            <input asp-for="DispatchDate" type="date" class="form-control" />
+            <span asp-validation-for="DispatchDate" class="transfer-field-error"></span>
+        </div>
+
+        <div class="transfer-col-3">
+            <label asp-for="ExpectedDate" class="transfer-label">
+                Ngày dự kiến đến <span class="text-danger transfer-release-req">*</span>
+            </label>
+            <input asp-for="ExpectedDate" type="date" class="form-control" />
+            <span asp-validation-for="ExpectedDate" class="transfer-field-error"></span>
+        </div>
+
+        <div class="transfer-col-full">
+            <label asp-for="Note" class="transfer-label">Ghi chú</label>
+            <textarea asp-for="Note" class="form-control" maxlength="1000" rows="2" placeholder="Nhập ghi chú nếu có..."></textarea>
+            <span asp-validation-for="Note" class="transfer-field-error"></span>
+        </div>
+    </div>
+</section>
+
+<section class="workspace-card">
+    <div class="transfer-card-header">
+        <h2 class="transfer-card-title">2. Danh sách sản phẩm</h2>
+        @if (Model.CanEdit)
+        {
+            <button type="button" id="transfer-add" class="workspace-button sales-button-secondary sales-button-small">
+                <i class="bi bi-plus-lg" aria-hidden="true"></i> Thêm sản phẩm
+            </button>
+        }
+    </div>
+
+    <div class="table-wrap">
+        <table class="workspace-table transfer-lines-table">
+            <thead>
+                <tr>
+                    <th style="width: 56px; text-align: center;">STT</th>
+                    <th style="min-width: 280px;">Sản phẩm <span class="text-danger">*</span></th>
+                    <th style="width: 96px; text-align: center;">Đơn vị</th>
+                    <th style="width: 150px; text-align: center;">Tồn khả dụng</th>
+                    <th style="width: 160px; text-align: right;">Số lượng chuyển <span class="text-danger">*</span></th>
+                    <th style="width: 72px; text-align: center;">Xóa</th>
+                </tr>
+            </thead>
+            <tbody id="transfer-lines">
+                @for (var i = 0; i < Model.Lines.Count; i++)
+                {
+                    var selected = Model.Products.FirstOrDefault(p => p.ProductId == Model.Lines[i].ProductId);
+                    var hasProduct = Model.Lines[i].ProductId > 0;
+                    var available = selected?.UnreservedQuantity ?? Model.Lines[i].AvailableQuantity;
+                    var stockBadgeClass = !hasProduct
+                        ? "badge-stock"
+                        : (available > 0 && Model.Lines[i].Quantity <= available ? "badge-stock-ok" : "badge-stock-zero");
+                    <tr>
+                        <td style="text-align: center;">
+                            <span class="transfer-row-num muted fw-semibold">@(i + 1)</span>
+                        </td>
+                        <td>
+                            <input asp-for="Lines[i].TransferLineId" type="hidden" />
+                            <select asp-for="Lines[i].ProductId" class="form-select transfer-product">
+                                <option value="">-- Chọn sản phẩm --</option>
+                                @foreach (var p in Model.Products)
+                                {
+                                    <option value="@p.ProductId">[@p.ProductCode] @p.ProductName</option>
+                                }
+                            </select>
+                            <span asp-validation-for="Lines[i].ProductId" class="transfer-field-error"></span>
+                        </td>
+                        <td style="text-align: center;">
+                            <span class="transfer-unit muted">@(selected?.Unit ?? "—")</span>
+                        </td>
+                        <td style="text-align: center;">
+                            <span class="stock-badge @stockBadgeClass transfer-available">
+                                @(hasProduct ? available.ToString("N0") : "—")
+                            </span>
+                        </td>
+                        <td>
+                            <input asp-for="Lines[i].Quantity" class="form-control text-end transfer-quantity" type="number" min="1" max="1000000" step="1" />
+                            <span asp-validation-for="Lines[i].Quantity" class="transfer-field-error text-end"></span>
+                        </td>
+                        <td style="text-align: center;">
+                            <button type="button" class="sales-danger-icon transfer-remove" title="Xóa dòng" aria-label="Xóa dòng sản phẩm">
+                                <i class="bi bi-trash" aria-hidden="true"></i>
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr class="transfer-table-total">
+                    <td colspan="4" style="text-align: right;">Tổng số lượng chuyển:</td>
+                    <td style="text-align: right;" id="totalQtyDisplay">@Model.Lines.Sum(l => Math.Max(0, l.Quantity)).ToString("N0")</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    <span asp-validation-for="Lines" class="transfer-field-error"></span>
+</section>
+
+<div id="transfer-feedback" role="status" aria-live="polite">
+    @if (Model.Assessment.Warnings.Count > 0)
+    {
+        @foreach (var message in Model.Assessment.Warnings.Distinct())
+        {
+            <div class="transfer-notice transfer-notice-warning">
+                <i class="bi bi-exclamation-triangle flex-shrink-0" aria-hidden="true"></i>
+                <span>@message</span>
+            </div>
+        }
+    }
+</div>
+
+<script type="application/json" id="transfer-products">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Products, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)))</script>

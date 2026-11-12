@@ -5,7 +5,7 @@ using PRN222_EWMS_Web.ViewModels.Inbound;
 
 namespace PRN222_EWMS_Web.Services.WarehouseStaff;
 
-public class InboundService(IInboundRepository repo) : IInboundService
+public class InboundService(IInboundRepository repo, PRN222_EWMS_Web.Services.Warehouse.IOutboundSupplyService supply) : IInboundService
 {
     private const int PageSize = 10;
     private static readonly TimeZoneInfo VietnamTime = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
@@ -196,6 +196,7 @@ public class InboundService(IInboundRepository repo) : IInboundService
         var warehouseId = await WarehouseAsync(userId);
         await repo.InTransactionAsync(userId, async () =>
         {
+            await supply.LockWarehouseAsync(warehouseId);
             var inbound = await repo.GetInboundAsync(inboundId, warehouseId) ?? throw new ArgumentException("Không tìm thấy phiếu.");
             if (inbound.Status == "DONE") return true;
             CheckVersion(inbound, version);
@@ -225,7 +226,7 @@ public class InboundService(IInboundRepository repo) : IInboundService
                 var source = new SupplySource { ProductId = group.Key.ProductId, WarehouseId = warehouseId,
                     ItemCondition = group.Key.Condition, SourceType = "INBOUND", SupplyState = "PHYSICAL",
                     InboundId = inboundId, EligibleQuantity = group.Key.Condition == "GOOD" ? group.Count() : 0,
-                    RemainingQuantity = group.Key.Condition == "GOOD" ? group.Count() : 0,
+                    RemainingQuantity = group.Count(),
                     AvailableFrom = DateOnly.FromDateTime(now), CreatedAt = now };
                 repo.AddSource(source);
                 await repo.SaveAsync();
@@ -258,6 +259,7 @@ public class InboundService(IInboundRepository repo) : IInboundService
             var expectedTotal = inbound.PurchaseOrder.PurchaseOrderLines.Sum(x => x.OrderedQuantity - x.ClosedQuantity);
             inbound.PurchaseOrder.Status = receivedTotal >= expectedTotal ? "RECEIVED" : "PARTIALLY_RECEIVED";
             await repo.SaveAsync();
+            await supply.AfterInboundPostedAsync(inboundId);
             return true;
         });
     }
