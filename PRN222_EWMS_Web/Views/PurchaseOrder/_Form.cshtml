@@ -109,7 +109,7 @@
         <thead>
             <tr>
                 <th style="width: 40px;">#</th>
-                <th style="min-width: 320px;">Sản phẩm (Mã / Tên / Model)</th>
+                <th style="min-width: 320px;">Sản phẩm</th>
                 <th style="width: 120px;">ĐVT</th>
                 <th style="width: 180px;">Số lượng đặt</th>
                 <th style="width: 60px; text-align: center;">Xóa</th>
@@ -131,7 +131,7 @@
                                         data-unit="@p.Unit"
                                         data-code="@p.ProductCode"
                                         data-model="@p.Model">
-                                    [@p.ProductCode] @p.ProductName (@p.Model)
+                                    @p.ProductName
                                 </option>
                             }
                         </select>
@@ -240,7 +240,7 @@
 
                     const opt = document.createElement('option');
                     opt.value = id;
-                    opt.textContent = `[${code}] ${name}${model ? ` (${model})` : ''}`;
+                    opt.textContent = name;
                     opt.dataset.unit = unit;
                     opt.dataset.code = code;
                     opt.dataset.model = model;
@@ -316,7 +316,7 @@
                 const name = p.productName ?? p.ProductName ?? '';
                 const model = p.model ?? p.Model ?? '';
                 const unit = p.unit ?? p.Unit ?? '';
-                optionsHtml += `<option value="${id}" data-unit="${unit}" data-code="${code}" data-model="${model}">[${code}] ${name}${model ? ` (${model})` : ''}</option>`;
+                optionsHtml += `<option value="${id}" data-unit="${unit}" data-code="${code}" data-model="${model}">${name}</option>`;
             });
 
             newRow.innerHTML = `
