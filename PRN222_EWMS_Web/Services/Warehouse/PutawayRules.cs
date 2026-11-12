@@ -20,16 +20,19 @@ internal static class PutawayRules
             return "Kho thuê chưa bắt đầu, đã hết hạn hoặc thiếu kỳ thuê. Cần cập nhật hợp đồng trước khi xếp kho.";
         if (item.ItemCondition is not ("GOOD" or "DAMAGED")) return "Tình trạng hàng chưa hợp lệ.";
         var source = item.CurrentSupplySource;
-        if (source is null || source.SupplyState != "PHYSICAL" || source.WarehouseId != item.CurrentWarehouseId
+        if (source is null || source.SupplyState != "PHYSICAL" || item.CurrentSupplyState != "PHYSICAL"
+            || source.WarehouseId != item.CurrentWarehouseId
             || source.ProductId != item.ProductId || source.ItemCondition != item.ItemCondition)
             return "Nguồn hàng hiện tại không khớp kho, sản phẩm hoặc tình trạng của serial.";
         var receiptDone = source.SourceType switch
         {
             "INBOUND" => source.Inbound?.Status == "DONE" && source.Inbound.PurchaseOrder.WarehouseId == item.CurrentWarehouseId,
             "RETURN" => source.ReturnReceipt?.Status == "DONE" && source.ReturnReceipt.ReturnOrder.WarehouseId == item.CurrentWarehouseId,
+            "TRANSFER_RECEIPT" => source.TransferReceipt?.Status == "DONE"
+                && source.TransferReceipt.TransferOrder.ToWarehouseId == item.CurrentWarehouseId,
             _ => false
         };
-        if (!receiptDone) return "Chỉ xếp hàng mua hoặc hàng khách trả đã được nhận chính thức bằng phiếu DONE.";
+        if (!receiptDone) return "Chỉ xếp hàng mua, hàng khách trả hoặc hàng chuyển kho đã có phiếu nhận hoàn tất tại kho này.";
         if (item.Product.Status != "ACTIVE") return "Sản phẩm đã ngừng hoạt động. Cần kiểm tra lại hồ sơ sản phẩm.";
         if (!ValidProfile(item.Product.LengthCm, item.Product.WidthCm, item.Product.HeightCm, item.Product.GrossWeightKg))
             return "Sản phẩm thiếu kích thước đóng gói hoặc khối lượng hợp lệ.";
