@@ -152,8 +152,9 @@ public class SalesOrderFormViewModel
     [Display(Name = "Kho xuất hàng")]
     public int? WarehouseId { get; set; }
 
+    [Required(ErrorMessage = "Vui lòng chọn ngày đặt hàng.")]
     [Display(Name = "Ngày đặt hàng")]
-    public DateOnly OrderDate { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+    public DateOnly? OrderDate { get; set; }
 
     [Display(Name = "Ngày yêu cầu xuất hàng")]
     public DateOnly? RequestedDate { get; set; }
