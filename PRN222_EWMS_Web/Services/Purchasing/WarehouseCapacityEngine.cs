@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Models;
+using PRN222_EWMS_Web.Services.Warehouse;
 
 namespace PRN222_EWMS_Web.Services.Purchasing;
 
@@ -67,8 +68,8 @@ public class WarehouseCapacityEngine(EwmsDbContext db) : IWarehouseCapacityEngin
             var curr = loc;
             while (curr != null)
             {
-                if (string.Equals(curr.ZoneType, "DEFECTIVE", StringComparison.OrdinalIgnoreCase)) return true;
-                if (string.Equals(curr.ConditionPolicy, "DEFECTIVE_ONLY", StringComparison.OrdinalIgnoreCase)) return true;
+                if (string.Equals(curr.ZoneType, "DAMAGED", StringComparison.OrdinalIgnoreCase)) return true;
+                if (string.Equals(curr.ConditionPolicy, "DAMAGED", StringComparison.OrdinalIgnoreCase)) return true;
                 if (string.Equals(curr.StorageType, "QUARANTINE", StringComparison.OrdinalIgnoreCase)) return true;
                 if (!curr.ParentLocationId.HasValue) break;
                 if (!locMap.TryGetValue(curr.ParentLocationId.Value, out curr!)) break;
@@ -222,15 +223,73 @@ public class WarehouseCapacityEngine(EwmsDbContext db) : IWarehouseCapacityEngin
         long? excludePoId = null,
         CancellationToken cancellationToken = default)
     {
-        foreach (var line in lines)
+        var inputs = lines.ToList();
+        if (inputs.Count == 0 || inputs.Any(l => l.Quantity <= 0)) return (false, "Cần sản phẩm và số lượng nguyên dương.");
+        var products = await db.Products.AsNoTracking().ToDictionaryAsync(p => p.ProductId, cancellationToken);
+        if (inputs.Any(l => !products.ContainsKey(l.ProductId))) return (false, "Có sản phẩm không còn tồn tại.");
+        CapacityProduct Profile(int id)
         {
-            var res = await CalculateCapacityAsync(warehouseId, line.ProductId, line.Quantity, excludePoId, cancellationToken);
-            if (!res.IsValid)
-            {
-                return (false, res.ErrorMessage);
-            }
+            var p = products[id];
+            return new(p.ProductId, p.ProductCode, p.CategoryId, p.BrandId, p.LengthCm, p.WidthCm, p.HeightCm, p.GrossWeightKg);
         }
-
-        return (true, null);
+        var locations = await db.StorageLocations.AsNoTracking().Where(l => l.WarehouseId == warehouseId).ToListAsync(cancellationToken);
+        var rules = await db.ZoneStorageRules.AsNoTracking().Where(r => r.ZoneLocation.WarehouseId == warehouseId).ToListAsync(cancellationToken);
+        var serials = await db.SerialItems.AsNoTracking().Where(s => s.CurrentWarehouseId == warehouseId
+                && (s.StockState == "IN_WAREHOUSE" || s.StockState == "RECEIVED"))
+            .Select(s => new { s.ProductId, s.ItemCondition, s.CurrentLocationId }).ToListAsync(cancellationToken);
+        var map = locations.ToDictionary(l => l.LocationId);
+        var slots = new List<CapacitySlot>();
+        foreach (var leaf in locations.Where(l => l.LocationType is "TIER" or "FLOOR_SLOT"))
+        {
+            var chain = new List<StorageLocation>();
+            StorageLocation? node = leaf;
+            var seen = new HashSet<int>();
+            while (node != null && seen.Add(node.LocationId) && chain.Count < 5)
+            {
+                chain.Add(node);
+                node = node.ParentLocationId is int parent && map.TryGetValue(parent, out var location) ? location : null;
+            }
+            bool floor = leaf.LocationType == "FLOOR_SLOT";
+            if (chain.Any(l => l.Status != "ACTIVE") || chain[^1].ParentLocationId != null) continue;
+            if (floor ? chain.Count != 3 || chain[1].LocationType != "ROW" || chain[1].StorageType != "FLOOR"
+                : chain.Count != 4 || chain[1].LocationType != "RACK" || chain[2].LocationType != "ROW" || chain[2].StorageType != "RACK") continue;
+            var zone = chain[^1];
+            var condition = floor ? leaf.ConditionPolicy : chain[1].ConditionPolicy;
+            if (zone.LocationType != "ZONE" || zone.ZoneType is not ("STANDARD" or "RESERVE") || condition is not ("GOOD" or "DAMAGED")
+                || leaf.LengthCm is not > 0 || leaf.WidthCm is not > 0 || (!floor && leaf.HeightCm is not > 0)
+                || leaf.CapacityMode != (floor ? "FLOOR_AREA" : "VOLUME")) continue;
+            slots.Add(new CapacitySlot { Id = leaf.LocationId, Reserve = zone.ZoneType == "RESERVE", Floor = floor, Condition = condition,
+                Length = leaf.LengthCm.Value, Width = leaf.WidthCm.Value, Height = leaf.HeightCm, MaxWeight = leaf.MaxWeightKg,
+                Rules = rules.Where(r => r.ZoneLocationId == zone.LocationId).Select(r => (r.CategoryId,r.BrandId)).ToList(),
+                Loads = serials.Where(s => s.CurrentLocationId == leaf.LocationId).GroupBy(s => new { s.ProductId,s.ItemCondition })
+                    .Select(g => new CapacityLoad(Profile(g.Key.ProductId),g.Key.ItemCondition,g.LongCount())).ToList() });
+        }
+        var pending = serials.Where(s => s.CurrentLocationId == null).GroupBy(s => new { s.ProductId,s.ItemCondition })
+            .Select(g => new CapacityLoad(Profile(g.Key.ProductId),g.Key.ItemCondition,g.LongCount())).ToList();
+        // Count document remainders once. TRANSFER_INCOMING is a projection of these shipments, not extra stock.
+        var purchases = await db.PurchaseOrderLines.AsNoTracking().Where(l => l.PurchaseOrder.WarehouseId == warehouseId
+                && (excludePoId == null || l.PurchaseOrderId != excludePoId)
+                && (l.PurchaseOrder.Status == "CONFIRMED" || l.PurchaseOrder.Status == "PARTIALLY_RECEIVED"))
+            .Select(l => new { l.ProductId, Quantity = (long)l.OrderedQuantity-l.ClosedQuantity
+                -db.InboundItems.LongCount(i => i.PolineId == l.PolineId && i.IsActive && i.Inbound.Status == "DONE") }).ToListAsync(cancellationToken);
+        pending.AddRange(purchases.Select(l => new CapacityLoad(Profile(l.ProductId),"GOOD",Math.Max(0,l.Quantity))));
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+        var transfers = await db.TransferOrderLines.AsNoTracking().Where(l => l.TransferOrder.ToWarehouseId == warehouseId
+                && (l.TransferOrder.Status == "RELEASED" || l.TransferOrder.Status == "IN_PROGRESS")
+                && (l.TransferOrder.ExpectedDate == null || l.TransferOrder.ExpectedDate >= today
+                    || l.TransferOrder.TransferDispatches.Any() || l.TransferOrder.TransferReceipts.Any()))
+            .Select(l => new { l.ProductId,l.TransferOrder.ItemCondition, Quantity = (long)l.RequestedQuantity-l.CancelledQuantity
+                -db.TransferReceiptItems.LongCount(i => i.DispatchItem.TransferLineId == l.TransferLineId && i.IsActive && i.TransferReceipt.Status == "DONE")
+                -db.TransferLossRequestItems.LongCount(i => i.DispatchItem.TransferLineId == l.TransferLineId && i.IsActive && i.LossRequest.AppliedAt != null) }).ToListAsync(cancellationToken);
+        pending.AddRange(transfers.Select(l => new CapacityLoad(Profile(l.ProductId),l.ItemCondition,Math.Max(0,l.Quantity))));
+        var returns = await db.CustomerReturnOrderLines.AsNoTracking().Where(l => l.ReturnOrder.WarehouseId == warehouseId
+                && (l.ReturnOrder.Status == "OPEN" || l.ReturnOrder.Status == "PARTIALLY_RECEIVED"))
+            .Select(l => new { l.ProductId, Quantity = (long)l.RequestedQuantity-l.CancelledQuantity
+                -db.ReturnReceiptItems.LongCount(i => i.ReturnLineId == l.ReturnLineId && i.IsActive && i.ReturnReceipt.Status == "DONE") }).ToListAsync(cancellationToken);
+        pending.AddRange(returns.Select(l => new CapacityLoad(Profile(l.ProductId),"GOOD",Math.Max(0,l.Quantity))));
+        // One shared simulation for all products, so no two lines reuse the same remaining area/volume/weight.
+        // Conservatively retain incoming capacity; do not promise space from an uncompleted outbound.
+        var errors = TransferCapacityPlanner.Allocate(slots, pending.Concat(inputs.Select(l => new CapacityLoad(Profile(l.ProductId),"GOOD",l.Quantity))));
+        return errors.Count == 0 ? (true, null) : (false, "Sức chứa toàn bộ PO và các chứng từ đã phát hành: " + string.Join(" ", errors));
     }
 }

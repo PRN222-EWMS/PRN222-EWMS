@@ -6,7 +6,7 @@ namespace PRN222_EWMS_Web.ViewModels.Putaway;
 
 public class PutawayFilter
 {
-    [Required(ErrorMessage = "Vui lòng chọn nguồn hàng."), RegularExpression("PURCHASE|RETURN", ErrorMessage = "Nguồn hàng không hợp lệ.")]
+    [Required(ErrorMessage = "Vui lòng chọn nguồn hàng."), RegularExpression("PURCHASE|RETURN|TRANSFER_RECEIPT", ErrorMessage = "Nguồn hàng không hợp lệ.")]
     public string Source { get; set; } = "PURCHASE";
     [Range(1, long.MaxValue)] public long? ReceiptId { get; set; }
     [StringLength(100)] public string? Search { get; set; }
@@ -29,13 +29,26 @@ public class PutawayQueueViewModel
     public List<PutawayPendingItem> Items { get; set; } = [];
     public int TotalCount { get; set; }
     public int TotalPages => Math.Max(1, (TotalCount + PageSize - 1) / PageSize);
-    public string SourceLabel => Filter.Source == "RETURN" ? "Hàng khách trả" : "Hàng mua";
+    public string SourceLabel => Filter.Source switch
+    {
+        "RETURN" => "Hàng khách trả",
+        "TRANSFER_RECEIPT" => "Hàng chuyển kho",
+        _ => "Hàng mua"
+    };
+    public string ReceiptLabel => Filter.Source switch
+    {
+        "RETURN" => "Phiếu nhận hàng trả đã hoàn tất",
+        "TRANSFER_RECEIPT" => "Phiếu nhận chuyển kho đã hoàn tất",
+        _ => "Phiếu nhập mua đã hoàn tất"
+    };
 }
 
-public record PutawayReceiptOption(long Id, string Code, int PendingCount);
+public record PutawayReceiptOption(long Id, string Code, int PendingCount,
+    string? TransferCode = null, string? FromWarehouseName = null);
 public record PutawayPendingItem(long Id, string Serial, string ProductCode, string ProductName,
     string Category, string Brand, string Condition, bool Quarantined, long ReceiptId,
-    string ReceiptCode, DateTime ReceivedAt);
+    string ReceiptCode, DateTime ReceivedAt, long? TransferOrderId = null,
+    string? TransferCode = null, string? FromWarehouseName = null);
 
 public class PutawaySerialViewModel
 {
@@ -47,8 +60,17 @@ public class PutawaySerialViewModel
     public string Brand { get; init; } = "";
     public string WarehouseName { get; init; } = "";
     public string Source { get; init; } = "PURCHASE";
+    public string SourceLabel => Source switch
+    {
+        "RETURN" => "Hàng khách trả",
+        "TRANSFER_RECEIPT" => "Hàng chuyển kho",
+        _ => "Hàng mua"
+    };
     public long? ReceiptId { get; init; }
     public string ReceiptCode { get; init; } = "";
+    public long? TransferOrderId { get; init; }
+    public string? TransferCode { get; init; }
+    public string? FromWarehouseName { get; init; }
     public string Condition { get; init; } = "";
     public bool Quarantined { get; init; }
     public decimal LengthCm { get; init; }

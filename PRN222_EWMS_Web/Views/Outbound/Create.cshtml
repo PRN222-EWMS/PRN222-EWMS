@@ -1,163 +1,49 @@
-@model PRN222_EWMS_Web.ViewModels.Outbound.CreateOutboundViewModel
-@{
-    ViewData["Title"] = "Tạo phiếu xuất kho";
-}
+﻿@model PRN222_EWMS_Web.ViewModels.Outbound.CreateOutboundViewModel
+@{ ViewData["Title"] = "Tạo phiếu xuất kho"; }
 
 <div class="outbound-page">
-    <div class="workspace-heading">
-        <div>
-            <p class="eyebrow">XUẤT KHO / TẠO MỚI</p>
-            <h1>Chọn đơn bán hàng cần xuất</h1>
-            <p class="muted">Danh sách các đơn bán hàng đã xác nhận và còn sản phẩm cần xuất kho.</p>
-        </div>
-        <div class="outbound-toolbar">
-            <a class="workspace-button sales-button-secondary" asp-action="Index">
-                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> Thoát
-            </a>
-        </div>
-    </div>
-
-    @if (TempData["Error"] != null)
-    {
-        <div class="outbound-notice outbound-notice-danger" role="alert">
-            <i class="bi bi-exclamation-triangle-fill flex-shrink-0" aria-hidden="true"></i>
-            <span>@TempData["Error"]</span>
-        </div>
-    }
-    @if (TempData["Success"] != null)
-    {
-        <div class="outbound-notice outbound-notice-success" role="alert">
-            <i class="bi bi-check-circle-fill flex-shrink-0" aria-hidden="true"></i>
-            <span>@TempData["Success"]</span>
-        </div>
-    }
-
+    <header class="workspace-heading">
+        <div><p class="eyebrow">XUẤT KHO</p><h1>Chọn đơn bán hàng cần xuất</h1></div>
+        <a class="workspace-button sales-button-secondary" asp-action="Index"><i class="bi bi-arrow-left me-2" aria-hidden="true"></i>Phiếu xuất kho</a>
+    </header>
+    <div asp-validation-summary="All" class="text-danger" role="alert"></div>
     @if (Model.EligibleOrders.Count == 0)
     {
-        <div class="workspace-card text-center py-5">
-            <i class="bi bi-inbox fs-1 muted d-block mb-3" aria-hidden="true"></i>
-            <h2 class="h5 fw-bold text-dark">Không có đơn bán hàng nào cần xuất kho</h2>
-            <p class="muted mb-3" style="font-size: 14px;">
-                Hiện tại tất cả các đơn bán hàng thuộc kho làm việc đã hoàn tất xuất kho hoặc chưa có đơn nào được duyệt.
-            </p>
-            <a class="workspace-button sales-button-secondary" asp-action="Index">Quay về danh sách phiếu xuất</a>
-        </div>
+        <section class="workspace-card text-center py-5"><i class="bi bi-inbox fs-1 muted" aria-hidden="true"></i><h2 class="h5 mt-3">Chưa có đơn cần xuất tại kho của bạn</h2><a asp-action="Index" class="workspace-link">Quay lại danh sách phiếu</a></section>
     }
     else
     {
-        <div class="d-flex flex-column gap-4">
-            @foreach (var order in Model.EligibleOrders)
-            {
-                var isSelected = Model.SelectedSalesOrderId == order.SalesOrderId;
-
-                <div class="workspace-card p-4 @(isSelected ? "border-primary shadow-sm" : "")">
-                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-                        <div>
-                            <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-                                <h2 class="h5 mb-0 fw-bold text-dark">@order.Socode</h2>
-                                <span class="outbound-badge outbound-badge-done">
-                                    Đã xác nhận
-                                </span>
-                                @if (order.IsPickingActive)
-                                {
-                                    <span class="outbound-badge outbound-badge-picking">
-                                        <i class="bi bi-clock-history me-1"></i>Đang nhặt: @order.ActiveIssueCode
-                                    </span>
-                                }
-                                else
-                                {
-                                    <span class="outbound-badge outbound-badge-ready">
-                                        Chờ xuất hàng
-                                    </span>
-                                }
-                                @if (order.HasShortage)
-                                {
-                                    <span class="outbound-badge outbound-badge-cancelled">
-                                        Thiếu hàng
-                                    </span>
-                                }
-                            </div>
-                            <p class="muted mb-1" style="font-size: 13.5px;">
-                                Khách hàng: <strong class="text-dark">@order.CustomerName</strong> · Số điện thoại: @(order.CustomerPhone ?? "—")
-                            </p>
-                            <p class="muted mb-0" style="font-size: 13px;">
-                                Địa chỉ giao: @(order.ShippingAddress ?? "—")
-                            </p>
-                        </div>
-
-                        <div class="text-end">
-                            @if (order.IsPickingActive)
-                            {
-                                <a asp-action="Picking" asp-route-id="@order.ActiveOutboundId" class="workspace-button sales-button-small" title="Mở lại bàn nhặt hàng của phiếu @order.ActiveIssueCode">
-                                    <i class="bi bi-box-arrow-in-right me-1"></i> Tiếp tục nhặt hàng
-                                </a>
-                                @if (!string.IsNullOrEmpty(order.ActivePickerName))
-                                {
-                                    <small class="muted d-block mt-2" style="font-size: 12px;">
-                                        Phụ trách: <strong class="text-dark">@order.ActivePickerName</strong>
-                                    </small>
-                                }
-                            }
-                            else
-                            {
-                                <form asp-action="StartPicking" method="post">
-                                    @Html.AntiForgeryToken()
-                                    <input type="hidden" name="salesOrderId" value="@order.SalesOrderId" />
-                                    <button type="submit" class="workspace-button sales-button-small">
-                                        <i class="bi bi-box-arrow-in-right me-1"></i> Bắt đầu lấy hàng
-                                    </button>
-                                </form>
-                            }
-                            <small class="muted d-block mt-2" style="font-size: 12px;">
-                                Hẹn giao: @(order.RequestedDate?.ToString("dd/MM/yyyy") ?? "Không yêu cầu")
-                            </small>
-                        </div>
-                    </div>
-
-                    <hr class="my-3 text-secondary opacity-25" />
-
+        <div class="workspace-card"><label for="outbound-order-search" class="form-label">Tìm đơn bán hàng</label><input id="outbound-order-search" class="form-control" type="search" maxlength="150" placeholder="Mã SO hoặc khách hàng..." /></div>
+        @foreach (var order in Model.EligibleOrders)
+        {
+            var selected = Model.SelectedSalesOrderId == order.SalesOrderId;
+            <article class="workspace-card p-4 @(selected ? "border-primary" : "")" data-outbound-order data-search="@order.Socode @order.CustomerName">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                    <div><h2 class="h5 mb-2">@order.Socode <span class="outbound-badge @(order.IsPickingActive ? "outbound-badge-picking" : order.TotalMaxIssueNow > 0 ? "outbound-badge-ready" : "outbound-badge-draft")">@(order.IsPickingActive ? "Đang lấy hàng" : order.TotalMaxIssueNow > 0 ? "Có hàng để xuất" : order.TotalIncoming > 0 ? "Chờ hàng về" : "Chưa có hàng đủ điều kiện")</span></h2><p class="muted mb-1">@order.CustomerName · @(order.CustomerPhone ?? "—")</p><small class="muted">Ngày yêu cầu xuất: @(order.RequestedDate?.ToString("dd/MM/yyyy") ?? "Chưa đặt")</small></div>
                     <div>
-                        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-                            <span class="fw-semibold text-dark" style="font-size: 13.5px;">
-                                Danh sách mặt hàng · Còn lại cần xuất: <strong class="text-danger">@order.TotalRemaining</strong> · Đã đặt: @order.TotalRequested
-                            </span>
-                            <span class="outbound-badge outbound-badge-draft">
-                                Đã giữ chỗ: @order.TotalReserved
-                            </span>
-                        </div>
-
-                        <div class="table-wrap">
-                            <table class="workspace-table">
-                                <thead>
-                                    <tr>
-                                        <th>Mã sản phẩm</th>
-                                        <th>Tên sản phẩm</th>
-                                        <th style="text-align: center;">Số lượng đặt</th>
-                                        <th style="text-align: center;">Đã xuất</th>
-                                        <th style="text-align: center;">Còn lại cần xuất</th>
-                                        <th style="text-align: center;">Đang giữ chỗ</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var line in order.Lines)
-                                    {
-                                        <tr>
-                                            <td class="fw-bold text-dark">@line.ProductCode</td>
-                                            <td>@line.ProductName</td>
-                                            <td style="text-align: center;">@line.RequestedQuantity @line.Unit</td>
-                                            <td style="text-align: center;" class="text-success">@line.DoneQuantity @line.Unit</td>
-                                            <td style="text-align: center;" class="fw-bold @(line.RemainingQuantity > 0 ? "text-danger" : "muted")">
-                                                @line.RemainingQuantity @line.Unit
-                                            </td>
-                                            <td style="text-align: center;">@line.ReservedBalance @line.Unit</td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
+                        @if (order.IsPickingActive && order.ActiveOutboundId.HasValue)
+                        {
+                            <a asp-action="Picking" asp-route-id="@order.ActiveOutboundId" class="workspace-button"><i class="bi bi-box-arrow-in-right me-2" aria-hidden="true"></i>Tiếp tục @order.ActiveIssueCode</a>
+                        }
+                        else
+                        {
+                            <form asp-action="StartPicking" method="post" data-outbound-submit-once>
+                                <input type="hidden" name="salesOrderId" value="@order.SalesOrderId" /><input type="hidden" name="requestToken" value="@Model.RequestToken" />
+                                <button type="submit" class="workspace-button" disabled="@(order.TotalMaxIssueNow <= 0)"><i class="bi bi-plus-lg me-2" aria-hidden="true"></i>Tạo phiếu và lấy hàng</button>
+                            </form>
+                        }
                     </div>
                 </div>
-            }
-        </div>
+                <dl class="outbound-info-grid mb-0 mt-4"><div><dt>Còn phải xuất</dt><dd>@order.TotalRemaining</dd></div><div><dt>Có thể lấy ngay</dt><dd class="text-primary">@order.TotalMaxIssueNow</dd></div><div><dt>Hàng dự kiến về</dt><dd>@order.TotalIncoming</dd></div><div><dt>Chưa có hàng để xuất</dt><dd>@order.Lines.Sum(line => Math.Max(0, line.RemainingQuantity - line.MaxIssueNow))</dd></div></dl>
+                <details class="mt-3" open="@selected"><summary class="workspace-link px-0">Sản phẩm và nguồn hàng</summary><div class="table-wrap mt-2"><table class="workspace-table"><thead><tr><th>Sản phẩm</th><th>Đã xuất</th><th>Còn phải xuất</th><th>Có thể lấy ngay</th><th>Chưa có hàng để xuất</th><th>Hàng dự kiến về</th></tr></thead><tbody>
+                    @foreach (var line in order.Lines)
+                    {
+                        <tr><td><strong>@line.ProductCode</strong><small class="d-block muted">@line.ProductName</small><partial name="_SourceBalances" model="line" /></td><td>@line.DoneQuantity</td><td>@line.RemainingQuantity</td><td class="fw-bold text-primary">@line.MaxIssueNow</td><td>@Math.Max(0, line.RemainingQuantity - line.MaxIssueNow)</td><td>@line.IncomingReservedBalance</td></tr>
+                    }
+                </tbody></table></div></details>
+            </article>
+        }
+        <p id="outbound-orders-empty" class="muted d-none" role="status">Không tìm thấy đơn phù hợp.</p>
     }
 </div>
+@section Scripts { <script src="~/js/outbound.js" asp-append-version="true"></script> }

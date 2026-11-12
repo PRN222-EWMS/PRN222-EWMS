@@ -35,10 +35,13 @@ public class OutboundListItemDto
     public string CreatedByName { get; set; } = null!;
     public string? AssignedToName { get; set; }
     public int ItemCount { get; set; }
+    public bool CanWork { get; set; }
 }
 
 public class OutboundDetailsViewModel
 {
+    public string Version { get; set; } = "";
+    public bool CanWork { get; set; }
     // Thông tin phiếu xuất
     public long OutboundId { get; set; }
     public string IssueCode { get; set; } = null!;
@@ -89,13 +92,14 @@ public class OutboundDetailsViewModel
     public int TotalDoneInThisReceipt => Serials.Count(s => s.IsActive && s.IsDone);
     public int TotalPickingInThisReceipt => Serials.Count(s => s.IsActive && !s.IsDone);
 
-    public int FulfillmentPercent => TotalRequested > 0
-        ? (int)Math.Min(100, Math.Round((double)TotalDone / TotalRequested * 100))
+    public int FulfillmentPercent => TotalRequested - Lines.Sum(l => l.CancelledQuantity) > 0
+        ? (int)Math.Min(100, Math.Round((double)TotalDone / (TotalRequested - Lines.Sum(l => l.CancelledQuantity)) * 100))
         : 0;
 }
 
 public class OutboundLineProgressDto
 {
+    public bool HasSourcePlan { get; set; }
     public long SolineId { get; set; }
     public int ProductId { get; set; }
     public string ProductCode { get; set; } = null!;
@@ -108,14 +112,24 @@ public class OutboundLineProgressDto
     public long RemainingQuantity { get; set; }
     public long ReservedBalance { get; set; }
     public int InThisReceiptCount { get; set; }
+    public long PhysicalReservedBalance { get; set; }
+    public long IncomingReservedBalance { get; set; }
+    public long ShortageQuantity { get; set; }
+    public long FallbackAvailableQuantity { get; set; }
+    public long MaxIssueNow { get; set; }
+    public long CanPickMoreQuantity => Math.Max(0, MaxIssueNow - InThisReceiptCount);
+    public List<OutboundSourceBalanceDto> Sources { get; set; } = [];
 
-    public int LineProgressPercent => RequestedQuantity > 0
-        ? (int)Math.Min(100, Math.Round((double)DoneQuantity / RequestedQuantity * 100))
+    public int LineProgressPercent => RequestedQuantity - CancelledQuantity > 0
+        ? (int)Math.Min(100, Math.Round((double)DoneQuantity / (RequestedQuantity - CancelledQuantity) * 100))
         : 0;
 }
 
 public class OutboundSerialItemDto
 {
+    public long SourceAtIssueId { get; set; }
+    public string SourceCode { get; set; } = "";
+    public string LocationPath { get; set; } = "";
     public long OutboundItemId { get; set; }
     public long SerialItemId { get; set; }
     public string SerialNumber { get; set; } = null!;
@@ -148,6 +162,7 @@ public class LookupItemDto
 
 public class CreateOutboundViewModel
 {
+    public string RequestToken { get; set; } = Guid.NewGuid().ToString("N");
     public long? SelectedSalesOrderId { get; set; }
     public List<EligibleSalesOrderDto> EligibleOrders { get; set; } = [];
 }
@@ -171,10 +186,14 @@ public class EligibleSalesOrderDto
     public string? ActiveIssueCode { get; set; }
     public string? ActivePickerName { get; set; }
     public List<OutboundLineProgressDto> Lines { get; set; } = [];
+    public long TotalMaxIssueNow => Lines.Sum(line => line.MaxIssueNow);
+    public long TotalIncoming => Lines.Sum(line => line.IncomingReservedBalance);
+    public long TotalShortage => Lines.Sum(line => line.ShortageQuantity);
 }
 
 public class PickingWorkbenchViewModel
 {
+    public string Version { get; set; } = "";
     public long OutboundId { get; set; }
     public string IssueCode { get; set; } = null!;
     public string Status { get; set; } = null!;
@@ -198,7 +217,7 @@ public class PickingWorkbenchViewModel
     public List<SuggestedSerialPickDto> SuggestedSerials { get; set; } = [];
 
     public int TotalScanned => ScannedSerials.Count(s => s.IsActive);
-    public long TotalRemainingToPick => Lines.Sum(l => l.RemainingQuantity) - TotalScanned;
+    public long TotalRemainingToPick => Lines.Sum(l => l.CanPickMoreQuantity);
 
     public string? SerialInput { get; set; }
     public string? ErrorMessage { get; set; }
@@ -207,6 +226,10 @@ public class PickingWorkbenchViewModel
 
 public class SuggestedSerialPickDto
 {
+    public long SupplySourceId { get; set; }
+    public string SourceCode { get; set; } = "";
+    public bool IsFallback { get; set; }
+    public bool CanSelect { get; set; } = true;
     public long SerialItemId { get; set; }
     public string SerialNumber { get; set; } = null!;
     public int ProductId { get; set; }
@@ -225,5 +248,9 @@ public class SuggestedSerialPickDto
         ? $"{ManufacturingMonth.Value:D2}/{ManufacturingYear.Value}"
         : (ManufacturingYear.HasValue ? $"{ManufacturingYear.Value}" : RegisteredAt.ToString("MM/yyyy"));
 }
+
+public record OutboundSourceBalanceDto(long SupplySourceId, string SourceCode, string SupplyState, long Balance, bool IsReplacement,
+    long ReadyQuantity = 0, string SourceType = "", DateOnly? AvailableFrom = null);
+public record OutboundSupplySnapshot(List<OutboundLineProgressDto> Lines, List<SuggestedSerialPickDto> Candidates);
 
 

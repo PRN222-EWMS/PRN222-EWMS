@@ -18,7 +18,6 @@ public class CreateSupplierViewModel
     public string? Address { get; set; }
 
     [StringLength(30)]
-    [RegularExpression(@"^0[0-9]{9}$", ErrorMessage = "Số điện thoại không hợp lệ (phải gồm đúng 10 chữ số và bắt đầu bằng số 0).")]
     [Display(Name = "Số điện thoại")]
     public string? Phone { get; set; }
 

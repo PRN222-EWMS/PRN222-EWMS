@@ -8,7 +8,7 @@ using PRN222_EWMS_Web.ViewModels.Sales;
 namespace PRN222_EWMS_Web.Controllers.Sales;
 
 [Authorize(Roles = "SALES_STAFF,MANAGER,WAREHOUSE_STAFF")]
-public class SalesOrderController(ISalesService sales) : Controller
+public class SalesOrderController(ISalesService sales, ILogger<SalesOrderController> logger) : Controller
 {
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
@@ -49,21 +49,19 @@ public class SalesOrderController(ISalesService sales) : Controller
             var orderId = await sales.CreateOrderAsync(model, action, CurrentUserId);
             var isSubmit = string.Equals(action, "submit", StringComparison.OrdinalIgnoreCase);
             TempData["Success"] = isSubmit
-                ? "Đơn bán hàng đã được tạo và gửi thành công (đã cấp phát giữ chỗ kho)!"
-                : "Đơn bán hàng đã được lưu nháp thành công!";
+                ? "Đã gửi đơn bán hàng và giữ hàng."
+                : "Đã lưu bản nháp.";
             return RedirectToAction(nameof(Details), new { id = orderId });
         }
-        catch (DbUpdateException ex)
+        catch (SalesOrderSourceException ex)
         {
-            var msg = ex.InnerException?.Message ?? ex.Message;
-            ModelState.AddModelError(string.Empty, msg);
+            ModelState.AddModelError(ex.Field, ex.Message);
             await PopulateFormDataAsync(model);
             return View(model);
         }
         catch (Exception ex)
         {
-            var msg = ex.InnerException?.Message ?? ex.Message;
-            ModelState.AddModelError(string.Empty, msg);
+            AddSaveError(ex);
             await PopulateFormDataAsync(model);
             return View(model);
         }
@@ -78,7 +76,7 @@ public class SalesOrderController(ISalesService sales) : Controller
 
         if (!model.CanEdit)
         {
-            TempData["Error"] = "Đơn bán hàng không đủ điều kiện chỉnh sửa (đơn đã có phiếu xuất hoặc bạn không phải người tạo đơn).";
+            TempData["Error"] = "Chỉ người tạo được sửa SO Draft. SO đã gửi sẽ khóa nội dung.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
@@ -90,6 +88,11 @@ public class SalesOrderController(ISalesService sales) : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(long id, SalesOrderFormViewModel model, string action)
     {
+        if (id != model.Id) return BadRequest();
+        var current = await sales.GetEditFormAsync(id, CurrentUserId);
+        if (current?.CanEdit != true) return Forbid();
+        model.Status = current.Status;
+        model.Code = current.Code;
         try
         {
             if (!ModelState.IsValid)
@@ -101,8 +104,8 @@ public class SalesOrderController(ISalesService sales) : Controller
             await sales.UpdateOrderAsync(id, model, action, CurrentUserId);
             var isSubmit = string.Equals(action, "submit", StringComparison.OrdinalIgnoreCase);
             TempData["Success"] = isSubmit
-                ? "Đơn bán hàng đã được gửi thành công!"
-                : "Đơn bán hàng đã được cập nhật thành công!";
+                ? "Đã gửi đơn bán hàng và giữ hàng."
+                : "Đã lưu thay đổi.";
             return RedirectToAction(nameof(Details), new { id });
         }
         catch (DbUpdateConcurrencyException)
@@ -111,17 +114,15 @@ public class SalesOrderController(ISalesService sales) : Controller
             await PopulateFormDataAsync(model);
             return View(model);
         }
-        catch (DbUpdateException ex)
+        catch (SalesOrderSourceException ex)
         {
-            var msg = ex.InnerException?.Message ?? ex.Message;
-            ModelState.AddModelError(string.Empty, msg);
+            ModelState.AddModelError(ex.Field, ex.Message);
             await PopulateFormDataAsync(model);
             return View(model);
         }
         catch (Exception ex)
         {
-            var msg = ex.InnerException?.Message ?? ex.Message;
-            ModelState.AddModelError(string.Empty, msg);
+            AddSaveError(ex);
             await PopulateFormDataAsync(model);
             return View(model);
         }
@@ -144,7 +145,7 @@ public class SalesOrderController(ISalesService sales) : Controller
             TempData["Error"] = message;
             if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
                 return Redirect(returnUrl);
-            return RedirectToAction(nameof(Edit), new { id });
+            return RedirectToAction(nameof(Details), new { id });
         }
     }
 
@@ -190,10 +191,61 @@ public class SalesOrderController(ISalesService sales) : Controller
 
     [Authorize(Roles = "SALES_STAFF")]
     [HttpGet]
-    public async Task<IActionResult> GetAvailableProducts(int warehouseId)
+    public async Task<IActionResult> GetAvailableProducts(int warehouseId, DateOnly? requestedDate)
     {
-        var products = await sales.GetAvailableProductsAsync(warehouseId);
+        var products = await sales.GetAvailableProductsAsync(warehouseId, requestedDate);
         return Json(products);
+    }
+
+    [Authorize(Roles = "SALES_STAFF")]
+    [HttpGet]
+    public async Task<IActionResult> GetSourceOptions(int warehouseId, DateOnly? requestedDate) =>
+        Json(await sales.GetSourceOptionsAsync(warehouseId, requestedDate));
+
+    [Authorize(Roles = "SALES_STAFF")]
+    [HttpGet]
+    public async Task<IActionResult> ReplaceSources(long id)
+    {
+        var model = await sales.GetReplacementFormAsync(id, CurrentUserId);
+        return model == null ? NotFound() : View(model);
+    }
+
+    [Authorize(Roles = "SALES_STAFF")]
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReplaceSources(long id, SalesOrderFormViewModel model)
+    {
+        if (id != model.Id) return BadRequest();
+        var fresh = await sales.GetReplacementFormAsync(id, CurrentUserId);
+        if (fresh == null) return NotFound();
+        try
+        {
+            if (ModelState.IsValid)
+            {
+                await sales.AddReplacementAsync(id, model, CurrentUserId);
+                TempData["Success"] = "Đã bổ sung nguồn hàng.";
+                return RedirectToAction(nameof(Details), new { id });
+            }
+        }
+        catch (SalesOrderSourceException ex) { ModelState.AddModelError(ex.Field, ex.Message); }
+        catch (Exception ex) { AddSaveError(ex); }
+        // Keep posted allocations for review; never silently replace the user's selections.
+        foreach (var line in fresh.Lines)
+            line.Sources = model.Lines.FirstOrDefault(l => l.SolineId == line.SolineId)?.Sources ?? [];
+        fresh.ConcurrencyToken = model.ConcurrencyToken;
+        return View(fresh);
+    }
+
+    private void AddSaveError(Exception ex)
+    {
+        if (ex is DbUpdateConcurrencyException)
+            ModelState.AddModelError(string.Empty, "SO đã thay đổi. Vui lòng tải lại trang trước khi lưu.");
+        else if (ex is InvalidOperationException or UnauthorizedAccessException)
+            ModelState.AddModelError(string.Empty, ex.Message);
+        else
+        {
+            logger.LogError(ex, "Cannot save sales order for user {UserId}", CurrentUserId);
+            ModelState.AddModelError(string.Empty, "Không thể lưu SO lúc này. Nguồn có thể vừa thay đổi; vui lòng tải lại số liệu và thử lại.");
+        }
     }
 
     private async Task PopulateFormDataAsync(SalesOrderFormViewModel model)
@@ -207,7 +259,7 @@ public class SalesOrderController(ISalesService sales) : Controller
         }
         if (model.WarehouseId.HasValue && model.WarehouseId.Value > 0)
         {
-            model.AvailableProducts = await sales.GetAvailableProductsAsync(model.WarehouseId.Value);
+            model.AvailableProducts = await sales.GetAvailableProductsAsync(model.WarehouseId.Value, model.RequestedDate);
         }
         else
         {

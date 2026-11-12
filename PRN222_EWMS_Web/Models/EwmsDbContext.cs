@@ -13,6 +13,8 @@ public partial class EwmsDbContext : DbContext
 
     public virtual DbSet<AuditLog> AuditLogs { get; set; }
 
+    public virtual DbSet<StocktakeRecountRequest> StocktakeRecountRequests { get; set; }
+
     public virtual DbSet<Brand> Brands { get; set; }
 
     public virtual DbSet<Category> Categories { get; set; }
@@ -86,6 +88,8 @@ public partial class EwmsDbContext : DbContext
     public virtual DbSet<SupplierProduct> SupplierProducts { get; set; }
 
     public virtual DbSet<SupplySource> SupplySources { get; set; }
+
+    public virtual DbSet<SalesOrderSourcePlan> SalesOrderSourcePlans { get; set; }
 
     public virtual DbSet<TransferDispatch> TransferDispatches { get; set; }
 
@@ -2081,6 +2085,26 @@ public partial class EwmsDbContext : DbContext
                 .HasConstraintName("FK_SupplierProduct_SupplierID");
         });
 
+        modelBuilder.Entity<SalesOrderSourcePlan>(entity =>
+        {
+            entity.HasKey(e => e.SourcePlanId);
+            entity.ToTable("SalesOrderSourcePlan", tb =>
+            {
+                tb.HasTrigger("TR_SalesOrderSourcePlan_DraftContext");
+                tb.HasTrigger("TR_SalesOrderSourcePlan_Audit");
+            });
+            entity.Property(e => e.SourcePlanId).HasColumnName("SourcePlanID");
+            entity.Property(e => e.SolineId).HasColumnName("SOLineID");
+            entity.Property(e => e.SupplySourceId).HasColumnName("SupplySourceID");
+            entity.Property(e => e.CreatedAt).HasPrecision(3).HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.RowVersion).IsRowVersion().IsConcurrencyToken();
+            entity.HasIndex(e => new { e.SolineId, e.SupplySourceId }, "UQ_SalesOrderSourcePlan_LineSource").IsUnique();
+            entity.HasOne(e => e.SalesOrderLine).WithMany(e => e.SourcePlans)
+                .HasForeignKey(e => e.SolineId).OnDelete(DeleteBehavior.ClientSetNull);
+            entity.HasOne(e => e.SupplySource).WithMany(e => e.SalesOrderSourcePlans)
+                .HasForeignKey(e => e.SupplySourceId).OnDelete(DeleteBehavior.ClientSetNull);
+        });
+
         modelBuilder.Entity<SupplySource>(entity =>
         {
             entity.ToTable("SupplySource", tb =>
@@ -2151,6 +2175,12 @@ public partial class EwmsDbContext : DbContext
                 .IsUnicode(false);
             entity.Property(e => e.TransferReceiptId).HasColumnName("TransferReceiptID");
             entity.Property(e => e.WarehouseId).HasColumnName("WarehouseID");
+
+            entity.Property(e => e.TransferLineId).HasColumnName("TransferLineID");
+            entity.HasIndex(e => e.TransferLineId, "UX_SupplySource_TransferIncomingLine")
+                .IsUnique().HasFilter("([TransferLineID] IS NOT NULL)");
+            entity.HasOne(e => e.IncomingTransferLine).WithMany(e => e.IncomingSupplySources)
+                .HasForeignKey(e => e.TransferLineId).OnDelete(DeleteBehavior.ClientSetNull);
 
             entity.HasOne(d => d.Adjustment).WithMany(p => p.SupplySources)
                 .HasForeignKey(d => d.AdjustmentId)
@@ -2944,6 +2974,39 @@ public partial class EwmsDbContext : DbContext
                 .HasForeignKey(d => d.ZoneLocationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_ZoneStorageRule_ZoneLocationID");
+        });
+
+        modelBuilder.Entity<StocktakeRecountRequest>(entity =>
+        {
+            entity.ToTable("StocktakeRecountRequest", table =>
+            {
+                table.HasTrigger("TR_StocktakeRecountRequest_Links");
+                table.HasTrigger("TR_StocktakeRecountRequest_Audit");
+            });
+            entity.HasKey(e => e.RecountRequestId);
+            entity.Property(e => e.RecountRequestId).HasColumnName("RecountRequestID");
+            entity.Property(e => e.StocktakeId).HasColumnName("StocktakeID");
+            entity.Property(e => e.SourceRoundId).HasColumnName("SourceRoundID");
+            entity.Property(e => e.ResultRoundId).HasColumnName("ResultRoundID");
+            entity.Property(e => e.ProductId).HasColumnName("ProductID");
+            entity.Property(e => e.LocationId).HasColumnName("LocationID");
+            entity.Property(e => e.RequestedByUserId).HasColumnName("RequestedByUserID");
+            entity.Property(e => e.AssignedToUserId).HasColumnName("AssignedToUserID");
+            entity.Property(e => e.ScopeKind).HasMaxLength(16).IsUnicode(false);
+            entity.Property(e => e.Status).HasMaxLength(16).IsUnicode(false).HasDefaultValue("REQUESTED");
+            entity.Property(e => e.Reason).HasMaxLength(1000);
+            entity.Property(e => e.RowVersion).IsRowVersion();
+            entity.Property(e => e.RequestedAt).HasPrecision(3).HasDefaultValueSql("SYSUTCDATETIME()");
+            entity.Property(e => e.StartedAt).HasPrecision(3);
+            entity.Property(e => e.SubmittedAt).HasPrecision(3);
+            entity.Property(e => e.CancelledAt).HasPrecision(3);
+            entity.HasOne<Stocktake>().WithMany().HasForeignKey(e => e.StocktakeId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<StocktakeRound>().WithMany().HasForeignKey(e => e.SourceRoundId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<StocktakeRound>().WithMany().HasForeignKey(e => e.ResultRoundId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<Product>().WithMany().HasForeignKey(e => e.ProductId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<StorageLocation>().WithMany().HasForeignKey(e => e.LocationId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.RequestedByUserId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.AssignedToUserId).OnDelete(DeleteBehavior.NoAction);
         });
 
         // DB49 tables with triggers cannot use EF's direct OUTPUT clause.

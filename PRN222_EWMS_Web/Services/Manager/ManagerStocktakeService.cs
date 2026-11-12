@@ -2,11 +2,12 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Models;
 using PRN222_EWMS_Web.Repositories.Manager;
+using PRN222_EWMS_Web.Repositories.Stocktaking;
 using PRN222_EWMS_Web.ViewModels.Manager;
 
 namespace PRN222_EWMS_Web.Services.Manager;
 
-public class ManagerStocktakeService(IManagerStocktakeRepository repository) : IManagerStocktakeService
+public class ManagerStocktakeService(IManagerStocktakeRepository repository, IStocktakeRepository stocktakeHistory) : IManagerStocktakeService
 {
     public Task<ManagerStocktakeListViewModel> GetListAsync(ManagerStocktakeFilter filter, CancellationToken ct)
     {
@@ -209,6 +210,8 @@ public class ManagerStocktakeService(IManagerStocktakeRepository repository) : I
                     ?? throw new ManagerStocktakeException("Đợt kiểm kê không còn tồn tại.", statusCode: 404);
                 await EnsureUnstartedAsync(plan, ct);
                 CheckVersion(input.RowVersion, plan.RowVersion);
+                if ((await stocktakeHistory.InvestigationsAsync(plan.StocktakeId, ct)).Count > 0)
+                    throw new ManagerStocktakeException("Đợt có liên kết đối soát. Cần giữ lại để tra cứu lịch sử.");
                 await repository.ClearPlanChildrenAsync(plan.StocktakeId, ct);
                 await repository.DeleteHeaderAsync(plan, ct);
                 return true;

@@ -1,0 +1,27 @@
+@using PRN222_EWMS_Web.ViewModels.Ceo
+@using PRN222_EWMS_Web.ViewModels.Stocktaking
+@model CeoStocktakeAdjustmentListViewModel
+@{ ViewData["Title"] = "Duyệt điều chỉnh kiểm kê"; var pages = Math.Max(1, (Model.TotalCount + CeoStocktakeAdjustmentListViewModel.PageSize - 1) / CeoStocktakeAdjustmentListViewModel.PageSize); }
+<div class="warehouse-list">
+<header class="workspace-heading"><div><p class="eyebrow">CEO · KIỂM KÊ</p><h1>Duyệt điều chỉnh kiểm kê</h1></div></header>
+<section class="workspace-card">
+<form method="get" class="workspace-form mt-0"><div class="row g-3 align-items-end">
+<div class="col-md-6"><label for="search">Mã yêu cầu, đợt kiểm kê hoặc kho</label><input id="search" name="search" value="@Model.Search" maxlength="100" type="search" /></div>
+<div class="col-md-3"><label for="status">Trạng thái</label><select id="status" name="status"><option value="">Tất cả</option>@foreach (var status in new[] { "SUBMITTED", "APPLIED", "REJECTED", "APPROVED", "CANCELLED" }) { <option value="@status" selected="@(Model.Status == status)">@(status == "SUBMITTED" ? "Chờ duyệt" : StocktakeDisplay.Status(status))</option> }</select></div>
+<div class="col-md-3"><button type="submit" class="workspace-button">Lọc</button> <a asp-action="Index" class="workspace-link">Xóa lọc</a></div>
+</div></form>
+<p class="muted mt-3">@Model.TotalCount yêu cầu</p>
+<div class="table-wrap"><table class="workspace-table"><thead><tr><th>Mã yêu cầu</th><th>Đợt / kho</th><th>Người gửi</th><th>Ngày gửi</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
+@foreach (var item in Model.Items) {
+<tr><td>@item.AdjustmentCode</td><td>@item.Stocktake.StocktakeCode<small class="d-block muted">@item.Stocktake.Warehouse.WarehouseName</small></td><td>@item.SubmittedByUser.FullName</td><td>@StocktakeDisplay.Time(item.SubmittedAt)</td><td><span class="role-badge">@(item.Status == "SUBMITTED" ? "Chờ duyệt" : StocktakeDisplay.Status(item.Status))</span></td><td><a asp-action="Details" asp-route-id="@item.AdjustmentId" class="workspace-button sales-button-small">Xem chi tiết</a></td></tr>
+}
+@if (Model.Items.Count == 0) { <tr><td colspan="6" class="text-center muted">Không có yêu cầu phù hợp.</td></tr> }
+</tbody></table></div>
+@if (pages > 1) {
+<nav class="d-flex align-items-center gap-3 mt-3" aria-label="Phân trang yêu cầu">
+@if (Model.Page > 1) { <a asp-action="Index" asp-route-page="@(Model.Page - 1)" asp-route-search="@Model.Search" asp-route-status="@Model.Status" class="workspace-link">Trang trước</a> }
+<span>Trang @Model.Page / @pages</span>
+@if (Model.Page < pages) { <a asp-action="Index" asp-route-page="@(Model.Page + 1)" asp-route-search="@Model.Search" asp-route-status="@Model.Status" class="workspace-link">Trang sau</a> }
+</nav>
+}
+</section></div>

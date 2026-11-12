@@ -1,0 +1,30 @@
+﻿@using PRN222_EWMS_Web.ViewModels.Stocktaking
+@model StocktakeReviewViewModel
+@{
+    ViewData["Title"] = "Yêu cầu điều chỉnh " + Model.Plan.StocktakeCode;
+    var differences = Model.Observations.Where(o => o.DifferenceType == "MISSING" && o.ReviewStatus != "RESOLVED").OrderBy(o => o.ScannedSerial).ToList();
+    string Product(int? id) => Model.Products.FirstOrDefault(p => p.ProductId == id)?.ProductName ?? "Chưa xác định";
+    string Location(int? id) => id.HasValue ? Model.Locations.FirstOrDefault(l => l.LocationId == id)?.LocationName ?? "Vị trí #" + id : "Chờ xếp kệ";
+    string Condition(string? condition) => condition switch { "GOOD" => "Tốt", "DAMAGED" => "Hỏng", _ => "—" };
+    var enteredReason = ViewData.ModelState.TryGetValue("Reason", out var reasonState) ? reasonState.AttemptedValue : "";
+    bool Eligible(PRN222_EWMS_Web.Models.StocktakeObservation row) => Model.InvestigationContext is null
+        && Model.ConfirmedShortageIds.Contains(row.ObservationId)
+        && row.ExpectedQuantity == 1 && row.ActualQuantity == 0 && row.SerialItemId.HasValue && row.ProductId.HasValue;
+}
+<div class="warehouse-list">
+    <header class="workspace-heading"><div><p class="eyebrow">MANAGER · ĐIỀU CHỈNH TỒN</p><h1>Đề nghị giảm tồn kho</h1><p class="muted">@Model.Plan.StocktakeCode</p></div><a asp-action="Details" asp-route-id="@Model.Plan.StocktakeId" class="workspace-button sales-button-secondary">Quay lại rà soát</a></header>
+    @if (TempData["Error"] is string error) { <div class="alert alert-danger" role="alert">@error</div> }
+    <section class="workspace-card"><h2>Xác nhận các chênh lệch cần điều chỉnh</h2><p class="muted">Chọn serial thiếu đã xác minh để gửi CEO duyệt giảm tồn.</p><div asp-validation-summary="All" class="text-danger" role="alert"></div>
+        <form asp-action="SubmitAdjustment" method="post" class="workspace-form mt-0">@Html.AntiForgeryToken()<input type="hidden" name="Id" value="@Model.Plan.StocktakeId" /><input type="hidden" name="Version" value="@Model.Version" />
+            <div class="table-wrap"><table class="workspace-table"><thead><tr><th>Chọn</th><th>Serial / sản phẩm</th><th>Vòng</th><th>Đối chiếu ban đầu</th><th>Thực tế</th><th>Chênh lệch / ghi chú</th></tr></thead><tbody>
+            @foreach (var row in differences)
+            {
+                <tr><td><input type="checkbox" name="ObservationIds" value="@row.ObservationId" id="observation-@row.ObservationId" aria-label="Chọn serial @row.ScannedSerial" disabled="@(!Eligible(row))" />@if (!Eligible(row)) { <small class="d-block muted">Cần chốt kết quả tìm toàn kho</small> }</td><td><label for="observation-@row.ObservationId"><strong>@row.ScannedSerial</strong></label><small class="d-block muted">@Product(row.ProductId)</small></td><td>@row.RoundNumber</td><td>Số lượng: @row.ExpectedQuantity<small class="d-block muted">@(row.ExpectedQuantity == 1 ? Condition(row.ExpectedCondition) + " · " + Location(row.ExpectedLocationId) : "Chưa có trong sổ kho")</small></td><td>Số lượng: @row.ActualQuantity<small class="d-block muted">@(row.ActualQuantity == 1 ? Condition(row.ActualCondition) + " · " + Location(row.ActualLocationId) : "Không ghi nhận")</small></td><td>@StocktakeDisplay.Difference(row.DifferenceType)<small class="d-block muted text-break">@row.Note</small></td></tr>
+            }
+            @if (differences.Count == 0) { <tr><td colspan="6" class="text-center muted py-4">Không có serial thiếu cần điều chỉnh.</td></tr> }
+            </tbody></table></div>
+            <div class="mt-3"><label for="Reason">Lý do và căn cứ điều chỉnh <span class="text-danger">*</span></label><textarea style="width:100%" id="Reason" name="Reason" maxlength="1000" rows="4" required>@enteredReason</textarea></div>
+            <div class="d-flex gap-2 mt-3">@if (differences.Any(Eligible)) { <button class="workspace-button" type="submit">Gửi CEO xét duyệt</button> }<a asp-action="Details" asp-route-id="@Model.Plan.StocktakeId" class="workspace-button sales-button-secondary">Quay lại</a></div>
+        </form>
+    </section>
+</div>

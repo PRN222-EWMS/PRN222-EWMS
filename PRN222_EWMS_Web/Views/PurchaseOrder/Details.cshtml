@@ -1,4 +1,4 @@
-@model PRN222_EWMS_Web.ViewModels.Purchasing.PoDetailsViewModel
+﻿@model PRN222_EWMS_Web.ViewModels.Purchasing.PoDetailsViewModel
 @{
     ViewData["Title"] = "Chi tiết đơn " + Model.Pocode;
     var statusClass = Model.Status switch
@@ -24,7 +24,7 @@
     };
 }
 
-<div class="po-page">
+<div class="po-page order-workspace">
     <div class="workspace-heading">
         <div>
             <p class="eyebrow">MUA HÀNG / CHI TIẾT ĐƠN MUA</p>
@@ -58,9 +58,9 @@
             }
             @if (Model.CanConfirm)
             {
-                <form method="post" asp-action="Confirm" asp-route-id="@Model.PurchaseOrderId" class="d-inline" onsubmit="return confirm('Bạn có chắc chắn muốn xác nhận đơn mua hàng này? Sau khi xác nhận, đơn sẽ sẵn sàng để kho tiếp nhận.');">
+                <form method="post" asp-action="Confirm" asp-route-id="@Model.PurchaseOrderId" class="d-inline" onsubmit="return confirm('Xác nhận đơn mua hàng? Sau khi xác nhận không thể sửa nội dung.');">
                     @Html.AntiForgeryToken()
-                    <button type="submit" class="workspace-button" style="background: #0e733b;">
+                    <button type="submit" class="workspace-button">
                         <i class="bi bi-check-lg me-1" aria-hidden="true"></i> Xác nhận đơn
                     </button>
                 </form>
@@ -188,7 +188,6 @@
         <div class="d-flex justify-content-between align-items-center mb-3">
             <div>
                 <h2>Chi tiết sản phẩm đặt hàng</h2>
-                <p class="muted mb-0">Theo dõi tiến độ nhận hàng thực tế theo từng dòng sản phẩm.</p>
             </div>
             <div class="text-end">
                 <span class="muted small">Tiến độ chung:</span>
@@ -258,8 +257,7 @@
 
     <!-- 3. LỊCH SỬ CÁC ĐỢT NHẬN HÀNG (INBOUNDS) -->
     <section class="workspace-card">
-        <h2>Lịch sử các đợt nhận hàng (Inbounds)</h2>
-        <p class="muted">Danh sách các phiếu nhập kho đã thực hiện đối với đơn mua hàng này.</p>
+        <h2 class="mb-3">Phiếu nhập kho</h2>
 
         <div class="table-wrap">
             <table class="workspace-table">
@@ -319,7 +317,7 @@
                 <input type="hidden" name="PurchaseOrderId" value="@Model.PurchaseOrderId" />
 
                 <p class="text-muted small">
-                    Số lượng còn lại chưa giao là <strong>@Model.TotalRemaining</strong> sản phẩm. Khi đóng số lượng còn lại, nhà cung cấp sẽ không tiếp tục giao phần còn lại này và đơn sẽ được chuyển sang trạng thái ĐÃ ĐÓNG (CLOSED).
+                    Đóng <strong>@Model.TotalRemaining</strong> sản phẩm chưa nhận. Các đơn bán hàng đang giữ nguồn này có thể bị thiếu hàng.
                 </p>
 
                 <div class="mb-3">

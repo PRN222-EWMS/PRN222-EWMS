@@ -2,10 +2,11 @@ using System.Data;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Models;
+using PRN222_EWMS_Web.Services.Warehouse;
 
 namespace PRN222_EWMS_Web.Services.WarehouseStaff;
 
-public class TransferReceiptWorkService(EwmsDbContext db)
+public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock, ISourceReservationService commitments)
 {
     private Task<TransferOrder?> LockDestinationOrderAsync(long orderId, int userId) =>
         db.TransferOrders
@@ -114,7 +115,14 @@ public class TransferReceiptWorkService(EwmsDbContext db)
 
     public async Task<(bool Success, string Message)> CompleteAsync(long orderId, long receiptId, int userId)
     {
+        var context = await db.TransferOrders.AsNoTracking().Where(o => o.TransferOrderId == orderId
+                && db.Users.Any(u => u.UserId == userId && u.Status == "ACTIVE" && u.Role.RoleName == "WAREHOUSE_STAFF"
+                    && u.WarehouseId == o.ToWarehouseId))
+            .Select(o => new { o.FromWarehouseId, o.ToWarehouseId }).SingleOrDefaultAsync();
+        if (context == null) return (false, "Lệnh không thuộc kho làm việc của bạn.");
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        foreach (var warehouseId in new[] { context.FromWarehouseId, context.ToWarehouseId }.Distinct().Order())
+            await commitments.LockWarehouseAsync(warehouseId);
         var order = await LockDestinationOrderAsync(orderId, userId);
         if (order is null)
             return (false, "Lệnh không thuộc kho đích của bạn.");
@@ -147,7 +155,20 @@ public class TransferReceiptWorkService(EwmsDbContext db)
                 return (false, $"Serial {serial.SerialNumber} thiếu tình trạng thực nhận hợp lệ.");
         }
 
-        var now = DateTime.UtcNow;
+        var destination = await db.Warehouses.AsNoTracking()
+            .Where(w => w.WarehouseId == order.ToWarehouseId)
+            .Select(w => new { w.WarehouseType, w.RentalStartDate, w.RentalEndDate }).SingleAsync();
+        var now = clock.GetUtcNow().UtcDateTime;
+        var receivedOn = DateOnly.FromDateTime(now.AddHours(7));
+        if (destination.WarehouseType == "RENTED")
+        {
+            if (destination.RentalStartDate is not DateOnly start || destination.RentalEndDate is not DateOnly end || start > end)
+                return (false, "Kho đích chưa có kỳ thuê hợp lệ; chưa thể hoàn tất nhận hàng.");
+            if (receivedOn < start)
+                return (false, $"Kho đích bắt đầu thuê ngày {start:dd/MM/yyyy}; chưa thể nhận hàng ngày {receivedOn:dd/MM/yyyy}.");
+            if (receivedOn > end)
+                return (false, $"Kho đích đã hết hạn thuê ngày {end:dd/MM/yyyy}; không thể nhận hàng ngày {receivedOn:dd/MM/yyyy}.");
+        }
         foreach (var group in items.GroupBy(i => new { i.DispatchItem.ProductId, Condition = i.ReceivedCondition! }))
         {
             var damaged = group.Key.Condition == "DAMAGED";
@@ -195,6 +216,7 @@ public class TransferReceiptWorkService(EwmsDbContext db)
         receipt.Status = "DONE";
         receipt.CompletedAt = now;
         await SaveAsActorAsync(userId);
+        await SaveAsActorAsync(userId, () => commitments.AfterTransferReceiptAsync(receiptId));
         await transaction.CommitAsync();
         return (true, $"Đã nhận {items.Count} serial trên phiếu {receipt.ReceiptCode}.");
     }
@@ -220,11 +242,12 @@ public class TransferReceiptWorkService(EwmsDbContext db)
         return (true, "Đã gỡ serial khỏi phiếu nhận.");
     }
 
-    private async Task SaveAsActorAsync(int userId)
+    private async Task SaveAsActorAsync(int userId, Func<Task>? sourceWork = null)
     {
         await db.Database.ExecuteSqlInterpolatedAsync($"EXEC sys.sp_set_session_context @key=N'ActorUserID', @value={userId}");
         try
         {
+            if (sourceWork != null) await sourceWork();
             await db.SaveChangesAsync();
         }
         finally

@@ -2,10 +2,11 @@ using System.Data;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Models;
+using PRN222_EWMS_Web.Services.Warehouse;
 
 namespace PRN222_EWMS_Web.Services.WarehouseStaff;
 
-public class TransferDispatchWorkService(EwmsDbContext db)
+public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService expiry, ISourceReservationService commitments)
 {
     private IQueryable<TransferOrder> SourceOrderForUpdate(long orderId, int userId) =>
         db.TransferOrders
@@ -22,6 +23,11 @@ public class TransferDispatchWorkService(EwmsDbContext db)
 
         if (order is null)
             return (false, "Bạn chỉ có thể nhận việc xuất tại kho nguồn của mình.");
+        if (await expiry.CancelLockedAsync(order))
+        {
+            await transaction.CommitAsync();
+            return (false, "Lệnh đã quá ngày dự kiến đến và tự động hủy. Không thể tạo phiếu gửi; hãy yêu cầu quản lý tạo lệnh mới.");
+        }
         if (order.Status is not ("RELEASED" or "IN_PROGRESS"))
             return (false, "Trạng thái hiện tại của lệnh chưa cho phép nhận việc xuất.");
 
@@ -139,7 +145,14 @@ public class TransferDispatchWorkService(EwmsDbContext db)
 
     public async Task<(bool Success, string Message)> CompleteAsync(long orderId, long dispatchId, int userId)
     {
+        var context = await db.TransferOrders.AsNoTracking().Where(o => o.TransferOrderId == orderId
+                && db.Users.Any(u => u.UserId == userId && u.Status == "ACTIVE" && u.Role.RoleName == "WAREHOUSE_STAFF"
+                    && u.WarehouseId == o.FromWarehouseId))
+            .Select(o => new { o.FromWarehouseId, o.ToWarehouseId }).SingleOrDefaultAsync();
+        if (context == null) return (false, "Lệnh không thuộc kho làm việc của bạn.");
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        foreach (var warehouseId in new[] { context.FromWarehouseId, context.ToWarehouseId }.Distinct().Order())
+            await commitments.LockWarehouseAsync(warehouseId);
         var order = await SourceOrderForUpdate(orderId, userId).SingleOrDefaultAsync();
         if (order is null)
             return (false, "Lệnh không thuộc kho nguồn của bạn.");
@@ -256,6 +269,7 @@ public class TransferDispatchWorkService(EwmsDbContext db)
         dispatch.IsActivePicking = false;
         order.Status = "IN_PROGRESS";
         await SaveAsActorAsync(userId);
+        await SaveAsActorAsync(userId, () => commitments.AfterDispatchAsync(orderId));
         await transaction.CommitAsync();
         return (true, $"Đã xuất {items.Count} serial trên phiếu {dispatch.DispatchCode}.");
     }
@@ -284,11 +298,12 @@ public class TransferDispatchWorkService(EwmsDbContext db)
         return (true, "Đã gỡ serial khỏi phiếu xuất.");
     }
 
-    private async Task SaveAsActorAsync(int userId)
+    private async Task SaveAsActorAsync(int userId, Func<Task>? sourceWork = null)
     {
         await db.Database.ExecuteSqlInterpolatedAsync($"EXEC sys.sp_set_session_context @key=N'ActorUserID', @value={userId}");
         try
         {
+            if (sourceWork != null) await sourceWork();
             await db.SaveChangesAsync();
         }
         finally
