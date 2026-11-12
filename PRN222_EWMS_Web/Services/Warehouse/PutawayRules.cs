@@ -1,5 +1,6 @@
 using PRN222_EWMS_Web.Models;
 using PRN222_EWMS_Web.ViewModels.Putaway;
+using PRN222_EWMS_Web.Services.Warehouse;
 
 namespace PRN222_EWMS_Web.Services.WarehouseStaff;
 
@@ -78,8 +79,7 @@ internal static class PutawayRules
             return Fail("Hàng đang đặt có hồ sơ không hợp lệ hoặc không khớp kho/tình trạng; chưa thể tính chỗ trống an toàn.");
         var incoming = new PutawayOccupant(item.SerialItemId, layout.Warehouse.WarehouseId, target.LocationId,
             item.ItemCondition, item.Product.LengthCm, item.Product.WidthCm, item.Product.HeightCm, item.Product.GrossWeightKg);
-        var all = current.Append(incoming).ToList();
-        if (all.Any(p => p.LengthCm > target.LengthCm || p.WidthCm > target.WidthCm
+        if (current.Append(incoming).Any(p => p.LengthCm > target.LengthCm || p.WidthCm > target.WidthCm
             || (target.HeightCm.HasValue && p.HeightCm > target.HeightCm)))
             return Fail("Kiện vượt kích thước sử dụng theo hướng đóng gói cố định.");
         var usedWeight = current.Sum(o => o.WeightKg);
@@ -90,8 +90,6 @@ internal static class PutawayRules
         if (floor)
         {
             if (used + incoming.LengthCm * incoming.WidthCm / 10_000m > total) return Fail("Ô sàn không đủ diện tích còn lại.");
-            if (!CanPackFloor(target.LengthCm.Value, target.WidthCm.Value, all))
-                return Fail("Chưa bố trí vừa các kiện cạnh nhau trên ô sàn, dù tổng diện tích có thể còn đủ.");
         }
         else
         {
@@ -100,6 +98,18 @@ internal static class PutawayRules
             if (used + incoming.LengthCm * incoming.WidthCm * incoming.HeightCm / 1_000_000m > total)
                 return Fail("Tầng kệ không đủ thể tích còn lại.");
         }
+        var slot = new CapacitySlot
+        {
+            Id = target.LocationId, Floor = floor, Condition = item.ItemCondition,
+            Length = target.LengthCm.Value, Width = target.WidthCm.Value, Height = target.HeightCm, MaxWeight = target.MaxWeightKg,
+            Loads = current.Select(o => new CapacityLoad(new CapacityProduct(0, "Kiện đã xếp", 0, 0,
+                o.LengthCm, o.WidthCm, o.HeightCm, o.WeightKg), o.Condition, 1)).ToList()
+        };
+        var load = new CapacityLoad(new CapacityProduct(item.ProductId, item.Product.ProductCode, item.Product.CategoryId,
+            item.Product.BrandId, incoming.LengthCm, incoming.WidthCm, incoming.HeightCm, incoming.WeightKg), item.ItemCondition, 1);
+        if (!TransferCapacityPlanner.Fits(slot, load))
+            return Fail(floor ? "Không bố trí vừa các kiện trên ô sàn theo chiều cố định, không chồng kiện."
+                : "Không bố trí vừa các kiện theo lớp trong kích thước và tải trọng tầng kệ.");
         return (new PutawayLocationViewModel
         {
             Id = target.LocationId, Path = Path(layout, target.LocationId), ZoneId = zone.LocationId, Zone = zone.LocationName,
@@ -129,22 +139,4 @@ internal static class PutawayRules
 
     private static bool ValidProfile(decimal length, decimal width, decimal height, decimal weight) => length > 0 && width > 0 && height > 0 && weight > 0;
 
-    private static bool CanPackFloor(decimal length, decimal width, List<PutawayOccupant> packages)
-    {
-        // Conservative 2D shelves: no rotation/stacking and no new x/y columns in the existing schema.
-        var shelves = new List<(decimal Width, decimal UsedLength)>();
-        var usedWidth = 0m;
-        foreach (var package in packages.OrderByDescending(p => p.WidthCm).ThenByDescending(p => p.LengthCm).ThenBy(p => p.SerialId))
-        {
-            var index = shelves.FindIndex(s => package.WidthCm <= s.Width && s.UsedLength + package.LengthCm <= length);
-            if (index >= 0) shelves[index] = (shelves[index].Width, shelves[index].UsedLength + package.LengthCm);
-            else
-            {
-                if (package.LengthCm > length || usedWidth + package.WidthCm > width) return false;
-                shelves.Add((package.WidthCm, package.LengthCm));
-                usedWidth += package.WidthCm;
-            }
-        }
-        return true;
-    }
 }

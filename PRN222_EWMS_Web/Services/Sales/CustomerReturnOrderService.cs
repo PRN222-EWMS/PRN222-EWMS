@@ -8,12 +8,14 @@ using Microsoft.Extensions.Logging;
 using PRN222_EWMS_Web.Models;
 using PRN222_EWMS_Web.Repositories.Sales;
 using PRN222_EWMS_Web.ViewModels.CustomerReturnOrder;
+using PRN222_EWMS_Web.Services.Purchasing;
 
 namespace PRN222_EWMS_Web.Services.Sales;
 
 public class CustomerReturnOrderService(
     ICustomerReturnOrderRepository repo,
-    ILogger<CustomerReturnOrderService> logger) : ICustomerReturnOrderService
+    ILogger<CustomerReturnOrderService> logger,
+    IWarehouseCapacityEngine capacity) : ICustomerReturnOrderService
 {
     private static readonly TimeZoneInfo VietnamTime = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
 
@@ -263,6 +265,7 @@ public class CustomerReturnOrderService(
             var createdResult = await repo.InTransactionAsync(actorId, async () =>
             {
                 bool isConfirm = string.Equals(model.Action, "SaveAndConfirm", StringComparison.OrdinalIgnoreCase);
+                if (isConfirm) await capacity.LockWarehouseAsync(model.WarehouseId, cancellationToken);
                 var freshEligibleLines = await LockAndRevalidateEligibilityUnderTxAsync(model.SalesOrderId, null, model.Lines, isConfirm, cancellationToken);
 
                 var order = new CustomerReturnOrder
@@ -286,6 +289,7 @@ public class CustomerReturnOrderService(
 
                 if (isConfirm)
                 {
+                    await CheckReturnCapacityAsync(model.WarehouseId, orderLines, null, cancellationToken);
                     await repo.ConfirmOrderAsync(order, orderLines, null, actorId, cancellationToken);
                     return (order.ReturnOrderId, order.ReturnCode, "OPEN");
                 }
@@ -342,6 +346,7 @@ public class CustomerReturnOrderService(
             var updatedResult = await repo.InTransactionAsync(actorId, async () =>
             {
                 bool isConfirm = string.Equals(model.Action, "SaveAndConfirm", StringComparison.OrdinalIgnoreCase);
+                if (isConfirm) await capacity.LockWarehouseAsync(model.WarehouseId, cancellationToken);
                 var freshEligibleLines = await LockAndRevalidateEligibilityUnderTxAsync(model.SalesOrderId, returnOrderId, model.Lines, isConfirm, cancellationToken);
 
                 var order = new CustomerReturnOrder
@@ -365,6 +370,7 @@ public class CustomerReturnOrderService(
 
                 if (isConfirm)
                 {
+                    await CheckReturnCapacityAsync(model.WarehouseId, orderLines, returnOrderId, cancellationToken);
                     await repo.ConfirmOrderAsync(order, orderLines, model.RowVersion, actorId, cancellationToken);
                     return (order.ReturnCode, "OPEN");
                 }
@@ -410,8 +416,11 @@ public class CustomerReturnOrderService(
 
         try
         {
+            var current = await repo.FindByIdAsync(returnOrderId, asNoTracking: true, cancellationToken);
+            if (current == null) return (false, "Không tìm thấy đơn trả hàng.");
             await repo.InTransactionAsync(actorId, async () =>
             {
+                await capacity.LockWarehouseAsync(current.WarehouseId, cancellationToken);
                 await repo.CancelOrderAsync(returnOrderId, cancelReason, rowVersion, actorId, cancellationToken);
                 return true;
             });
@@ -431,6 +440,17 @@ public class CustomerReturnOrderService(
             logger.LogError(ex, "Lỗi hệ thống khi hủy đơn trả hàng ID: {ReturnOrderId}", returnOrderId);
             return (false, "Đã xảy ra lỗi trong quá trình hủy đơn trả hàng. Vui lòng thử lại sau.");
         }
+    }
+
+    private async Task CheckReturnCapacityAsync(int warehouseId, IEnumerable<CustomerReturnOrderLine> lines,
+        long? excludeReturnId, CancellationToken ct)
+    {
+        var check = await capacity.EvaluateAsync(new()
+        {
+            WarehouseId = warehouseId, ExcludeReturnOrderId = excludeReturnId,
+            Demands = lines.Select(l => new CapacityDemand(l.ProductId, l.RequestedQuantity - l.CancelledQuantity, "UNKNOWN")).ToList()
+        }, ct);
+        if (!check.IsValid) throw new InvalidOperationException("Kho nhận trả chưa đủ chỗ: " + string.Join(" ", check.Errors));
     }
 
     private async Task<List<EligibleSalesOrderLineDto>> LockAndRevalidateEligibilityUnderTxAsync(
@@ -588,8 +608,7 @@ public class CustomerReturnOrderService(
 
         var products = await repo.GetProductsByIdsAsync(productIds, cancellationToken);
         var activeZones = warehouse.StorageLocations
-            .Where(l => l.LocationType == "ZONE" && l.Status == "ACTIVE" && l.ZoneType != "DEFECTIVE"
-                     && l.StorageType != "QUARANTINE" && l.ConditionPolicy != "DEFECTIVE_ONLY").ToList();
+            .Where(l => l.LocationType == "ZONE" && l.Status == "ACTIVE" && l.ZoneType is "STANDARD" or "RESERVE").ToList();
 
         if (activeZones.Count == 0)
         {

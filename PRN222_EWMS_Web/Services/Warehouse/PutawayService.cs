@@ -2,10 +2,11 @@ using System.ComponentModel.DataAnnotations;
 using PRN222_EWMS_Web.Models;
 using PRN222_EWMS_Web.Repositories.WarehouseStaff;
 using PRN222_EWMS_Web.ViewModels.Putaway;
+using PRN222_EWMS_Web.Services.Purchasing;
 
 namespace PRN222_EWMS_Web.Services.WarehouseStaff;
 
-public class PutawayService(IPutawayRepository repo) : IPutawayService
+public class PutawayService(IPutawayRepository repo, IWarehouseCapacityEngine capacity) : IPutawayService
 {
     private async Task<PutawayActor> ActorAsync(int userId, CancellationToken ct) =>
         await repo.GetActorAsync(userId, ct) ?? throw new PutawayException("Tài khoản chưa được phân công kho hoặc không còn quyền nhân viên kho.", 403);
@@ -35,8 +36,12 @@ public class PutawayService(IPutawayRepository repo) : IPutawayService
             .Select(l => PutawayRules.Evaluate(item, layout, l, occupants)).ToList();
         model.Locations = evaluations.Where(e => e.Location is not null).Select(e => e.Location!)
             .OrderBy(l => l.IsReserve).ThenBy(l => l.Path, StringComparer.Ordinal).ThenBy(l => l.Id).ToList();
+        var plannedErrors = await capacity.GetPlacementErrorsAsync(actor.WarehouseId, item.SerialItemId,
+            model.Locations.Select(l => l.Id).ToArray(), ct);
+        model.Locations = model.Locations.Where(l => !plannedErrors.ContainsKey(l.Id)).ToList();
         if (model.Locations.Count == 0)
-            model.EmptyReason = evaluations.Count == 0 ? "Kho chưa có tầng kệ hoặc ô sàn được cấu hình."
+            model.EmptyReason = plannedErrors.Count > 0 ? plannedErrors.Values.First()
+                : evaluations.Count == 0 ? "Kho chưa có tầng kệ hoặc ô sàn được cấu hình."
                 : "Không có vị trí phù hợp: " + string.Join(" ", evaluations.Select(e => e.Reason).Where(r => r is not null).Distinct().Take(4));
         return model;
     }
@@ -64,6 +69,8 @@ public class PutawayService(IPutawayRepository repo) : IPutawayService
                 ?? throw new PutawayException("Vị trí đích không tồn tại trong kho được giao.", 404);
             var evaluation = PutawayRules.Evaluate(item, layout, target, await repo.GetOccupantsAsync(actor.WarehouseId, target.LocationId, token));
             if (evaluation.Location is null) throw new PutawayException(evaluation.Reason ?? "Vị trí không còn hợp lệ.");
+            var plannedErrors = await capacity.GetPlacementErrorsAsync(actor.WarehouseId, item.SerialItemId, [target.LocationId], token);
+            if (plannedErrors.TryGetValue(target.LocationId, out var plannedReason)) throw new PutawayException(plannedReason);
             await repo.SavePlacementAsync(item, target.LocationId, userId, version, evaluation.Location.Path, token);
             var receipt = ReceiptInfo(item.CurrentSupplySource);
             return new PutawayResult(item.SerialNumber, evaluation.Location.Path, receipt.Source, receipt.ReceiptId);
