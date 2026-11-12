@@ -30,7 +30,7 @@
         document.addEventListener("DOMContentLoaded", function () {
             ReturnOrderEngine.initCreate(
                 '@Url.Action("GetEligibleLines", "CustomerReturnOrder")',
-                @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AvailableLines ?? new()))
+                @Json.Serialize(Model.AvailableLines)
             );
         });
     </script>

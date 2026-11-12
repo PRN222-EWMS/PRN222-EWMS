@@ -1,3 +1,6 @@
+@{
+    var useInlineNotifications = ViewContext.RouteData.Values["controller"]?.ToString() is "CustomerReturnOrder" or "Supplier";
+}
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -50,7 +53,7 @@
     {
         <link rel="stylesheet" href="~/css/manager-inbound.css" asp-append-version="true" />
     }
-    @if (User.IsInRole("SALES_STAFF") ||
+    @if (User.IsInRole("SALES_STAFF") || ViewContext.RouteData.Values["controller"]?.ToString() == "Supplier" ||
         ((User.IsInRole("MANAGER") || User.IsInRole("WAREHOUSE_STAFF")) &&
          (string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "SalesOrder", StringComparison.OrdinalIgnoreCase) ||
           string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "CustomerReturnOrder", StringComparison.OrdinalIgnoreCase))))
@@ -88,34 +91,34 @@
             </div>
         </header>
         <main class="ewms-content" id="main-content">
+            <div id="inlineNotifications" class="toast-container @(useInlineNotifications ? "position-static w-100 mb-3" : "position-fixed bottom-0 end-0 p-3")" style="z-index: 1090;">
+                @if (TempData["Success"] != null)
+                {
+                    <div id="toastSuccess" class="toast @(useInlineNotifications ? "w-100 shadow-none" : "shadow-lg") align-items-center border-0 bg-white" role="alert" aria-live="polite" aria-atomic="true" data-bs-autohide="true" data-bs-delay="3000">
+                        <div class="d-flex border-start border-success border-4 rounded-start">
+                            <div class="toast-body d-flex align-items-center gap-2 text-dark">
+                                <i class="bi bi-check-circle-fill text-success fs-5 flex-shrink-0" aria-hidden="true"></i>
+                                <div>@TempData["Success"]</div>
+                            </div>
+                            <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                        </div>
+                    </div>
+                }
+                @if (TempData["Error"] != null)
+                {
+                    <div id="toastError" class="toast @(useInlineNotifications ? "w-100 shadow-none" : "shadow-lg") align-items-center border-0 bg-white" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="3000">
+                        <div class="d-flex border-start border-danger border-4 rounded-start">
+                            <div class="toast-body d-flex align-items-center gap-2 text-dark">
+                                <i class="bi bi-exclamation-triangle-fill text-danger fs-5 flex-shrink-0" aria-hidden="true"></i>
+                                <div>@TempData["Error"]</div>
+                            </div>
+                            <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                        </div>
+                    </div>
+                }
+            </div>
             @RenderBody()
         </main>
-    </div>
-    <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1090;">
-        @if (TempData["Success"] != null)
-        {
-            <div id="toastSuccess" class="toast align-items-center border-0 shadow-lg bg-white" role="alert" aria-live="polite" aria-atomic="true" data-bs-autohide="true" data-bs-delay="3000">
-                <div class="d-flex border-start border-success border-4 rounded-start">
-                    <div class="toast-body d-flex align-items-center gap-2 text-dark">
-                        <i class="bi bi-check-circle-fill text-success fs-5 flex-shrink-0" aria-hidden="true"></i>
-                        <div>@TempData["Success"]</div>
-                    </div>
-                    <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-                </div>
-            </div>
-        }
-        @if (TempData["Error"] != null)
-        {
-            <div id="toastError" class="toast align-items-center border-0 shadow-lg bg-white" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="3000">
-                <div class="d-flex border-start border-danger border-4 rounded-start">
-                    <div class="toast-body d-flex align-items-center gap-2 text-dark">
-                        <i class="bi bi-exclamation-triangle-fill text-danger fs-5 flex-shrink-0" aria-hidden="true"></i>
-                        <div>@TempData["Error"]</div>
-                    </div>
-                    <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-                </div>
-            </div>
-        }
     </div>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
@@ -123,12 +126,10 @@
     <script src="~/js/password-toggle.js" asp-append-version="true"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            const inline = @Json.Serialize(useInlineNotifications);
             document.querySelectorAll('.toast-container .toast').forEach(function (el) {
-                var toast = new bootstrap.Toast(el, { autohide: true, delay: 3000 });
+                var toast = new bootstrap.Toast(el, { animation: !inline, autohide: !inline, delay: 3000 });
                 toast.show();
-                setTimeout(function () {
-                    try { toast.hide(); } catch (e) {}
-                }, 3000);
             });
         });
     </script>

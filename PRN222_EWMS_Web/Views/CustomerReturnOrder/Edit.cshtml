@@ -28,6 +28,14 @@
             <partial name="_ReturnOrderForm" model="Model" />
         </section>
     </form>
+
+    @if (Model.CanCancel)
+    {
+        <form id="directCancelForm" method="post" asp-action="Cancel" asp-route-id="@Model.ReturnOrderId" class="d-none">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="rowVersion" value="@(Model.RowVersion != null ? Convert.ToBase64String(Model.RowVersion) : "")" />
+        </form>
+    }
 </div>
 
 @section Scripts {
@@ -35,7 +43,7 @@
     <partial name="_ReturnOrderScripts" />
     <script>
         document.addEventListener("DOMContentLoaded", function () {
-            ReturnOrderEngine.initEdit(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AvailableLines ?? new())));
+            ReturnOrderEngine.initEdit(@Json.Serialize(Model.AvailableLines));
         });
     </script>
 }

@@ -7,11 +7,18 @@
             <div class="putaway-source-tabs" role="group" aria-label="Chọn nguồn hàng">
                 <button type="button" data-source="PURCHASE" class="@(Model.Filter.Source == "PURCHASE" ? "is-selected" : "")" aria-pressed="@(Model.Filter.Source == "PURCHASE" ? "true" : "false")">Hàng mua</button>
                 <button type="button" data-source="RETURN" class="@(Model.Filter.Source == "RETURN" ? "is-selected" : "")" aria-pressed="@(Model.Filter.Source == "RETURN" ? "true" : "false")">Hàng khách trả</button>
+                <button type="button" data-source="TRANSFER_RECEIPT" class="@(Model.Filter.Source == "TRANSFER_RECEIPT" ? "is-selected" : "")" aria-pressed="@(Model.Filter.Source == "TRANSFER_RECEIPT" ? "true" : "false")">Hàng chuyển kho</button>
             </div>
-            <label for="putaway-receipt">@(Model.Filter.Source == "RETURN" ? "Phiếu nhận hàng trả đã DONE" : "Phiếu nhập mua đã DONE")</label>
-            <select id="putaway-receipt" name="ReceiptId"><option value="">Tất cả phiếu thuộc nguồn này</option>@foreach (var receipt in Model.Receipts) { <option value="@receipt.Id" selected="@(Model.Filter.ReceiptId == receipt.Id)">@receipt.Code · @receipt.PendingCount Serial chờ</option> }</select>
+            <label for="putaway-receipt">@Model.ReceiptLabel</label>
+            <select id="putaway-receipt" name="ReceiptId">
+                <option value="">Tất cả phiếu thuộc nguồn này</option>
+                @foreach (var receipt in Model.Receipts)
+                {
+                    <option value="@receipt.Id" selected="@(Model.Filter.ReceiptId == receipt.Id)">@receipt.Code · @receipt.PendingCount Serial chờ@(receipt.TransferCode is null ? "" : $" · {receipt.TransferCode} · Từ {receipt.FromWarehouseName}")</option>
+                }
+            </select>
             <label for="putaway-search">Tìm trong danh sách chờ</label>
-            <input id="putaway-search" type="search" name="Search" value="@Model.Filter.Search" maxlength="100" placeholder="Serial, mã/tên sản phẩm, mã phiếu" />
+            <input id="putaway-search" type="search" name="Search" value="@Model.Filter.Search" maxlength="100" placeholder="@(Model.Filter.Source == "TRANSFER_RECEIPT" ? "Serial, sản phẩm, phiếu, lệnh chuyển, kho gửi" : "Serial, mã/tên sản phẩm, mã phiếu")" />
             <label for="putaway-condition">Tình trạng hàng</label>
             <select id="putaway-condition" name="Condition"><option value="">Tất cả</option><option value="GOOD" selected="@(Model.Filter.Condition == "GOOD")">Hàng tốt</option><option value="DAMAGED" selected="@(Model.Filter.Condition == "DAMAGED")">Hàng hỏng</option></select>
             <button type="submit" class="putaway-secondary">Tìm hàng chờ</button>
@@ -32,7 +39,18 @@
                     <p class="muted">@item.Category · @item.Brand</p>
                     <span class="putaway-condition @(item.Condition == "DAMAGED" ? "is-damaged" : "")">@(item.Condition == "DAMAGED" ? "Hàng hỏng" : "Hàng tốt")</span>
                     @if (item.Quarantined) { <span class="putaway-quarantined">Đang cách ly</span> }
-                    <p class="putaway-receipt-link"><a asp-controller="@(Model.Filter.Source == "RETURN" ? "ReturnReceive" : "Inbound")" asp-action="Details" asp-route-id="@item.ReceiptId">@item.ReceiptCode</a><small class="muted">Nhận: @item.ReceivedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small></p>
+                    <p class="putaway-receipt-link">
+                        @if (Model.Filter.Source == "TRANSFER_RECEIPT")
+                        {
+                            <a asp-controller="WarehouseTransfer" asp-action="Details" asp-route-id="@item.TransferOrderId">@item.ReceiptCode</a>
+                            <small class="muted">Từ @item.FromWarehouseName · @item.TransferCode</small>
+                        }
+                        else
+                        {
+                            <a asp-controller="@(Model.Filter.Source == "RETURN" ? "ReturnReceive" : "Inbound")" asp-action="Details" asp-route-id="@item.ReceiptId">@item.ReceiptCode</a>
+                        }
+                        <small class="muted">Nhận: @item.ReceivedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
+                    </p>
                     <button type="button" class="putaway-secondary" data-select-serial="@item.Serial">Chọn Serial →</button>
                 </article>
             }

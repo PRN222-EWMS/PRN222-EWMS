@@ -65,29 +65,38 @@ public class PutawayService(IPutawayRepository repo) : IPutawayService
             var evaluation = PutawayRules.Evaluate(item, layout, target, await repo.GetOccupantsAsync(actor.WarehouseId, target.LocationId, token));
             if (evaluation.Location is null) throw new PutawayException(evaluation.Reason ?? "Vị trí không còn hợp lệ.");
             await repo.SavePlacementAsync(item, target.LocationId, userId, version, evaluation.Location.Path, token);
-            var source = item.CurrentSupplySource!;
-            return new PutawayResult(item.SerialNumber, evaluation.Location.Path, source.SourceType == "RETURN" ? "RETURN" : "PURCHASE",
-                source.SourceType == "RETURN" ? source.ReturnReceiptId : source.InboundId);
+            var receipt = ReceiptInfo(item.CurrentSupplySource);
+            return new PutawayResult(item.SerialNumber, evaluation.Location.Path, receipt.Source, receipt.ReceiptId);
         }, ct);
     }
 
     private static PutawaySerialViewModel ToSerialModel(SerialItem item, PutawayLayout layout)
     {
         var source = item.CurrentSupplySource;
-        var returned = source?.SourceType == "RETURN";
+        var receipt = ReceiptInfo(source);
+        var transfer = source?.SourceType == "TRANSFER_RECEIPT" ? source.TransferReceipt?.TransferOrder : null;
         return new PutawaySerialViewModel
         {
             Id = item.SerialItemId, Serial = item.SerialNumber, ProductCode = item.Product.ProductCode,
             ProductName = item.Product.ProductName, Category = item.Product.Category.CategoryName, Brand = item.Product.Brand.BrandName,
-            WarehouseName = layout.Warehouse.WarehouseName, Source = returned ? "RETURN" : "PURCHASE",
-            ReceiptId = returned ? source?.ReturnReceiptId : source?.InboundId,
-            ReceiptCode = (returned ? source?.ReturnReceipt?.ReceiptCode : source?.Inbound?.ReceiptCode) ?? "Chưa có nguồn nhận hợp lệ",
+            WarehouseName = layout.Warehouse.WarehouseName, Source = receipt.Source,
+            ReceiptId = receipt.ReceiptId, ReceiptCode = receipt.ReceiptCode ?? "Chưa có nguồn nhận hợp lệ",
+            TransferOrderId = transfer?.TransferOrderId, TransferCode = transfer?.TransferCode,
+            FromWarehouseName = transfer?.FromWarehouse?.WarehouseName,
             Condition = item.ItemCondition, Quarantined = item.IsQuarantined,
             LengthCm = item.Product.LengthCm, WidthCm = item.Product.WidthCm, HeightCm = item.Product.HeightCm, WeightKg = item.Product.GrossWeightKg,
             RowVersion = Convert.ToBase64String(item.RowVersion),
             CurrentLocationPath = item.CurrentLocationId is int id ? PutawayRules.Path(layout, id) : null
         };
     }
+
+    private static (string Source, long? ReceiptId, string? ReceiptCode) ReceiptInfo(SupplySource? source) => source?.SourceType switch
+    {
+        "INBOUND" => ("PURCHASE", source.InboundId, source.Inbound?.ReceiptCode),
+        "RETURN" => ("RETURN", source.ReturnReceiptId, source.ReturnReceipt?.ReceiptCode),
+        "TRANSFER_RECEIPT" => ("TRANSFER_RECEIPT", source.TransferReceiptId, source.TransferReceipt?.ReceiptCode),
+        _ => ("PURCHASE", null, null)
+    };
 
     private static void Validate(object input)
     {

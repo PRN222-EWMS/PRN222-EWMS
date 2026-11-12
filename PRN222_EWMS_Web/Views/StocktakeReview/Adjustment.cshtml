@@ -8,7 +8,10 @@
     string Condition(string? condition) => condition switch { "GOOD" => "Tốt", "DAMAGED" => "Hỏng", _ => "—" };
     var enteredReason = ViewData.ModelState.TryGetValue("Reason", out var reasonState) ? reasonState.AttemptedValue : "";
     bool Eligible(PRN222_EWMS_Web.Models.StocktakeObservation row) => Model.InvestigationContext is null
+        && Model.ConfirmedShortageIds.Contains(row.ObservationId)
         && row.ExpectedQuantity == 1 && row.ActualQuantity == 0 && row.SerialItemId.HasValue && row.ProductId.HasValue;
+    string PendingStep(PRN222_EWMS_Web.Models.StocktakeObservation row) => row.RoundNumber == 1
+        ? "Cần đếm lại tại khu vực" : "Cần chốt kết quả tìm toàn kho";
 }
 <div class="warehouse-list">
     <header class="workspace-heading"><div><p class="eyebrow">MANAGER · ĐIỀU CHỈNH TỒN</p><h1>Đề nghị giảm tồn kho</h1><p class="muted">@Model.Plan.StocktakeCode</p></div><a asp-action="Details" asp-route-id="@Model.Plan.StocktakeId" class="workspace-button sales-button-secondary">Quay lại rà soát</a></header>
@@ -18,7 +21,7 @@
             <div class="table-wrap"><table class="workspace-table"><thead><tr><th>Chọn</th><th>Serial / sản phẩm</th><th>Vòng</th><th>Đối chiếu ban đầu</th><th>Thực tế</th><th>Chênh lệch / ghi chú</th></tr></thead><tbody>
             @foreach (var row in differences)
             {
-                <tr><td><input type="checkbox" name="ObservationIds" value="@row.ObservationId" id="observation-@row.ObservationId" aria-label="Chọn serial @row.ScannedSerial" disabled="@(!Eligible(row))" />@if (!Eligible(row)) { <small class="d-block muted">Thiếu thông tin serial</small> }</td><td><label for="observation-@row.ObservationId"><strong>@row.ScannedSerial</strong></label><small class="d-block muted">@Product(row.ProductId)</small></td><td>@row.RoundNumber</td><td>Số lượng: @row.ExpectedQuantity<small class="d-block muted">@(row.ExpectedQuantity == 1 ? Condition(row.ExpectedCondition) + " · " + Location(row.ExpectedLocationId) : "Chưa có trong sổ kho")</small></td><td>Số lượng: @row.ActualQuantity<small class="d-block muted">@(row.ActualQuantity == 1 ? Condition(row.ActualCondition) + " · " + Location(row.ActualLocationId) : "Không ghi nhận")</small></td><td>@StocktakeDisplay.Difference(row.DifferenceType)<small class="d-block muted text-break">@row.Note</small></td></tr>
+                <tr><td><input type="checkbox" name="ObservationIds" value="@row.ObservationId" id="observation-@row.ObservationId" aria-label="Chọn serial @row.ScannedSerial" disabled="@(!Eligible(row))" />@if (!Eligible(row)) { <small class="d-block muted">@PendingStep(row)</small> }</td><td><label for="observation-@row.ObservationId"><strong>@row.ScannedSerial</strong></label><small class="d-block muted">@Product(row.ProductId)</small></td><td>@row.RoundNumber</td><td>Số lượng: @row.ExpectedQuantity<small class="d-block muted">@(row.ExpectedQuantity == 1 ? Condition(row.ExpectedCondition) + " · " + Location(row.ExpectedLocationId) : "Chưa có trong sổ kho")</small></td><td>Số lượng: @row.ActualQuantity<small class="d-block muted">@(row.ActualQuantity == 1 ? Condition(row.ActualCondition) + " · " + Location(row.ActualLocationId) : "Không ghi nhận")</small></td><td>@StocktakeDisplay.Difference(row.DifferenceType)<small class="d-block muted text-break">@row.Note</small></td></tr>
             }
             @if (differences.Count == 0) { <tr><td colspan="6" class="text-center muted py-4">Không có serial thiếu cần điều chỉnh.</td></tr> }
             </tbody></table></div>
