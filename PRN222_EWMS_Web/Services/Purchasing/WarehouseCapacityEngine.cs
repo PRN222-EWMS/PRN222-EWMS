@@ -4,250 +4,76 @@ using PRN222_EWMS_Web.Services.Warehouse;
 
 namespace PRN222_EWMS_Web.Services.Purchasing;
 
-public class WarehouseCapacityEngine(EwmsDbContext db) : IWarehouseCapacityEngine
+public class WarehouseCapacityEngine(EwmsDbContext db, ISourceReservationService sources, TimeProvider clock) : IWarehouseCapacityEngine
 {
-    public async Task<ProductCapacityResult> CalculateCapacityAsync(
-        int warehouseId,
-        int productId,
-        int requestedQuantity,
-        long? excludePoId = null,
-        CancellationToken cancellationToken = default)
+    private const int MaxLineQuantity = 1000000;
+    private static readonly string[] LockedStatuses = ["COUNTING", "RECOUNTING", "REVIEWING", "PENDING_APPROVAL"];
+    private DateOnly Today => DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime.AddHours(7));
+
+    private sealed record PositionedStock(long Id, int ProductId, string Condition, int? LocationId);
+    private sealed class Snapshot
     {
-        var result = new ProductCapacityResult
+        public Dictionary<int, Product> Products { get; set; } = [];
+        public List<CapacitySlot> Slots { get; } = [];
+        public List<PositionedStock> Serials { get; set; } = [];
+        public List<CapacityLoad> Awaiting { get; set; } = [];
+        public List<CapacityLoad> Purchases { get; } = [];
+        public List<CapacityLoad> Transfers { get; } = [];
+        public List<CapacityLoad> Returns { get; } = [];
+        public List<string> Errors { get; } = [];
+        public List<string> Warnings { get; } = [];
+        public HashSet<int> LockedLocations { get; set; } = [];
+        public Dictionary<int, StorageLocation> Locations { get; set; } = [];
+        public bool AwaitingLocked { get; set; }
+        public CapacityProduct Profile(int id)
         {
-            ProductId = productId
-        };
-
-        // 1. Lấy thông tin kích thước và danh mục của sản phẩm
-        var p = await db.Products
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.ProductId == productId, cancellationToken);
-
-        if (p == null)
-        {
-            result.IsValid = false;
-            result.ErrorMessage = "Không tìm thấy thông tin sản phẩm yêu cầu.";
-            return result;
-        }
-
-        result.ProductCode = p.ProductCode;
-        result.ProductName = p.ProductName;
-
-        // Tính Footprint (diện tích chân đế m²) và Volume (thể tích m³)
-        // Footprint = (LengthCm * WidthCm) / 10,000
-        // Volume = (LengthCm * WidthCm * HeightCm) / 1,000,000
-        decimal footprint = (p.LengthCm * p.WidthCm) / 10000m;
-        decimal volume = (p.LengthCm * p.WidthCm * p.HeightCm) / 1000000m;
-        decimal unitWeight = p.GrossWeightKg;
-
-        // 2. Nạp toàn bộ vị trí lưu trữ của kho để xây dựng cây phân cấp (Zone -> Row -> Rack -> Tier/FloorSlot)
-        var locations = await db.StorageLocations
-            .AsNoTracking()
-            .Where(l => l.WarehouseId == warehouseId)
-            .ToListAsync(cancellationToken);
-
-        var locMap = locations.ToDictionary(l => l.LocationId);
-
-        // Hàm cục bộ tìm Root Zone
-        StorageLocation? GetRootZone(StorageLocation loc)
-        {
-            var curr = loc;
-            while (curr != null)
-            {
-                if (string.Equals(curr.LocationType, "ZONE", StringComparison.OrdinalIgnoreCase))
-                    return curr;
-                if (!curr.ParentLocationId.HasValue) return null;
-                if (!locMap.TryGetValue(curr.ParentLocationId.Value, out curr!)) return null;
-            }
-            return null;
-        }
-
-        // Hàm cục bộ kiểm tra vị trí hoặc bất kỳ vị trí cha nào có thuộc khu lỗi/cách ly hay không
-        bool IsDefectiveOrQuarantine(StorageLocation loc)
-        {
-            var curr = loc;
-            while (curr != null)
-            {
-                if (string.Equals(curr.ZoneType, "DAMAGED", StringComparison.OrdinalIgnoreCase)) return true;
-                if (string.Equals(curr.ConditionPolicy, "DAMAGED", StringComparison.OrdinalIgnoreCase)) return true;
-                if (string.Equals(curr.StorageType, "QUARANTINE", StringComparison.OrdinalIgnoreCase)) return true;
-                if (!curr.ParentLocationId.HasValue) break;
-                if (!locMap.TryGetValue(curr.ParentLocationId.Value, out curr!)) break;
-            }
-            return false;
-        }
-
-        // 3. Lấy danh sách quy tắc phân khu ZoneStorageRule của kho
-        var zoneRules = await db.ZoneStorageRules
-            .AsNoTracking()
-            .Where(r => r.ZoneLocation.WarehouseId == warehouseId)
-            .ToListAsync(cancellationToken);
-
-        // Xác định các Zone hợp lệ cho sản phẩm:
-        // - ZoneType == 'RESERVE' (Khu dự phòng dùng chung khi Standard đầy)
-        // - ZoneType == 'STANDARD' và khớp CategoryId (cùng BrandId nếu rule có BrandId)
-        // - Loại trừ 100% DEFECTIVE và QUARANTINE
-        var validZoneIds = new HashSet<int>();
-        foreach (var loc in locations.Where(l => string.Equals(l.LocationType, "ZONE", StringComparison.OrdinalIgnoreCase)))
-        {
-            if (IsDefectiveOrQuarantine(loc)) continue;
-
-            if (string.Equals(loc.ZoneType, "RESERVE", StringComparison.OrdinalIgnoreCase))
-            {
-                validZoneIds.Add(loc.LocationId);
-            }
-            else if (string.Equals(loc.ZoneType, "STANDARD", StringComparison.OrdinalIgnoreCase))
-            {
-                bool matchesRule = zoneRules.Any(r => r.ZoneLocationId == loc.LocationId
-                                                   && r.CategoryId == p.CategoryId
-                                                   && (r.BrandId == null || r.BrandId == p.BrandId));
-                if (matchesRule)
-                {
-                    validZoneIds.Add(loc.LocationId);
-                }
-            }
-        }
-
-        if (validZoneIds.Count == 0)
-        {
-            result.HasValidZone = false;
-            result.IsValid = false;
-            result.ErrorMessage = $"Sản phẩm '{p.ProductName}' (Mã: {p.ProductCode}) không thuộc danh mục được phép lưu trữ tại kho tiếp nhận này hoặc kho chưa thiết lập khu vực lưu trữ phù hợp (Mã lỗi: MSG-015).";
-            return result;
-        }
-
-        result.HasValidZone = true;
-
-        // 4. Lấy dữ liệu sức chứa tính sẵn từ View CSDL vw_LocationCapacity
-        var capacities = await db.VwLocationCapacities
-            .AsNoTracking()
-            .Where(c => c.WarehouseId == warehouseId)
-            .ToListAsync(cancellationToken);
-
-        int floorCapacity = 0;
-        int rackCapacity = 0;
-
-        foreach (var cap in capacities)
-        {
-            if (!locMap.TryGetValue(cap.LocationId, out var loc)) continue;
-            if (!string.Equals(loc.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase)) continue;
-            if (IsDefectiveOrQuarantine(loc)) continue;
-
-            var rootZone = GetRootZone(loc);
-            if (rootZone == null || !validZoneIds.Contains(rootZone.LocationId)) continue;
-
-            // 4.1 Tính sức chứa Ô sàn (FLOOR_SLOT)
-            if (string.Equals(cap.LocationType, "FLOOR_SLOT", StringComparison.OrdinalIgnoreCase))
-            {
-                decimal remArea = Math.Max(0m, (cap.CapacityAreaM2 ?? 0m) - (cap.UsedAreaM2 ?? 0m));
-                int floorQty = footprint > 0 ? (int)Math.Floor(remArea / footprint) : 0;
-
-                // Nếu có giới hạn tải trọng sàn
-                if (cap.MaxWeightKg.HasValue && cap.MaxWeightKg.Value > 0 && unitWeight > 0)
-                {
-                    decimal remWeight = Math.Max(0m, cap.MaxWeightKg.Value - cap.UsedWeightKg);
-                    int wQty = (int)Math.Floor(remWeight / unitWeight);
-                    floorQty = Math.Min(floorQty, wQty);
-                }
-
-                floorCapacity += floorQty;
-            }
-            // 4.2 Tính sức chứa Kệ nhiều tầng (TIER)
-            else if (string.Equals(cap.LocationType, "TIER", StringComparison.OrdinalIgnoreCase))
-            {
-                decimal remVol = Math.Max(0m, (cap.CapacityVolumeM3 ?? 0m) - (cap.UsedVolumeM3 ?? 0m));
-                int volQty = volume > 0 ? (int)Math.Floor(remVol / volume) : 0;
-
-                if (cap.MaxWeightKg.HasValue && cap.MaxWeightKg.Value > 0 && unitWeight > 0)
-                {
-                    decimal remWeight = Math.Max(0m, cap.MaxWeightKg.Value - cap.UsedWeightKg);
-                    int wQty = (int)Math.Floor(remWeight / unitWeight);
-                    rackCapacity += Math.Min(volQty, wQty);
-                }
-                else
-                {
-                    rackCapacity += volQty;
-                }
-            }
-        }
-
-        result.FloorSlotCapacity = floorCapacity;
-        result.RackTierCapacity = rackCapacity;
-
-        // 5. Tính toán lượng hàng đang trên đường về (Incoming Pipeline)
-        // 5.1 SupplySource INCOMING / IN_TRANSIT (PO khác sắp về, khách trả hàng, điều chuyển)
-        var supplyQuery = db.SupplySources
-            .AsNoTracking()
-            .Where(s => s.ProductId == productId
-                     && s.WarehouseId == warehouseId
-                     && (s.SupplyState == "INCOMING" || s.SupplyState == "IN_TRANSIT")
-                     && (s.ItemCondition == "GOOD" || s.ItemCondition == null));
-
-        if (excludePoId.HasValue && excludePoId.Value > 0)
-        {
-            supplyQuery = supplyQuery.Where(s => s.Poline == null || s.Poline.PurchaseOrderId != excludePoId.Value);
-        }
-
-        int supplyPipeline = await supplyQuery.SumAsync(s => (int?)s.RemainingQuantity, cancellationToken) ?? 0;
-
-        // 5.2 SerialItem chờ xếp vị trí (RECEIVED hoặc IN_WAREHOUSE nhưng CurrentLocationId == null)
-        int awaitingPutaway = await db.SerialItems
-            .AsNoTracking()
-            .Where(s => s.ProductId == productId
-                     && s.CurrentWarehouseId == warehouseId
-                     && (s.StockState == "RECEIVED" || s.StockState == "IN_WAREHOUSE")
-                     && s.CurrentLocationId == null
-                     && (s.ItemCondition == "GOOD" || s.ItemCondition == null))
-            .CountAsync(cancellationToken);
-
-        result.SupplyPipelineQuantity = supplyPipeline;
-        result.AwaitingPutawayQuantity = awaitingPutaway;
-
-        // 6. Đối chiếu với số lượng yêu cầu đặt mua
-        if (requestedQuantity > result.MaxOrderQuantity)
-        {
-            result.IsValid = false;
-            result.ErrorMessage = $"Kệ/ô sàn không đủ sức chứa cho số lượng yêu cầu của sản phẩm '{p.ProductName}' (Mã: {p.ProductCode}). Số lượng đặt: {requestedQuantity}, Sức chứa tối đa còn lại: {result.MaxOrderQuantity} (Mã lỗi: MSG-016).";
-        }
-        else
-        {
-            result.IsValid = true;
-        }
-
-        return result;
-    }
-
-    public async Task<(bool IsValid, string? ErrorMessage)> ValidatePurchaseOrderLinesCapacityAsync(
-        int warehouseId,
-        IEnumerable<(int ProductId, int Quantity)> lines,
-        long? excludePoId = null,
-        CancellationToken cancellationToken = default)
-    {
-        var inputs = lines.ToList();
-        if (inputs.Count == 0 || inputs.Any(l => l.Quantity <= 0)) return (false, "Cần sản phẩm và số lượng nguyên dương.");
-        var products = await db.Products.AsNoTracking().ToDictionaryAsync(p => p.ProductId, cancellationToken);
-        if (inputs.Any(l => !products.ContainsKey(l.ProductId))) return (false, "Có sản phẩm không còn tồn tại.");
-        CapacityProduct Profile(int id)
-        {
-            var p = products[id];
+            var p = Products[id];
             return new(p.ProductId, p.ProductCode, p.CategoryId, p.BrandId, p.LengthCm, p.WidthCm, p.HeightCm, p.GrossWeightKg);
         }
-        var locations = await db.StorageLocations.AsNoTracking().Where(l => l.WarehouseId == warehouseId).ToListAsync(cancellationToken);
-        var rules = await db.ZoneStorageRules.AsNoTracking().Where(r => r.ZoneLocation.WarehouseId == warehouseId).ToListAsync(cancellationToken);
-        var serials = await db.SerialItems.AsNoTracking().Where(s => s.CurrentWarehouseId == warehouseId
-                && (s.StockState == "IN_WAREHOUSE" || s.StockState == "RECEIVED"))
-            .Select(s => new { s.ProductId, s.ItemCondition, s.CurrentLocationId }).ToListAsync(cancellationToken);
-        var map = locations.ToDictionary(l => l.LocationId);
-        var slots = new List<CapacitySlot>();
+        public List<CapacityLoad> Queue(IEnumerable<PositionedStock> serials) => serials
+            .Where(s => s.LocationId == null).GroupBy(s => new { s.ProductId, s.Condition })
+            .Select(g => new CapacityLoad(Profile(g.Key.ProductId), g.Key.Condition, g.LongCount())).ToList();
+    }
+    private sealed record Simulation(List<CapacitySlot> Slots, List<string> Errors,
+        Dictionary<(int Slot, int Product, string Condition), long> BeforeRequests);
+
+    public Task LockWarehouseAsync(int warehouseId, CancellationToken ct = default) => sources.LockWarehouseAsync(warehouseId, ct);
+
+    private async Task<Snapshot> ReadAsync(WarehouseCapacityRequest request, CancellationToken ct)
+    {
+        var s = new Snapshot();
+        var warehouse = await db.Warehouses.AsNoTracking().SingleOrDefaultAsync(w => w.WarehouseId == request.WarehouseId, ct);
+        if (warehouse == null || warehouse.Status != "ACTIVE")
+        {
+            s.Errors.Add("Kho tiếp nhận không tồn tại hoặc đã ngừng hoạt động.");
+            return s;
+        }
+        var arrival = request.ExpectedArrivalDate ?? Today;
+        if (arrival < Today) s.Errors.Add("Ngày dự kiến nhận không được trong quá khứ.");
+        if (warehouse.WarehouseType == "RENTED" &&
+            (warehouse.RentalStartDate is not DateOnly start || warehouse.RentalEndDate is not DateOnly end || arrival < start || arrival > end))
+            s.Errors.Add("Ngày nhận hàng nằm ngoài thời hạn thuê kho.");
+        s.Products = await db.Products.AsNoTracking().Include(p => p.Brand).ToDictionaryAsync(p => p.ProductId, ct);
+        foreach (var line in request.Demands)
+            if (!s.Products.TryGetValue(line.ProductId, out var product) || product.Status != "ACTIVE" || product.Brand.Status != "ACTIVE")
+                s.Errors.Add("Có sản phẩm/thương hiệu không tồn tại hoặc đã ngừng hoạt động.");
+        if (s.Errors.Count > 0) return s;
+
+        var locations = await db.StorageLocations.AsNoTracking().Where(l => l.WarehouseId == request.WarehouseId).ToListAsync(ct);
+        s.Locations = locations.ToDictionary(l => l.LocationId);
+        var rules = await db.ZoneStorageRules.AsNoTracking().Where(r => r.ZoneLocation.WarehouseId == request.WarehouseId).ToListAsync(ct);
+        s.Serials = await db.SerialItems.AsNoTracking().Where(i => i.CurrentWarehouseId == request.WarehouseId
+                && (i.StockState == "IN_WAREHOUSE" || i.StockState == "RECEIVED"))
+            .Select(i => new PositionedStock(i.SerialItemId, i.ProductId, i.ItemCondition, i.CurrentLocationId)).ToListAsync(ct);
         foreach (var leaf in locations.Where(l => l.LocationType is "TIER" or "FLOOR_SLOT"))
         {
             var chain = new List<StorageLocation>();
-            StorageLocation? node = leaf;
             var seen = new HashSet<int>();
+            StorageLocation? node = leaf;
             while (node != null && seen.Add(node.LocationId) && chain.Count < 5)
             {
                 chain.Add(node);
-                node = node.ParentLocationId is int parent && map.TryGetValue(parent, out var location) ? location : null;
+                node = node.ParentLocationId is int id && s.Locations.TryGetValue(id, out var parent) ? parent : null;
             }
             bool floor = leaf.LocationType == "FLOOR_SLOT";
             if (chain.Any(l => l.Status != "ACTIVE") || chain[^1].ParentLocationId != null) continue;
@@ -257,39 +83,209 @@ public class WarehouseCapacityEngine(EwmsDbContext db) : IWarehouseCapacityEngin
             var condition = floor ? leaf.ConditionPolicy : chain[1].ConditionPolicy;
             if (zone.LocationType != "ZONE" || zone.ZoneType is not ("STANDARD" or "RESERVE") || condition is not ("GOOD" or "DAMAGED")
                 || leaf.LengthCm is not > 0 || leaf.WidthCm is not > 0 || (!floor && leaf.HeightCm is not > 0)
-                || leaf.CapacityMode != (floor ? "FLOOR_AREA" : "VOLUME")) continue;
-            slots.Add(new CapacitySlot { Id = leaf.LocationId, Reserve = zone.ZoneType == "RESERVE", Floor = floor, Condition = condition,
+                || leaf.HeightCm is <= 0 || leaf.MaxWeightKg is <= 0 || leaf.CapacityMode != (floor ? "FLOOR_AREA" : "VOLUME")) continue;
+            s.Slots.Add(new CapacitySlot
+            {
+                Id = leaf.LocationId, Reserve = zone.ZoneType == "RESERVE", Floor = floor, Condition = condition,
                 Length = leaf.LengthCm.Value, Width = leaf.WidthCm.Value, Height = leaf.HeightCm, MaxWeight = leaf.MaxWeightKg,
-                Rules = rules.Where(r => r.ZoneLocationId == zone.LocationId).Select(r => (r.CategoryId,r.BrandId)).ToList(),
-                Loads = serials.Where(s => s.CurrentLocationId == leaf.LocationId).GroupBy(s => new { s.ProductId,s.ItemCondition })
-                    .Select(g => new CapacityLoad(Profile(g.Key.ProductId),g.Key.ItemCondition,g.LongCount())).ToList() });
+                Rules = rules.Where(r => r.ZoneLocationId == zone.LocationId).Select(r => (r.CategoryId, r.BrandId)).ToList(),
+                Loads = s.Serials.Where(i => i.LocationId == leaf.LocationId).GroupBy(i => new { i.ProductId, i.Condition })
+                    .Select(g => new CapacityLoad(s.Profile(g.Key.ProductId), g.Key.Condition, g.LongCount())).ToList()
+            });
         }
-        var pending = serials.Where(s => s.CurrentLocationId == null).GroupBy(s => new { s.ProductId,s.ItemCondition })
-            .Select(g => new CapacityLoad(Profile(g.Key.ProductId),g.Key.ItemCondition,g.LongCount())).ToList();
-        // Count document remainders once. TRANSFER_INCOMING is a projection of these shipments, not extra stock.
-        var purchases = await db.PurchaseOrderLines.AsNoTracking().Where(l => l.PurchaseOrder.WarehouseId == warehouseId
-                && (excludePoId == null || l.PurchaseOrderId != excludePoId)
+        s.Awaiting = s.Queue(s.Serials);
+        var purchases = await db.PurchaseOrderLines.AsNoTracking().Where(l => l.PurchaseOrder.WarehouseId == request.WarehouseId
+                && (request.ExcludePoId == null || l.PurchaseOrderId != request.ExcludePoId)
                 && (l.PurchaseOrder.Status == "CONFIRMED" || l.PurchaseOrder.Status == "PARTIALLY_RECEIVED"))
-            .Select(l => new { l.ProductId, Quantity = (long)l.OrderedQuantity-l.ClosedQuantity
-                -db.InboundItems.LongCount(i => i.PolineId == l.PolineId && i.IsActive && i.Inbound.Status == "DONE") }).ToListAsync(cancellationToken);
-        pending.AddRange(purchases.Select(l => new CapacityLoad(Profile(l.ProductId),"GOOD",Math.Max(0,l.Quantity))));
-        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
-        var transfers = await db.TransferOrderLines.AsNoTracking().Where(l => l.TransferOrder.ToWarehouseId == warehouseId
-                && (l.TransferOrder.Status == "RELEASED" || l.TransferOrder.Status == "IN_PROGRESS")
-                && (l.TransferOrder.ExpectedDate == null || l.TransferOrder.ExpectedDate >= today
-                    || l.TransferOrder.TransferDispatches.Any() || l.TransferOrder.TransferReceipts.Any()))
-            .Select(l => new { l.ProductId,l.TransferOrder.ItemCondition, Quantity = (long)l.RequestedQuantity-l.CancelledQuantity
-                -db.TransferReceiptItems.LongCount(i => i.DispatchItem.TransferLineId == l.TransferLineId && i.IsActive && i.TransferReceipt.Status == "DONE")
-                -db.TransferLossRequestItems.LongCount(i => i.DispatchItem.TransferLineId == l.TransferLineId && i.IsActive && i.LossRequest.AppliedAt != null) }).ToListAsync(cancellationToken);
-        pending.AddRange(transfers.Select(l => new CapacityLoad(Profile(l.ProductId),l.ItemCondition,Math.Max(0,l.Quantity))));
-        var returns = await db.CustomerReturnOrderLines.AsNoTracking().Where(l => l.ReturnOrder.WarehouseId == warehouseId
+            .Select(l => new { l.ProductId, Qty = (long)l.OrderedQuantity - l.ClosedQuantity
+                - db.InboundItems.LongCount(i => i.PolineId == l.PolineId && i.IsActive && i.Inbound.Status == "DONE") }).ToListAsync(ct);
+        s.Purchases.AddRange(purchases.Where(l => l.Qty > 0).Select(l => new CapacityLoad(s.Profile(l.ProductId), "GOOD", l.Qty)));
+
+        var transfers = await db.TransferOrderLines.AsNoTracking().Where(l => l.TransferOrder.ToWarehouseId == request.WarehouseId
+                && (request.ExcludeTransferOrderId == null || l.TransferOrderId != request.ExcludeTransferOrderId)
+                && (l.TransferOrder.Status == "RELEASED" || l.TransferOrder.Status == "IN_PROGRESS"))
+            .Select(l => new { l.ProductId, l.TransferOrder.ItemCondition, l.TransferOrder.Status, l.TransferOrder.ExpectedDate,
+                HasDocuments = l.TransferOrder.TransferDispatches.Any() || l.TransferOrder.TransferReceipts.Any(),
+                Qty = (long)l.RequestedQuantity - l.CancelledQuantity
+                    - db.TransferReceiptItems.LongCount(i => i.DispatchItem.TransferLineId == l.TransferLineId && i.IsActive && i.TransferReceipt.Status == "DONE")
+                    - db.TransferLossRequestItems.LongCount(i => i.DispatchItem.TransferLineId == l.TransferLineId && i.IsActive && i.LossRequest.AppliedAt != null) }).ToListAsync(ct);
+        s.Transfers.AddRange(transfers.Where(l => l.Qty > 0 && !TransferPolicy.IsExpired(l.Status, l.ExpectedDate, Today, l.HasDocuments))
+            .Select(l => new CapacityLoad(s.Profile(l.ProductId), l.ItemCondition, l.Qty)));
+        var returns = await db.CustomerReturnOrderLines.AsNoTracking().Where(l => l.ReturnOrder.WarehouseId == request.WarehouseId
+                && (request.ExcludeReturnOrderId == null || l.ReturnOrderId != request.ExcludeReturnOrderId)
                 && (l.ReturnOrder.Status == "OPEN" || l.ReturnOrder.Status == "PARTIALLY_RECEIVED"))
-            .Select(l => new { l.ProductId, Quantity = (long)l.RequestedQuantity-l.CancelledQuantity
-                -db.ReturnReceiptItems.LongCount(i => i.ReturnLineId == l.ReturnLineId && i.IsActive && i.ReturnReceipt.Status == "DONE") }).ToListAsync(cancellationToken);
-        pending.AddRange(returns.Select(l => new CapacityLoad(Profile(l.ProductId),"GOOD",Math.Max(0,l.Quantity))));
-        // One shared simulation for all products, so no two lines reuse the same remaining area/volume/weight.
-        // Conservatively retain incoming capacity; do not promise space from an uncompleted outbound.
-        var errors = TransferCapacityPlanner.Allocate(slots, pending.Concat(inputs.Select(l => new CapacityLoad(Profile(l.ProductId),"GOOD",l.Quantity))));
-        return errors.Count == 0 ? (true, null) : (false, "Sức chứa toàn bộ PO và các chứng từ đã phát hành: " + string.Join(" ", errors));
+            .Select(l => new { l.ProductId, Qty = (long)l.RequestedQuantity - l.CancelledQuantity
+                - db.ReturnReceiptItems.LongCount(i => i.ReturnLineId == l.ReturnLineId && i.IsActive && i.ReturnReceipt.Status == "DONE") }).ToListAsync(ct);
+        s.Returns.AddRange(returns.Where(l => l.Qty > 0).Select(l => new CapacityLoad(s.Profile(l.ProductId), "UNKNOWN", l.Qty)));
+        // Document remainders own future space. SupplySource/Reservation/SourcePlan are not additional arrivals.
+        var locked = await db.Stocktakes.AsNoTracking().Where(t => t.WarehouseId == request.WarehouseId && LockedStatuses.Contains(t.Status))
+            .Select(t => new { t.StocktakeId, t.ScopeType, t.IncludeAwaitingPutaway }).ToListAsync(ct);
+        var ids = locked.Select(t => t.StocktakeId).ToArray();
+        var scopes = await db.StocktakeScopes.AsNoTracking().Where(t => ids.Contains(t.StocktakeId))
+            .Select(t => new { t.StocktakeId, t.LocationId }).ToListAsync(ct);
+        s.LockedLocations = scopes.Select(t => t.LocationId).ToHashSet();
+        s.AwaitingLocked = locked.Any(t => t.ScopeType == "WHOLE_WAREHOUSE" || t.IncludeAwaitingPutaway
+            || t.ScopeType is not ("WHOLE_WAREHOUSE" or "LOCATIONS")
+            || (t.ScopeType == "LOCATIONS" && scopes.All(x => x.StocktakeId != t.StocktakeId)));
+        if (locked.Count > 0)
+            s.Warnings.Add("Kho có phạm vi đang kiểm kê. Sức chứa kế hoạch không đồng nghĩa có thể xếp ngay vào vị trí đang khóa.");
+        if (s.Returns.Count > 0 || request.Demands.Any(l => l.Condition == "UNKNOWN"))
+            s.Warnings.Add("Hàng khách trả chưa nhận được kiểm tra ở cả hai khả năng hàng tốt và hàng hỏng.");
+        return s;
+    }
+
+    private static string[] Scenarios(Snapshot s, IEnumerable<CapacityDemand> demands) =>
+        s.Returns.Count > 0 || demands.Any(l => l.Condition == "UNKNOWN") ? ["GOOD", "DAMAGED"] : ["GOOD"];
+
+    private static Simulation Simulate(Snapshot s, IReadOnlyList<CapacityDemand> demands, string scenario,
+        bool commitments = true, List<CapacitySlot>? slotsOverride = null, List<CapacityLoad>? queueOverride = null)
+    {
+        var slots = (slotsOverride ?? s.Slots).Select(l => l.Copy()).ToList();
+        var errors = TransferCapacityPlanner.Allocate(slots, queueOverride ?? s.Awaiting);
+        if (commitments && errors.Count == 0)
+            errors.AddRange(TransferCapacityPlanner.Allocate(slots, s.Purchases.Concat(s.Transfers)
+                .Concat(s.Returns.Select(l => l with { Condition = scenario }))));
+        var before = slots.SelectMany(slot => slot.Loads.Select(l => new { Slot = slot.Id, Product = l.Product.Id, l.Condition, l.Quantity }))
+            .GroupBy(l => (l.Slot, l.Product, l.Condition))
+            .ToDictionary(g => g.Key, g => g.Sum(l => l.Quantity));
+        if (errors.Count == 0)
+            errors.AddRange(TransferCapacityPlanner.Allocate(slots, demands.Where(l => l.Quantity > 0)
+                .Select(l => new CapacityLoad(s.Profile(l.ProductId), l.Condition == "UNKNOWN" ? scenario : l.Condition, l.Quantity))));
+        return new(slots, errors, before);
+    }
+
+    private static List<string> Errors(Snapshot s, IReadOnlyList<CapacityDemand> demands, bool commitments = true)
+    {
+        var scenarios = Scenarios(s, demands);
+        return scenarios.SelectMany(condition => Simulate(s, demands, condition, commitments).Errors
+            .Select(e => scenarios.Length == 1 ? e : $"Khả năng khách trả {(condition == "GOOD" ? "hàng tốt" : "hàng hỏng")}: {e}"))
+            .Distinct().Take(8).ToList();
+    }
+
+    public async Task<WarehouseCapacityAssessment> EvaluateAsync(WarehouseCapacityRequest request, CancellationToken ct = default)
+    {
+        var result = new WarehouseCapacityAssessment();
+        if (request.WarehouseId <= 0 || request.Demands.Count is < 1 or > 100
+            || request.Demands.Any(l => l.ProductId <= 0 || l.Quantity is < 1 or > MaxLineQuantity || l.Condition is not ("GOOD" or "DAMAGED" or "UNKNOWN")))
+        {
+            result.Errors.Add("Cần kho hợp lệ và từ 1 đến 100 dòng, số lượng nguyên dương tối đa 1.000.000 mỗi dòng.");
+            return result;
+        }
+        var demands = request.Demands.GroupBy(l => new { l.ProductId, l.Condition })
+            .Select(g => new CapacityDemand(g.Key.ProductId, g.Sum(l => l.Quantity), g.Key.Condition)).ToList();
+        if (demands.Any(l => l.Quantity > MaxLineQuantity))
+        {
+            result.Errors.Add("Tổng số lượng của một sản phẩm vượt quá giới hạn 1.000.000.");
+            return result;
+        }
+        var s = await ReadAsync(request, ct);
+        result.Errors.AddRange(s.Errors);
+        result.Warnings.AddRange(s.Warnings);
+        if (!result.IsValid) return result;
+        result.IncomingPurchaseQuantity = s.Purchases.Sum(l => l.Quantity);
+        result.IncomingTransferQuantity = s.Transfers.Sum(l => l.Quantity);
+        result.IncomingReturnQuantity = s.Returns.Sum(l => l.Quantity);
+        result.AwaitingPutawayQuantity = s.Awaiting.Sum(l => l.Quantity);
+        result.PhysicalFits = Errors(s, demands, false).Count == 0;
+        result.Errors.AddRange(Errors(s, demands));
+        if (!request.CalculateLimits) return result;
+
+        foreach (var demand in demands)
+        {
+            ct.ThrowIfCancellationRequested();
+            var product = s.Products[demand.ProductId];
+            var profile = s.Profile(demand.ProductId);
+            var row = new ProductCapacityResult
+            {
+                ProductId = product.ProductId, ProductCode = product.ProductCode, ProductName = product.ProductName,
+                HasValidZone = (demand.Condition == "UNKNOWN" ? new[] { "GOOD", "DAMAGED" } : [demand.Condition])
+                    .All(condition => s.Slots.Any(slot => slot.Accepts(new(profile, condition, 1))
+                        && TransferCapacityPlanner.Fits(slot, new(profile, condition, 1)))),
+                SupplyPipelineQuantity = (int)Math.Min(int.MaxValue, s.Purchases.Concat(s.Transfers).Concat(s.Returns).Where(l => l.Product.Id == demand.ProductId).Sum(l => l.Quantity)),
+                AwaitingPutawayQuantity = (int)Math.Min(int.MaxValue, s.Awaiting.Where(l => l.Product.Id == demand.ProductId).Sum(l => l.Quantity))
+            };
+            List<CapacityDemand> WithQuantity(long quantity) => demands.Select(l => l == demand ? l with { Quantity = quantity } : l).ToList();
+            long low = result.IsValid ? demand.Quantity : 0, high = MaxLineQuantity;
+            if (!row.HasValidZone || Errors(s, WithQuantity(0)).Count > 0) high = 0;
+            low = Math.Min(low, high);
+            while (low < high)
+            {
+                ct.ThrowIfCancellationRequested();
+                long mid = low + (high - low + 1) / 2;
+                if (Errors(s, WithQuantity(mid)).Count == 0) low = mid; else high = mid - 1;
+            }
+            row.MaxOrderQuantity = (int)low;
+            row.IsValid = result.IsValid && demand.Quantity <= low;
+            if (!row.IsValid) row.ErrorMessage = string.Join(" ", result.Errors);
+            if (low > 0)
+            {
+                var run = Simulate(s, WithQuantity(low), Scenarios(s, demands)[0]);
+                string condition = demand.Condition == "UNKNOWN" ? Scenarios(s, demands)[0] : demand.Condition;
+                foreach (var slot in run.Slots)
+                {
+                    var count = slot.Loads.Where(l => l.Product.Id == demand.ProductId && l.Condition == condition).Sum(l => l.Quantity)
+                        - run.BeforeRequests.GetValueOrDefault((slot.Id, demand.ProductId, condition));
+                    if (slot.Floor) row.FloorSlotCapacity += (int)count; else row.RackTierCapacity += (int)count;
+                }
+            }
+            result.Lines.Add(row);
+        }
+        return result;
+    }
+
+    public async Task<ProductCapacityResult> CalculateCapacityAsync(int warehouseId, int productId, int requestedQuantity,
+        long? excludePoId = null, CancellationToken cancellationToken = default)
+    {
+        var result = await EvaluateAsync(new() { WarehouseId = warehouseId, ExcludePoId = excludePoId,
+            Demands = [new(productId, requestedQuantity)], CalculateLimits = true }, cancellationToken);
+        return result.Lines.FirstOrDefault() ?? new() { ProductId = productId, ErrorMessage = string.Join(" ", result.Errors) };
+    }
+
+    public async Task<(bool IsValid, string? ErrorMessage)> ValidatePurchaseOrderLinesCapacityAsync(int warehouseId,
+        IEnumerable<(int ProductId, int Quantity)> lines, long? excludePoId = null, CancellationToken cancellationToken = default)
+    {
+        var result = await EvaluateAsync(new() { WarehouseId = warehouseId, ExcludePoId = excludePoId,
+            Demands = lines.Select(l => new CapacityDemand(l.ProductId, l.Quantity)).ToList() }, cancellationToken);
+        return (result.IsValid, result.IsValid ? null : string.Join(" ", result.Errors));
+    }
+
+    public async Task<IReadOnlyDictionary<int, string>> GetPlacementErrorsAsync(int warehouseId, long serialId,
+        IReadOnlyCollection<int> locationIds, CancellationToken ct = default)
+    {
+        var errors = new Dictionary<int, string>();
+        if (locationIds.Count == 0) return errors;
+        var s = await ReadAsync(new() { WarehouseId = warehouseId }, ct);
+        var serial = s.Serials.SingleOrDefault(i => i.Id == serialId);
+        if (s.Errors.Count > 0 || serial == null || serial.LocationId != null || s.AwaitingLocked)
+        {
+            string reason = s.Errors.FirstOrDefault() ?? "Serial không còn chờ xếp hoặc phạm vi chờ xếp đang bị khóa kiểm kê.";
+            foreach (var id in locationIds) errors[id] = reason;
+            return errors;
+        }
+        var load = new CapacityLoad(s.Profile(serial.ProductId), serial.Condition, 1);
+        var queue = s.Queue(s.Serials.Where(i => i.Id != serialId));
+        foreach (var id in locationIds.Distinct())
+        {
+            ct.ThrowIfCancellationRequested();
+            var slots = s.Slots.Select(l => l.Copy()).ToList();
+            var target = slots.SingleOrDefault(l => l.Id == id);
+            int? current = id;
+            bool locked = false;
+            var seen = new HashSet<int>();
+            while (current is int location && seen.Add(location) && s.Locations.TryGetValue(location, out var node))
+            {
+                locked |= s.LockedLocations.Contains(location);
+                current = node.ParentLocationId;
+            }
+            if (target == null || locked || !target.Accepts(load) || !TransferCapacityPlanner.Fits(target, load))
+            {
+                errors[id] = "Vị trí không còn phù hợp, không đủ chỗ hoặc đang bị khóa.";
+                continue;
+            }
+            target.Loads.Add(load);
+            var problems = Scenarios(s, []).SelectMany(condition => Simulate(s, [], condition, true, slots, queue).Errors).Distinct().Take(3).ToList();
+            if (problems.Count > 0) errors[id] = "Vị trí này cần dành chỗ cho hàng chờ/sắp nhận: " + string.Join(" ", problems);
+        }
+        return errors;
     }
 }

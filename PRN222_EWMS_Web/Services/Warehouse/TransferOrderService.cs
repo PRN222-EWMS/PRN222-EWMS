@@ -7,7 +7,8 @@ using PRN222_EWMS_Web.ViewModels.Transfer;
 namespace PRN222_EWMS_Web.Services.Warehouse;
 
 public class TransferOrderService(EwmsDbContext db, TransferStockService stock, TransferCapacityService capacity,
-    TransferExpiryService expiry, TimeProvider clock, ILogger<TransferOrderService> logger) : ITransferOrderService
+    TransferExpiryService expiry, TimeProvider clock, ILogger<TransferOrderService> logger,
+    ISourceReservationService sources) : ITransferOrderService
 {
     public Task<List<ProductLookupDto>> GetAvailableProductsAsync(int warehouseId, string itemCondition = "GOOD", long? transferOrderId = null) =>
         stock.GetProductsAsync(warehouseId, itemCondition, transferOrderId);
@@ -122,13 +123,10 @@ public class TransferOrderService(EwmsDbContext db, TransferStockService stock, 
     }
 
     // All checks and reservations share a serializable transaction. Lock order matches staff dispatch actions.
-    private async Task LockWarehousesAsync(int from, int to)
+    private async Task LockWarehousesAsync(params int[] warehouseIds)
     {
-        foreach (var id in new[] { from, to }.Distinct().Order())
-        {
-            await db.Warehouses.FromSqlInterpolated($"SELECT * FROM dbo.Warehouse WITH (UPDLOCK,HOLDLOCK) WHERE WarehouseID={id}").AsNoTracking().ToListAsync();
-            await db.SupplySources.FromSqlInterpolated($"SELECT * FROM dbo.SupplySource WITH (UPDLOCK,HOLDLOCK) WHERE WarehouseID={id} AND SupplyState='PHYSICAL'").AsNoTracking().ToListAsync();
-        }
+        foreach (var id in warehouseIds.Where(id => id > 0).Distinct().Order())
+            await sources.LockWarehouseAsync(id);
     }
 
     private async Task ReserveAsync(TransferOrder order, IEnumerable<TransferOrderLine> lines)
@@ -203,11 +201,17 @@ public class TransferOrderService(EwmsDbContext db, TransferStockService stock, 
     public async Task<(bool Success, string? Error)> UpdateTransferOrderAsync(EditTransferOrderViewModel model, int userId)
     {
         if (await expiry.CancelIfExpiredAsync(model.TransferOrderId)) return (false, "Lệnh đã quá ngày dự kiến đến và được tự động hủy. Hãy tạo lệnh khác.");
+        var previous = await db.TransferOrders.AsNoTracking().Where(o => o.TransferOrderId == model.TransferOrderId)
+            .Select(o => new { o.FromWarehouseId, o.ToWarehouseId }).SingleOrDefaultAsync();
+        if (previous == null) return (false, "Lệnh chuyển kho không tồn tại.");
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
         {
+            await LockWarehousesAsync(previous.FromWarehouseId, previous.ToWarehouseId, model.FromWarehouseId, model.ToWarehouseId);
             var order = await TransferDataAccess.LockOrderAsync(db, model.TransferOrderId);
             if (order == null) return (false, "Lệnh chuyển kho không tồn tại.");
+            if (order.FromWarehouseId != previous.FromWarehouseId || order.ToWarehouseId != previous.ToWarehouseId)
+                return (false, "Kho của lệnh vừa thay đổi. Hãy tải lại trang.");
             if (await expiry.CancelLockedAsync(order)) { await tx.CommitAsync(); return (false, TransferPolicy.ExpiryReason); }
             if (order.Status is not ("DRAFT" or "RELEASED") || await TransferDataAccess.HasDocumentsAsync(db, order.TransferOrderId))
                 return (false, "Lệnh đã có phiếu gửi/nhận hoặc đã kết thúc; toàn bộ chỉnh sửa bị khóa.");
@@ -219,7 +223,6 @@ public class TransferOrderService(EwmsDbContext db, TransferStockService stock, 
                 || await db.Reservations.AnyAsync(r => r.TransferOrderId == order.TransferOrderId && r.ConsumedQuantity > 0))
                 return (false, "Lệnh đã có dữ liệu phân bổ/tiêu thụ hàng; không thể sửa thủ công.");
             bool release = order.Status == "RELEASED" || model.IsRelease;
-            await LockWarehousesAsync(model.FromWarehouseId, model.ToWarehouseId);
             model.Assessment = await AssessAsync(model, order.TransferOrderId, release);
             if (model.Assessment.Errors.Count > 0) return (false, string.Join(" ", model.Assessment.Errors));
             bool sourceChanged = order.FromWarehouseId != model.FromWarehouseId || order.ItemCondition != model.ItemCondition;

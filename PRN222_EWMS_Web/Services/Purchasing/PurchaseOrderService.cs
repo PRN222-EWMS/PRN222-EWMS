@@ -589,8 +589,12 @@ public class PurchaseOrderService(
         var ids = form.Lines.Select(l => l.ProductId).ToArray();
         if (await db.SupplierProducts.CountAsync(sp => sp.SupplierId == form.SupplierId && ids.Contains(sp.ProductId) && sp.Product.Status == "ACTIVE") != ids.Length)
             return "Có sản phẩm đã ngừng hoạt động hoặc không thuộc danh mục của nhà cung cấp.";
-        var capacity = await capacityEngine.ValidatePurchaseOrderLinesCapacityAsync(form.WarehouseId, form.Lines.Select(l => (l.ProductId,l.OrderedQuantity)), id);
-        return capacity.IsValid ? null : capacity.ErrorMessage ?? "Kho không đủ sức chứa.";
+        var capacity = await capacityEngine.EvaluateAsync(new()
+        {
+            WarehouseId = form.WarehouseId, ExpectedArrivalDate = form.ExpectedArrivalDate, ExcludePoId = id,
+            Demands = form.Lines.Select(l => new CapacityDemand(l.ProductId, l.OrderedQuantity)).ToList()
+        });
+        return capacity.IsValid ? null : string.Join(" ", capacity.Errors);
     }
 
     private async Task ReconcileAsActorAsync(int actorId, int warehouseId, string reason)
