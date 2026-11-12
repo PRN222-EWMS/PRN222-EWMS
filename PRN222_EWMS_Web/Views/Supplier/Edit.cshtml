@@ -95,7 +95,7 @@
         </div>
 
         <div class="form-actions mt-4 justify-content-end">
-            <button id="btnSubmitEdit" class="workspace-button" type="button" disabled>
+            <button class="workspace-button" type="submit">
                 <i class="bi bi-save" aria-hidden="true"></i> Lưu thay đổi
             </button>
             <a class="workspace-link" asp-controller="Supplier" asp-action="Details"
@@ -107,81 +107,7 @@
     </form>
 </section>
 
-<!-- Confirmation Modal -->
-<div class="modal fade" id="confirmEditModal" tabindex="-1" aria-labelledby="confirmEditModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="confirmEditModalLabel">Xác nhận cập nhật nhà cung cấp</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                Bạn có chắc chắn muốn cập nhật thông tin nhà cung cấp này không?
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy</button>
-                <button type="button" id="btnConfirmSubmit" class="workspace-button">Xác nhận</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const form = document.getElementById('editSupplierForm');
-            const submitBtn = document.getElementById('btnSubmitEdit');
-            const confirmBtn = document.getElementById('btnConfirmSubmit');
-            const modalEl = document.getElementById('confirmEditModal');
-            const modal = new bootstrap.Modal(modalEl);
-
-            // Select only editable fields that have a name attribute
-            const watchedInputs = form.querySelectorAll('input[name]:not([type="hidden"]):not([disabled]), textarea[name], select[name]');
-            const initialValues = new Map();
-
-            function getVal(el) {
-                if (el.type === 'checkbox') return el.checked;
-                return (el.value || '').trim();
-            }
-
-            watchedInputs.forEach(input => {
-                initialValues.set(input.name, getVal(input));
-            });
-
-            function checkDirty() {
-                let isDirty = false;
-                watchedInputs.forEach(input => {
-                    const initial = initialValues.get(input.name);
-                    const current = getVal(input);
-                    if (current !== initial) {
-                        isDirty = true;
-                    }
-                });
-                submitBtn.disabled = !isDirty;
-            }
-
-            watchedInputs.forEach(input => {
-                input.addEventListener('input', checkDirty);
-                input.addEventListener('change', checkDirty);
-            });
-
-            // Enforce dirty check on page load so initial state is disabled
-            checkDirty();
-
-            submitBtn.addEventListener('click', function () {
-                if (submitBtn.disabled) return;
-                if (window.jQuery && $(form).valid && !$(form).valid()) {
-                    return;
-                }
-                modal.show();
-            });
-
-            confirmBtn.addEventListener('click', function () {
-                modal.hide();
-                form.submit();
-            });
-        });
-    </script>
 }
 

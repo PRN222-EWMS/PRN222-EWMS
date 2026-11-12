@@ -2,19 +2,19 @@
 @{
     ViewData["Title"] = "Chi tiết đơn trả hàng " + Model.ReturnCode;
     var vnTime = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
-    var (statusText, statusClass) = GetStatusDisplay(Model.Status);
+    var statusText = GetStatusText(Model.Status);
 }
 
 @functions {
-    public (string Text, string Class) GetStatusDisplay(string status) => status switch
+    public string GetStatusText(string status) => status switch
     {
-        "DRAFT" => ("Bản nháp", "badge bg-secondary-subtle text-secondary border border-secondary"),
-        "OPEN" => ("Đã xác nhận", "badge bg-primary-subtle text-primary border border-primary"),
-        "PARTIALLY_RECEIVED" => ("Đã nhận một phần", "badge bg-warning-subtle text-warning-emphasis border border-warning"),
-        "RECEIVED" => ("Đã nhận đủ", "badge bg-success-subtle text-success border border-success"),
-        "CLOSED" => ("Đã đóng", "badge bg-dark-subtle text-dark border border-dark"),
-        "CANCELLED" => ("Đã hủy", "badge bg-danger-subtle text-danger border border-danger"),
-        _ => (status, "badge bg-light text-dark border")
+        "DRAFT" => "Bản nháp",
+        "OPEN" => "Đã xác nhận",
+        "PARTIALLY_RECEIVED" => "Đã nhận một phần",
+        "RECEIVED" => "Đã nhận đủ",
+        "CLOSED" => "Đã đóng",
+        "CANCELLED" => "Đã hủy",
+        _ => status
     };
 }
 
@@ -24,10 +24,10 @@
             <p class="eyebrow">BÁN HÀNG / CHI TIẾT ĐƠN TRẢ HÀNG</p>
             <h1>@Model.ReturnCode</h1>
             <div class="d-flex align-items-center gap-2 mt-2">
-                <span class="@statusClass">@statusText</span>
+                <span>@statusText</span>
                 @if (Model.TotalCancelledQuantity > 0)
                 {
-                    <span class="badge bg-danger-subtle text-danger border border-danger">Có sản phẩm bị hủy (@Model.TotalCancelledQuantity)</span>
+                    <span>Có sản phẩm bị hủy (@Model.TotalCancelledQuantity)</span>
                 }
             </div>
         </div>
@@ -50,15 +50,6 @@
         </div>
     </div>
 
-    @if (TempData["Success"] != null)
-    {
-        <div class="sales-alert sales-alert-success mb-3" role="status">@TempData["Success"]</div>
-    }
-    @if (TempData["Error"] != null)
-    {
-        <div class="sales-warning mb-3" role="alert">@TempData["Error"]</div>
-    }
-
     <!-- 1. THÔNG TIN CHUNG -->
     <section class="workspace-card mb-3">
         <h2 class="mb-3">Thông tin đơn trả hàng</h2>
@@ -69,7 +60,7 @@
             </div>
             <div class="col-12 col-sm-6 col-md-3">
                 <div class="text-muted small mb-1">Trạng thái</div>
-                <div><span class="@statusClass">@statusText</span></div>
+                <div>@statusText</div>
             </div>
             <div class="col-12 col-sm-6 col-md-3">
                 <div class="text-muted small mb-1">Đơn bán gốc</div>
