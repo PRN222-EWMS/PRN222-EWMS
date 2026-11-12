@@ -91,11 +91,12 @@ public class SalesOrderSourceService(EwmsDbContext db, ISourceReservationService
                 var codes = await db.SalesOrders.AsNoTracking().Where(o => o.Socode.StartsWith(prefix)).Select(o => o.Socode).ToListAsync(ct);
                 var max = codes.Select(code => long.TryParse(code[prefix.Length..], out var value) ? value : 0L).DefaultIfEmpty().Max();
                 order = new SalesOrder { Socode = prefix + checked(max + 1).ToString("D3"), CreatedByUserId = actorId, CreatedAt = Now,
-                    OrderDate = Today, WarehouseId = warehouse.WarehouseId, Status = "DRAFT" };
+                    WarehouseId = warehouse.WarehouseId, Status = "DRAFT" };
                 db.SalesOrders.Add(order);
             }
+            order.OrderDate = form.OrderDate!.Value;
             if (form.RequestedDate.HasValue && form.RequestedDate < order.OrderDate)
-                throw new SalesOrderSourceException(nameof(form.RequestedDate), "Ngày phải xuất không được trước ngày đặt SO.");
+                throw new SalesOrderSourceException(nameof(form.RequestedDate), "Ngày yêu cầu xuất không được trước ngày đặt.");
             if (submit && form.RequestedDate < Today)
                 throw new SalesOrderSourceException(nameof(form.RequestedDate), "Không thể phát hành SO với ngày phải xuất đã qua.");
             if (form.RequestedDate.HasValue && warehouse.WarehouseType == "RENTED"
@@ -163,6 +164,8 @@ public class SalesOrderSourceService(EwmsDbContext db, ISourceReservationService
 
     private static void ValidateLines(SalesOrderFormViewModel form, bool submit)
     {
+        if (!form.OrderDate.HasValue || form.OrderDate.Value == default)
+            throw new SalesOrderSourceException(nameof(form.OrderDate), "Vui lòng chọn ngày đặt hàng hợp lệ.");
         if (form.WarehouseId is not > 0 || form.CustomerId is not > 0) throw new InvalidOperationException("Chọn khách hàng và kho xuất hợp lệ.");
         if (submit && !form.RequestedDate.HasValue) throw new SalesOrderSourceException(nameof(form.RequestedDate), "Chọn ngày phải xuất khi gửi SO.");
         if (form.Note?.Length > 500) throw new SalesOrderSourceException(nameof(form.Note), "Ghi chú tối đa 500 ký tự.");

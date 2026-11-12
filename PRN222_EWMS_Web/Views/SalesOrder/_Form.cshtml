@@ -63,14 +63,15 @@
 
         <div class="row g-2 mb-3">
             <div class="col-6">
-                <label asp-for="OrderDate" class="form-label fw-semibold">Ngày đặt</label>
-                <input type="date" asp-for="OrderDate" class="form-control" readonly style="background:#f6f5f4;" />
+                <label asp-for="OrderDate" class="form-label fw-semibold">Ngày đặt <span class="text-danger">*</span></label>
+                <input type="date" asp-for="OrderDate" class="form-control" required />
+                <span asp-validation-for="OrderDate" class="text-danger small"></span>
             </div>
             <div class="col-6">
                 <label asp-for="RequestedDate" class="form-label fw-semibold">
                     Ngày yêu cầu xuất <span class="text-danger" id="reqDateAsterisk">*</span>
                 </label>
-                <input type="date" asp-for="RequestedDate" class="form-control" id="RequestedDateInput" min="@Model.OrderDate.ToString("yyyy-MM-dd")" />
+                <input type="date" asp-for="RequestedDate" class="form-control" id="RequestedDateInput" min="@Model.OrderDate?.ToString("yyyy-MM-dd")" />
                 <span asp-validation-for="RequestedDate" class="text-danger small"></span>
                 <div class="form-text">Bắt buộc khi gửi đơn hoặc chọn nguồn hàng sắp về.</div>
             </div>
@@ -225,6 +226,18 @@
         const totalQtyDisplay = document.getElementById('totalQtyDisplay');
         const noLinesWarning = document.getElementById('noLinesWarning');
         const reqDateInput = document.getElementById('RequestedDateInput');
+        const orderDateInput = document.getElementById('OrderDate');
+
+        function updateDateLimit() {
+            reqDateInput.min = orderDateInput.value;
+            reqDateInput.setCustomValidity(reqDateInput.value && orderDateInput.value && reqDateInput.value < orderDateInput.value
+                ? 'Ngày yêu cầu xuất không được trước ngày đặt.' : '');
+        }
+        orderDateInput.addEventListener('input', updateDateLimit);
+        orderDateInput.addEventListener('change', updateDateLimit);
+        reqDateInput.addEventListener('input', updateDateLimit);
+        reqDateInput.addEventListener('change', updateDateLimit);
+        updateDateLimit();
 
         let currentProducts = [];
         try {
