@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Models;
 using PRN222_EWMS_Web.Repositories.Stocktaking;
 using PRN222_EWMS_Web.Services.Stocktaking;
+using PRN222_EWMS_Web.Services.Warehouse;
 using PRN222_EWMS_Web.ViewModels.Ceo;
 using PRN222_EWMS_Web.ViewModels.Stocktaking;
 using Plan = PRN222_EWMS_Web.Models.Stocktake;
@@ -9,7 +10,7 @@ using WarehouseEntity = PRN222_EWMS_Web.Models.Warehouse;
 
 namespace PRN222_EWMS_Web.Services.Ceo;
 
-public class CeoStocktakeAdjustmentService(IStocktakeRepository repo) : ICeoStocktakeAdjustmentService
+public class CeoStocktakeAdjustmentService(IStocktakeRepository repo, ISourceReservationService commitments) : ICeoStocktakeAdjustmentService
 {
     private static readonly string[] Statuses = ["SUBMITTED", "REJECTED", "APPLIED", "APPROVED", "CANCELLED"];
     private async Task RequireCeoAsync(int actorId, CancellationToken ct)
@@ -95,6 +96,7 @@ public class CeoStocktakeAdjustmentService(IStocktakeRepository repo) : ICeoStoc
                 repo.TouchPlan(plan); await repo.SaveAsync(token); return true;
             }
             await ValidateEvidenceAsync(plan, lines, token);
+            await commitments.LockWarehouseAsync(warehouseId, token);
             request.Status = "APPROVED";
             await repo.SaveAsync(token); // Posting triggers require a decision; all stages stay inside this transaction.
             var warehouse = await repo.Query<WarehouseEntity>().AsNoTracking().SingleAsync(w => w.WarehouseId == warehouseId, token);
@@ -212,20 +214,9 @@ public class CeoStocktakeAdjustmentService(IStocktakeRepository repo) : ICeoStoc
                 && ((a.Outbound != null && a.Outbound.Status != "DONE" && a.Outbound.Status != "CANCELLED")
                     || (a.Dispatch != null && a.Dispatch.Status != "DONE" && a.Dispatch.Status != "CANCELLED")), ct))
                 throw new StocktakeWorkflowException("Nguồn bị giảm đang được phân bổ cho phiếu xuất/chuyển kho chưa hoàn tất. Cần xử lý phiếu đó trước.");
-            foreach (var reservation in reservations)
-            {
-                if (excess == 0) break;
-                var release = Math.Min(excess, reservation.ReservedQuantity - reservation.ConsumedQuantity - reservation.ReleasedQuantity);
-                if (release <= 0) continue;
-                reservation.ReleasedQuantity += release; excess -= release;
-                if (reservation.ReservedQuantity == reservation.ConsumedQuantity + reservation.ReleasedQuantity)
-                { reservation.Status = "CLOSED"; reservation.ClosedAt = now; }
-                if (reservation.SalesOrderId is long orderId)
-                {
-                    var order = await repo.Query<SalesOrder>().SingleAsync(o => o.SalesOrderId == orderId, ct);
-                    if (order.Status is "SUBMITTED" or "PARTIALLY_FULFILLED") order.HasShortage = true;
-                }
-            }
         }
+        await repo.SaveAsync(ct);
+        await commitments.ReconcileWarehouseAsync(warehouseId,
+            "Điều chỉnh kiểm kê đã áp dụng, nguồn bảo đảm cho đơn đã thay đổi.", ct);
     }
 }

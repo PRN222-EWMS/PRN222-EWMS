@@ -25,6 +25,8 @@ public partial class SalesOrderLine
 
     public virtual Product Product { get; set; } = null!;
 
+    public virtual ICollection<SalesOrderSourcePlan> SourcePlans { get; set; } = new List<SalesOrderSourcePlan>();
+
     public virtual ICollection<Reservation> ReservationSalesOrderLines { get; set; } = new List<Reservation>();
 
     public virtual ICollection<Reservation> ReservationSolines { get; set; } = new List<Reservation>();

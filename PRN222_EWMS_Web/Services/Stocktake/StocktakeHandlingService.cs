@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Models;
 using PRN222_EWMS_Web.Repositories.Stocktaking;
 using PRN222_EWMS_Web.Services.WarehouseStaff;
+using PRN222_EWMS_Web.Services.Warehouse;
 using PRN222_EWMS_Web.ViewModels.Putaway;
 using PRN222_EWMS_Web.ViewModels.Stocktaking;
 using Plan = PRN222_EWMS_Web.Models.Stocktake;
@@ -9,7 +10,7 @@ using WarehouseEntity = PRN222_EWMS_Web.Models.Warehouse;
 
 namespace PRN222_EWMS_Web.Services.Stocktaking;
 
-public class StocktakeHandlingService(IStocktakeRepository repo) : IStocktakeHandlingService
+public class StocktakeHandlingService(IStocktakeRepository repo, ISourceReservationService commitments) : IStocktakeHandlingService
 {
     private async Task<(Plan Plan, StocktakeHandling Handling, SerialItem Item)> ContextAsync(int actorId, long id, long handlingId, CancellationToken ct)
     {
@@ -52,6 +53,7 @@ public class StocktakeHandlingService(IStocktakeRepository repo) : IStocktakeHan
             .Select(s => (int?)s.WarehouseId).SingleOrDefaultAsync(ct) ?? throw new StocktakeWorkflowException("Không tìm thấy đợt.", 404);
         await repo.TransactionAsync(actorId, warehouseId, async token =>
         {
+            await commitments.LockWarehouseAsync(warehouseId, token);
             var (plan, handling, item) = await ContextAsync(actorId, input.Id, input.HandlingId, token);
             if (handling.Status == "MOVED") return true; // Idempotent confirmation, no second movement.
             CheckVersion(plan.RowVersion, input.Version); CheckVersion(handling.RowVersion, input.HandlingVersion);
@@ -165,15 +167,9 @@ public class StocktakeHandlingService(IStocktakeRepository repo) : IStocktakeHan
                 && ((a.Outbound != null && a.Outbound.Status != "DONE" && a.Outbound.Status != "CANCELLED")
                     || (a.Dispatch != null && a.Dispatch.Status != "DONE" && a.Dispatch.Status != "CANCELLED")), ct)))
             throw new StocktakeWorkflowException("Nguồn đang có công việc xuất/chuyển kho. Cần xử lý công việc đó trước khi chuyển hàng hỏng.");
-        foreach (var reservation in reservations)
-        {
-            if (excess == 0) break;
-            var release = Math.Min(excess,reservation.ReservedQuantity-reservation.ConsumedQuantity-reservation.ReleasedQuantity);
-            if (release<=0) continue;
-            reservation.ReleasedQuantity+=release; excess-=release;
-            if (reservation.ReservedQuantity==reservation.ConsumedQuantity+reservation.ReleasedQuantity) { reservation.Status="CLOSED"; reservation.ClosedAt=now; }
-            if (reservation.SalesOrderId is long id) { var order=await repo.Query<SalesOrder>().SingleAsync(o=>o.SalesOrderId==id,ct); if(order.Status is "SUBMITTED" or "PARTIALLY_FULFILLED") order.HasShortage=true; }
-        }
+        await repo.SaveAsync(ct);
+        await commitments.ReconcileWarehouseAsync(source.WarehouseId,
+            "Kiểm kê ghi nhận thay đổi tình trạng hàng, một phần nguồn không còn đủ điều kiện.", ct);
     }
 
     private static void CheckVersion(byte[] expected, string supplied)

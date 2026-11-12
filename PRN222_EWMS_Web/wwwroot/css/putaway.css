@@ -16,8 +16,8 @@
 .putaway-secondary { display:inline-flex; justify-content:center; align-items:center; min-height:40px; border:1px solid #d9d9d9; background:#fff; color:#31302e; border-radius:7px; padding:8px 13px; font:inherit; font-size:13px; cursor:pointer; }
 .putaway-secondary:hover { background:#f6f5f4; }
 .putaway-page button:disabled { opacity:.55; cursor:default; }
-.putaway-source-tabs { display:flex; gap:8px; margin-bottom:8px; }
-.putaway-source-tabs button { flex:1; min-height:42px; border:1px solid #ddd; background:#fff; border-radius:7px; font:inherit; font-size:13px; cursor:pointer; }
+.putaway-source-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:8px; }
+.putaway-source-tabs button { min-width:0; min-height:48px; padding:8px 6px; border:1px solid #ddd; background:#fff; border-radius:7px; font:inherit; font-size:13px; line-height:1.4; overflow-wrap:anywhere; cursor:pointer; }
 .putaway-source-tabs button.is-selected { color:#0866b6; background:#edf5fd; border-color:#86bce9; font-weight:600; }
 .putaway-list-heading { display:flex; align-items:center; justify-content:space-between; margin:20px 0 14px; }
 .putaway-list-heading h2 { margin:0; }
@@ -71,4 +71,4 @@
 .putaway-confirm .putaway-actions { justify-content:flex-end; flex-wrap:wrap; }
 .putaway-page [hidden] { display:none!important; }
 @media(max-width:1000px) { .putaway-workspace { grid-template-columns:1fr; } .putaway-pending-list { grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); } }
-@media(max-width:600px) { .putaway-capture-panel,.putaway-profile,.putaway-filters,.putaway-location-filters { padding:18px 15px; } .putaway-location-selects { grid-template-columns:repeat(2,minmax(0,1fr)); } .putaway-selection { align-items:stretch; flex-direction:column; } .putaway-page input:not([type=radio]):not([type=hidden]):not([type=file]),.putaway-page select { font-size:16px; } }
+@media(max-width:600px) { .putaway-capture-panel,.putaway-profile,.putaway-filters,.putaway-location-filters { padding:18px 15px; } .putaway-source-tabs { grid-template-columns:1fr; } .putaway-location-selects { grid-template-columns:repeat(2,minmax(0,1fr)); } .putaway-selection { align-items:stretch; flex-direction:column; } .putaway-page input:not([type=radio]):not([type=hidden]):not([type=file]),.putaway-page select { font-size:16px; } }

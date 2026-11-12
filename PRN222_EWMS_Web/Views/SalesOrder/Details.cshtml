@@ -1,21 +1,25 @@
-@model PRN222_EWMS_Web.ViewModels.Sales.SalesOrderDetailsViewModel
+﻿@model PRN222_EWMS_Web.ViewModels.Sales.SalesOrderDetailsViewModel
 @using PRN222_EWMS_Web.ViewModels.Sales
 @{ ViewData["Title"] = "Chi tiết " + Model.Code; }
 
-<div class="sales-page">
+<div class="sales-page order-workspace">
 <div class="workspace-heading">
     <div>
         <p class="eyebrow">BÁN HÀNG / CHI TIẾT ĐƠN</p>
         <h1>@Model.Code</h1>
         <div class="d-flex align-items-center gap-2 mt-2">
-            <span class="sales-status">@SalesDisplay.Status(Model.Status)</span>
+            <span class="sales-status" data-status="@Model.Status">@SalesDisplay.Status(Model.Status)</span>
             @if (Model.HasShortage)
             {
-                <span class="stock-badge badge-stock-zero">Thiếu nguồn đáp ứng</span>
+                <span class="stock-badge badge-stock-zero">Thiếu nguồn</span>
             }
         </div>
     </div>
     <div class="sales-toolbar">
+        @if (Model.CanReplaceSources)
+        {
+            <a class="workspace-button" asp-action="ReplaceSources" asp-route-id="@Model.Id">Bổ sung nguồn</a>
+        }
         @if (Model.CanEdit && User.IsInRole("SALES_STAFF"))
         {
             <a class="workspace-button" asp-action="Edit" asp-route-id="@Model.Id">
@@ -38,17 +42,14 @@
 @if (Model.HasShortage)
 {
     <div class="sales-warning" role="status">
-        <i class="bi bi-exclamation-triangle-fill me-1"></i> Đơn hàng đang có sản phẩm thiếu nguồn đáp ứng giữ chỗ. Cần kiểm tra các đợt nhập hàng hoặc bổ sung nguồn cung.
+        <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i> Chưa đủ nguồn cho phần còn phải xuất.
     </div>
 }
 
-@if (User.IsInRole("SALES_STAFF") && User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value != Model.CreatedByUserId.ToString())
+@if (User.IsInRole("SALES_STAFF") && User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value == Model.CreatedByUserId.ToString()
+    && Model.Status is "SUBMITTED" or "PARTIALLY_FULFILLED")
 {
-    <p class="sales-muted-small mb-0">Bạn đang xem đơn của Sales khác. Chỉ người tạo đơn được phép chỉnh sửa khi đơn còn đủ điều kiện.</p>
-}
-else if (User.IsInRole("SALES_STAFF") && !Model.CanEdit)
-{
-    <p class="sales-muted-small mb-0">Đơn của bạn hiện không còn đủ điều kiện chỉnh sửa. Đơn đã có phiếu xuất được lưu sẽ khóa sửa thông tin đơn.</p>
+    <p class="order-state-note"><i class="bi bi-lock" aria-hidden="true"></i> Đơn đã gửi, nội dung đã khóa.</p>
 }
 
 <section class="workspace-card">
@@ -77,8 +78,7 @@ else if (User.IsInRole("SALES_STAFF") && !Model.CanEdit)
 </section>
 
 <section class="workspace-card">
-    <h2>Sản phẩm yêu cầu</h2>
-    <p class="muted">Đã xuất chỉ tính các serial hợp lệ thuộc phiếu xuất hoàn tất.</p>
+    <div class="order-section-title"><h2>Sản phẩm</h2><span class="order-count">@Model.Lines.Count sản phẩm</span></div>
     <div class="table-wrap">
         <table class="workspace-table">
             <thead>
@@ -96,7 +96,16 @@ else if (User.IsInRole("SALES_STAFF") && !Model.CanEdit)
                 {
                     <tr>
                         <td><code>@line.ProductCode</code></td>
-                        <td>@line.ProductName</td>
+                        <td>@line.ProductName
+                            @if (Model.Status is "SUBMITTED" or "PARTIALLY_FULFILLED" && line.Sources.Count > 0)
+                            {
+                                var missing = Math.Max(0, line.RemainingQuantity - line.Sources.Sum(s => s.HeldQuantity));
+                                @if (missing > 0)
+                                {
+                                    <small class="d-block text-danger">Thiếu nguồn: @missing</small>
+                                }
+                            }
+                        </td>
                         <td style="text-align: right;">@line.RequestedQuantity</td>
                         <td style="text-align: right;">@line.IssuedQuantity</td>
                         <td style="text-align: right;">@line.CancelledQuantity</td>
@@ -110,11 +119,46 @@ else if (User.IsInRole("SALES_STAFF") && !Model.CanEdit)
     {
         <p class="sales-empty">Đơn chưa có sản phẩm.</p>
     }
+    @foreach (var line in Model.Lines.Where(l => l.Sources.Count > 0))
+    {
+        <details class="order-source-history" open="@Model.HasShortage">
+            <summary>@line.ProductCode · Nguồn hàng</summary>
+            <div class="table-wrap">
+                <table class="workspace-table">
+                    <thead><tr><th>Nguồn</th><th class="text-end">Chọn ban đầu</th><th class="text-end">Đang giữ</th><th class="text-end">Đã xuất</th><th class="text-end">Đã chuyển / giải phóng</th></tr></thead>
+                    <tbody>
+                        @foreach (var source in line.Sources)
+                        {
+                            <tr>
+                                <td>@source.Label</td>
+                                <td class="text-end">@source.OriginalQuantity</td>
+                                <td class="text-end"><strong>@source.HeldQuantity</strong></td>
+                                <td class="text-end">@source.ConsumedQuantity</td>
+                                <td class="text-end">@source.ReleasedQuantity</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </details>
+    }
 </section>
+
+@if (Model.CanCancel)
+{
+    <section class="workspace-card">
+        <h2 class="mb-3">Hủy đơn hàng</h2>
+        <form asp-action="Cancel" asp-route-id="@Model.Id" method="post" class="d-flex flex-wrap gap-2 align-items-end">
+            @Html.AntiForgeryToken()
+            <div class="flex-grow-1"><label class="form-label" for="cancelReason">Lý do hủy đơn</label><input class="form-control" id="cancelReason" name="reason" maxlength="1000" /></div>
+            <button type="submit" class="workspace-button sales-button-danger">Hủy đơn hàng</button>
+        </form>
+    </section>
+}
 
 <section class="workspace-card">
     <div class="sales-section-heading">
-        <h2>Các đợt xuất hàng (Outbounds)</h2>
+        <h2>Phiếu xuất kho</h2>
         @if (User.IsInRole("WAREHOUSE_STAFF")
             && (Model.Status == "SUBMITTED" || Model.Status == "PARTIALLY_FULFILLED")
             && Model.Lines.Any(line => line.RemainingQuantity > 0))
@@ -141,7 +185,7 @@ else if (User.IsInRole("SALES_STAFF") && !Model.CanEdit)
                     <tr>
                         <td><code>@receipt.Code</code></td>
                         <td>@receipt.IssueDate.ToString("dd/MM/yyyy")</td>
-                        <td><span class="sales-status">@SalesDisplay.Status(receipt.Status)</span></td>
+                        <td><span class="sales-status" data-status="@receipt.Status">@SalesDisplay.Status(receipt.Status)</span></td>
                         <td>@receipt.Quantity</td>
                         <td>@(receipt.CompletedAt?.ToString("dd/MM/yyyy HH:mm") ?? "—")</td>
                     </tr>

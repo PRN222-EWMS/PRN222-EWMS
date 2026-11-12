@@ -1,0 +1,52 @@
+﻿@model PRN222_EWMS_Web.ViewModels.Sales.SalesOrderFormViewModel
+@{ ViewData["Title"] = "Bổ sung nguồn · " + Model.Code; }
+<div class="sales-page order-workspace">
+    <div class="workspace-heading">
+        <div><p class="eyebrow">BÁN HÀNG / NGUỒN THAY THẾ</p><h1>@Model.Code</h1></div>
+        <a class="workspace-button sales-button-secondary" asp-action="Details" asp-route-id="@Model.Id">← Chi tiết SO</a>
+    </div>
+    <section class="workspace-card">
+        <h2>Bổ sung nguồn hàng</h2>
+        <p class="muted">Kho: @Model.Warehouses.FirstOrDefault()?.Text · Ngày phải xuất: @(Model.RequestedDate?.ToString("dd/MM/yyyy") ?? "—").</p>
+        <p class="form-text mb-4">Chọn nguồn và số lượng bổ sung, tối đa bằng phần đang thiếu.</p>
+        @if (Model.Lines.Count == 0)
+        {
+            <p class="text-success">Đơn đã đủ nguồn hàng.</p>
+        }
+        else
+        {
+            <form method="post" asp-action="ReplaceSources" asp-route-id="@Model.Id" id="salesOrderForm" data-replacement="true" data-source-url="@Url.Action("GetSourceOptions", "SalesOrder")">
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="Id" />
+                <input type="hidden" asp-for="CustomerId" />
+                <input type="hidden" asp-for="OrderDate" value="@Model.OrderDate?.ToString("yyyy-MM-dd")" />
+                <input type="hidden" asp-for="ConcurrencyToken" />
+                <input type="hidden" asp-for="WarehouseId" id="WarehouseSelect" />
+                <input type="hidden" asp-for="RequestedDate" id="RequestedDateInput" value="@Model.RequestedDate?.ToString("yyyy-MM-dd")" />
+                <div asp-validation-summary="All" class="sales-warning" role="alert"></div>
+                <div class="table-wrap">
+                    <table class="workspace-table">
+                        <thead><tr><th>STT</th><th>Sản phẩm và nguồn bổ sung</th><th>Số lượng thiếu</th></tr></thead>
+                        <tbody id="linesTbody">
+                            @for (int i = 0; i < Model.Lines.Count; i++)
+                            {
+                                var line = Model.Lines[i];
+                                <tr data-product-id="@line.ProductId">
+                                    <td>@(i + 1)</td>
+                                    <td><strong>@line.ProductCode</strong> · @line.ProductName
+                                        <input type="hidden" name="Lines[@i].SolineId" value="@line.SolineId" />
+                                        <input type="hidden" name="Lines[@i].ProductId" value="@line.ProductId" />
+                                    </td>
+                                    <td><input type="number" name="Lines[@i].RequestedQuantity" value="@line.RequestedQuantity" class="form-control qty-input" readonly /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="sales-form-actions order-actions"><button type="submit" class="workspace-button">Xác nhận bổ sung</button></div>
+            </form>
+            <script id="initialSourcesJson" type="application/json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Lines, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)))</script>
+            <script src="~/js/sales-order-sources.js" asp-append-version="true"></script>
+        }
+    </section>
+</div>

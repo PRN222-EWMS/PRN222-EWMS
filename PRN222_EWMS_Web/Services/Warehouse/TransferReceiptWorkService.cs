@@ -2,10 +2,11 @@ using System.Data;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Models;
+using PRN222_EWMS_Web.Services.Warehouse;
 
 namespace PRN222_EWMS_Web.Services.WarehouseStaff;
 
-public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock)
+public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock, ISourceReservationService commitments)
 {
     private Task<TransferOrder?> LockDestinationOrderAsync(long orderId, int userId) =>
         db.TransferOrders
@@ -114,7 +115,14 @@ public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock)
 
     public async Task<(bool Success, string Message)> CompleteAsync(long orderId, long receiptId, int userId)
     {
+        var context = await db.TransferOrders.AsNoTracking().Where(o => o.TransferOrderId == orderId
+                && db.Users.Any(u => u.UserId == userId && u.Status == "ACTIVE" && u.Role.RoleName == "WAREHOUSE_STAFF"
+                    && u.WarehouseId == o.ToWarehouseId))
+            .Select(o => new { o.FromWarehouseId, o.ToWarehouseId }).SingleOrDefaultAsync();
+        if (context == null) return (false, "Lệnh không thuộc kho làm việc của bạn.");
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        foreach (var warehouseId in new[] { context.FromWarehouseId, context.ToWarehouseId }.Distinct().Order())
+            await commitments.LockWarehouseAsync(warehouseId);
         var order = await LockDestinationOrderAsync(orderId, userId);
         if (order is null)
             return (false, "Lệnh không thuộc kho đích của bạn.");
@@ -208,6 +216,7 @@ public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock)
         receipt.Status = "DONE";
         receipt.CompletedAt = now;
         await SaveAsActorAsync(userId);
+        await SaveAsActorAsync(userId, () => commitments.AfterTransferReceiptAsync(receiptId));
         await transaction.CommitAsync();
         return (true, $"Đã nhận {items.Count} serial trên phiếu {receipt.ReceiptCode}.");
     }
@@ -233,11 +242,12 @@ public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock)
         return (true, "Đã gỡ serial khỏi phiếu nhận.");
     }
 
-    private async Task SaveAsActorAsync(int userId)
+    private async Task SaveAsActorAsync(int userId, Func<Task>? sourceWork = null)
     {
         await db.Database.ExecuteSqlInterpolatedAsync($"EXEC sys.sp_set_session_context @key=N'ActorUserID', @value={userId}");
         try
         {
+            if (sourceWork != null) await sourceWork();
             await db.SaveChangesAsync();
         }
         finally

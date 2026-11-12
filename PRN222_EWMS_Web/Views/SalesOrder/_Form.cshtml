@@ -1,6 +1,7 @@
 @model PRN222_EWMS_Web.ViewModels.Sales.SalesOrderFormViewModel
 
 <div asp-validation-summary="All" class="sales-warning mb-4" role="alert" style="@(ViewData.ModelState.IsValid ? "display:none;" : "")"></div>
+<input type="hidden" asp-for="RequestToken" />
 
 @if (Model.IsEditMode)
 {
@@ -62,15 +63,17 @@
 
         <div class="row g-2 mb-3">
             <div class="col-6">
-                <label asp-for="OrderDate" class="form-label fw-semibold">Ngày đặt</label>
-                <input type="date" asp-for="OrderDate" class="form-control" readonly style="background:#f6f5f4;" />
+                <label asp-for="OrderDate" class="form-label fw-semibold">Ngày đặt <span class="text-danger">*</span></label>
+                <input type="date" asp-for="OrderDate" class="form-control" required />
+                <span asp-validation-for="OrderDate" class="text-danger small"></span>
             </div>
             <div class="col-6">
                 <label asp-for="RequestedDate" class="form-label fw-semibold">
                     Ngày yêu cầu xuất <span class="text-danger" id="reqDateAsterisk">*</span>
                 </label>
-                <input type="date" asp-for="RequestedDate" class="form-control" id="RequestedDateInput" min="@Model.OrderDate.ToString("yyyy-MM-dd")" />
+                <input type="date" asp-for="RequestedDate" class="form-control" id="RequestedDateInput" min="@Model.OrderDate?.ToString("yyyy-MM-dd")" />
                 <span asp-validation-for="RequestedDate" class="text-danger small"></span>
+                <div class="form-text">Bắt buộc khi gửi đơn hoặc chọn nguồn hàng sắp về.</div>
             </div>
         </div>
 
@@ -100,7 +103,7 @@
                     <th style="width: 50px;">STT</th>
                     <th style="min-width: 280px;">Sản phẩm</th>
                     <th style="width: 100px;">ĐVT</th>
-                    <th style="width: 180px;">Tồn khả dụng</th>
+                    <th style="width: 180px;">Khả dụng theo ngày xuất</th>
                     <th style="width: 160px; text-align: right;">Số lượng yêu cầu</th>
                     <th style="width: 70px; text-align: center;">Xóa</th>
                 </tr>
@@ -167,7 +170,8 @@
 </section>
 
 <!-- NÚT THAO TÁC CUỐI TRANG -->
-<div class="sales-form-actions mt-4 justify-content-end">
+<div class="sales-form-actions order-actions">
+    <p class="order-actions-note">Lưu nháp chưa giữ hàng. Gửi đơn sẽ giữ hàng và khóa nội dung.</p>
     @if (!Model.IsEditMode)
     {
         <a asp-action="Index" class="workspace-button sales-button-secondary">Thoát</a>
@@ -209,6 +213,10 @@
 <script id="initialProductsJson" type="application/json">
     @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AvailableProducts, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }))
 </script>
+<script id="initialSourcesJson" type="application/json">
+    @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Lines, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)))
+</script>
+<script src="~/js/sales-order-sources.js" asp-append-version="true"></script>
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -218,6 +226,18 @@
         const totalQtyDisplay = document.getElementById('totalQtyDisplay');
         const noLinesWarning = document.getElementById('noLinesWarning');
         const reqDateInput = document.getElementById('RequestedDateInput');
+        const orderDateInput = document.getElementById('OrderDate');
+
+        function updateDateLimit() {
+            reqDateInput.min = orderDateInput.value;
+            reqDateInput.setCustomValidity(reqDateInput.value && orderDateInput.value && reqDateInput.value < orderDateInput.value
+                ? 'Ngày yêu cầu xuất không được trước ngày đặt.' : '');
+        }
+        orderDateInput.addEventListener('input', updateDateLimit);
+        orderDateInput.addEventListener('change', updateDateLimit);
+        reqDateInput.addEventListener('input', updateDateLimit);
+        reqDateInput.addEventListener('change', updateDateLimit);
+        updateDateLimit();
 
         let currentProducts = [];
         try {
@@ -227,10 +247,11 @@
             currentProducts = [];
         }
 
-        // Đổi kho xuất -> Gọi AJAX tải lại tồn khả dụng
-        if (warehouseSelect) {
-            warehouseSelect.addEventListener('change', async function () {
-                const whId = this.value;
+        let productRequest = 0;
+        // Both warehouse and required date determine eligible incoming stock.
+        async function loadProducts() {
+                const revision = ++productRequest;
+                const whId = warehouseSelect.value;
                 if (!whId) {
                     currentProducts = [];
                     refreshAllProductDropdowns();
@@ -238,16 +259,24 @@
                 }
 
                 try {
-                    const response = await fetch(`/SalesOrder/GetAvailableProducts?warehouseId=${whId}`);
+                    const query = new URLSearchParams({ warehouseId: whId });
+                    if (reqDateInput.value) query.set('requestedDate', reqDateInput.value);
+                    const response = await fetch('@Url.Action("GetAvailableProducts", "SalesOrder")' + '?' + query);
                     if (response.ok) {
-                        currentProducts = await response.json();
+                        const products = await response.json();
+                        if (revision !== productRequest) return;
+                        currentProducts = products;
                         refreshAllProductDropdowns();
                     }
                 } catch (err) {
+                    if (revision !== productRequest) return;
+                    currentProducts = [];
+                    refreshAllProductDropdowns();
                     console.error('Lỗi khi tải tồn kho sản phẩm:', err);
                 }
-            });
         }
+        warehouseSelect?.addEventListener('change', loadProducts);
+        reqDateInput?.addEventListener('change', loadProducts);
 
         function refreshAllProductDropdowns() {
             const selects = linesTbody.querySelectorAll('.product-select');
@@ -444,7 +473,11 @@
                 const name = p.productName ?? p.ProductName ?? '';
                 const unit = p.unit ?? p.Unit ?? '—';
                 const unreserved = p.unreservedQuantity ?? p.UnreservedQuantity ?? 0;
-                optionsHtml += `<option value="${id}" data-unit="${unit}" data-code="${code}" data-unreserved="${unreserved}">[${code}] ${name}</option>`;
+                const option = new Option(`[${code}] ${name}`, id);
+                option.dataset.unit = unit;
+                option.dataset.code = code;
+                option.dataset.unreserved = unreserved;
+                optionsHtml += option.outerHTML;
             });
 
             newRow.innerHTML = `
