@@ -39,7 +39,10 @@
             <a asp-controller="ManagerStocktake" asp-action="Details" asp-route-id="@Model.Plan.StocktakeId" class="workspace-button workspace-button-secondary">Chi tiết kế hoạch</a>
             @if (canReview)
             {
-                <a asp-action="Recount" asp-route-id="@Model.Plan.StocktakeId" class="workspace-button workspace-button-secondary">Yêu cầu đếm lại</a>
+                @if (Model.RecountChoices.Count > 0)
+                {
+                    <a asp-action="Recount" asp-route-id="@Model.Plan.StocktakeId" class="workspace-button workspace-button-secondary">Yêu cầu đếm lại</a>
+                }
                 @if (Model.SearchableShortageIds.Count > 0)
                 {
                     <a href="#shortage-search" class="workspace-button">Tìm serial thiếu trong toàn kho</a>
@@ -84,7 +87,7 @@
                     <input type="hidden" name="Id" value="@Model.Plan.StocktakeId" />
                     <input type="hidden" name="Version" value="@Model.Version" />
                     <fieldset>
-                        <legend class="fs-6">Serial vẫn thiếu sau khi đếm lại</legend>
+                        <legend class="fs-6">Serial đang báo thiếu</legend>
                         @foreach (var row in Model.Observations.Where(o => Model.SearchableShortageIds.Contains(o.ObservationId)).OrderBy(o => o.ScannedSerial)) {
                             <label class="d-flex gap-2 align-items-center mb-2">
                                 <input type="checkbox" name="ShortageObservationIds" value="@row.ObservationId" />
@@ -94,6 +97,7 @@
                     </fieldset>
                     <div>
                         <label for="shortage-staff">Nhân viên tìm serial *</label>
+                        <p class="muted mb-1">Chọn nhân viên khác người phụ trách đếm lần đầu.</p>
                         <select id="shortage-staff" name="AssignedToUserId" required>
                             <option value="">Chọn nhân viên</option>
                             @foreach (var staff in Model.Staff) { <option value="@staff.UserId">@staff.FullName</option> }

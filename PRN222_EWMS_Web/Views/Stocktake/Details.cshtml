@@ -5,9 +5,22 @@
     var request = Model.Requests.FirstOrDefault(r => r.RecountRequestId == Model.RecountRequestId);
     string Product(int? id) => Model.Products.FirstOrDefault(p => p.ProductId == id)?.ProductName ?? "Chưa xác định";
     string Location(int? id) => id.HasValue ? Model.Locations.FirstOrDefault(l => l.LocationId == id)?.LocationName ?? "Vị trí #" + id : "Chờ xếp kệ";
+    string LocationPath(int? id)
+    {
+        var names = new Stack<string>();
+        var visited = new HashSet<int>();
+        for (var current = id; current is int locationId && visited.Add(locationId);)
+        {
+            var location = Model.Locations.FirstOrDefault(l => l.LocationId == locationId);
+            if (location is null) break;
+            names.Push(location.LocationName);
+            current = location.ParentLocationId;
+        }
+        return names.Count == 0 ? Location(id) : string.Join(" / ", names);
+    }
 }
 <div class="warehouse-list">
-    <header class="workspace-heading"><div><p class="eyebrow">@(request is null ? "NHIỆM VỤ KIỂM KÊ" : "NHIỆM VỤ ĐẾM LẠI")</p><h1>@Model.Plan.StocktakeCode</h1><p class="muted">@Model.ScopeLabel</p></div><a asp-action="Index" class="workspace-button sales-button-secondary">Danh sách nhiệm vụ</a></header>
+    <header class="workspace-heading"><div><p class="eyebrow">@(Model.IsShortageSearch ? "TÌM SERIAL THIẾU TRONG TOÀN KHO" : request is null ? "NHIỆM VỤ KIỂM KÊ" : "NHIỆM VỤ ĐẾM LẠI")</p><h1>@Model.Plan.StocktakeCode</h1><p class="muted">@Model.ScopeLabel</p></div><a asp-action="Index" class="workspace-button sales-button-secondary">Danh sách nhiệm vụ</a></header>
     @if (TempData["Success"] is string success) { <div class="workspace-notice" role="status">@success</div> }
     @if (TempData["Error"] is string error) { <div class="alert alert-danger" role="alert">@error</div> }
     <div asp-validation-summary="All" class="text-danger" role="alert"></div>
@@ -19,10 +32,14 @@
             <p><strong>Sản phẩm cần đếm lại:</strong> @Product(request.ProductId)</p><p><strong>Lý do:</strong> @request.Reason</p><p><strong>Trạng thái yêu cầu:</strong> @StocktakeDisplay.Status(request.Status)</p><p class="muted">Kiểm lại toàn bộ sản phẩm này trong khu vực được giao, gồm các vị trí con.</p>
         }
         @if (!string.IsNullOrWhiteSpace(Model.Plan.Note)) { <p class="text-break">@Model.Plan.Note</p> }
+        @if (Model.IsShortageSearch)
+        {
+            <p class="muted">Kiểm tra vị trí trong sổ kho trước. Nếu chưa thấy, tìm ở các khu khác và khu hàng chờ xếp.</p>
+        }
         <div class="d-flex flex-wrap gap-2 mt-3">
             @if (Model.CanStart)
             {
-                <form asp-action="Start" method="post">@Html.AntiForgeryToken()<input type="hidden" name="Id" value="@Model.Plan.StocktakeId" /><input type="hidden" name="Version" value="@Model.Version" /><input type="hidden" name="RecountRequestId" value="@Model.RecountRequestId" /><button type="submit" class="workspace-button">@(request is null ? "Bắt đầu kiểm kê" : "Bắt đầu đếm lại")</button></form>
+                <form asp-action="Start" method="post">@Html.AntiForgeryToken()<input type="hidden" name="Id" value="@Model.Plan.StocktakeId" /><input type="hidden" name="Version" value="@Model.Version" /><input type="hidden" name="RecountRequestId" value="@Model.RecountRequestId" /><button type="submit" class="workspace-button">@(Model.IsShortageSearch ? "Bắt đầu tìm serial" : request is null ? "Bắt đầu kiểm kê" : "Bắt đầu đếm lại")</button></form>
             }
             @if (Model.CanCount) { <a asp-action="Count" asp-route-id="@Model.Plan.StocktakeId" asp-route-recountRequestId="@Model.RecountRequestId" class="workspace-button">Tiếp tục ghi nhận</a> }
         </div>
@@ -34,10 +51,10 @@
         }
         </tbody></table></div></section>
     }
-    <section class="workspace-card"><h2>Kết quả trong phạm vi nhiệm vụ</h2><p class="muted">Kết quả thiếu hàng được xác định sau khi kết thúc vòng đếm.</p><div class="table-wrap"><table class="workspace-table"><thead><tr><th>Serial / sản phẩm</th><th>Vòng</th><th>Ghi nhận</th><th>Vị trí thực tế</th><th>Kết quả</th></tr></thead><tbody>
+    <section class="workspace-card"><h2>Kết quả trong phạm vi nhiệm vụ</h2><p class="muted">Kết quả thiếu hàng được xác định sau khi kết thúc vòng đếm.</p><div class="table-wrap"><table class="workspace-table"><thead><tr><th>Serial / sản phẩm</th><th>@(Model.IsShortageSearch ? "Vị trí trong sổ kho" : "Vòng")</th><th>Ghi nhận</th><th>Vị trí thực tế</th><th>Kết quả</th></tr></thead><tbody>
         @foreach (var row in Model.Observations.OrderByDescending(o => o.RoundNumber).ThenBy(o => o.ScannedSerial))
         {
-            <tr><td><strong>@row.ScannedSerial</strong><small class="d-block muted">@Product(row.ProductId)</small></td><td>@row.RoundNumber</td><td>@(row.ScannedAt.HasValue ? "Đã ghi nhận" : "Chưa ghi nhận")<small class="d-block muted">@StocktakeDisplay.Time(row.ScannedAt)</small></td><td>@(row.ActualQuantity == 1 ? Location(row.ActualLocationId) : "—")</td><td>@StocktakeDisplay.Difference(row.DifferenceType)</td></tr>
+            <tr><td><strong>@row.ScannedSerial</strong><small class="d-block muted">@Product(row.ProductId)</small></td><td>@(Model.IsShortageSearch ? LocationPath(row.ExpectedLocationId) : row.RoundNumber.ToString())</td><td>@(row.ScannedAt.HasValue ? "Đã ghi nhận" : "Chưa ghi nhận")<small class="d-block muted">@StocktakeDisplay.Time(row.ScannedAt)</small></td><td>@(row.ActualQuantity == 1 ? Location(row.ActualLocationId) : "—")</td><td>@(Model.IsShortageSearch && Model.Plan.StartedAt is null ? "Chờ bắt đầu tìm" : StocktakeDisplay.Difference(row.DifferenceType))</td></tr>
         }
         @if (Model.Observations.Count == 0) { <tr><td colspan="5" class="text-center muted py-4">Chưa có dữ liệu đếm trong nhiệm vụ này.</td></tr> }
     </tbody></table></div></section>

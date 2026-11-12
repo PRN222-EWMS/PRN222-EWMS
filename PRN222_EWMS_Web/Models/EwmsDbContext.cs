@@ -89,6 +89,8 @@ public partial class EwmsDbContext : DbContext
 
     public virtual DbSet<SupplySource> SupplySources { get; set; }
 
+    public virtual DbSet<SalesOrderSourcePlan> SalesOrderSourcePlans { get; set; }
+
     public virtual DbSet<TransferDispatch> TransferDispatches { get; set; }
 
     public virtual DbSet<TransferDispatchItem> TransferDispatchItems { get; set; }
@@ -2083,6 +2085,26 @@ public partial class EwmsDbContext : DbContext
                 .HasConstraintName("FK_SupplierProduct_SupplierID");
         });
 
+        modelBuilder.Entity<SalesOrderSourcePlan>(entity =>
+        {
+            entity.HasKey(e => e.SourcePlanId);
+            entity.ToTable("SalesOrderSourcePlan", tb =>
+            {
+                tb.HasTrigger("TR_SalesOrderSourcePlan_DraftContext");
+                tb.HasTrigger("TR_SalesOrderSourcePlan_Audit");
+            });
+            entity.Property(e => e.SourcePlanId).HasColumnName("SourcePlanID");
+            entity.Property(e => e.SolineId).HasColumnName("SOLineID");
+            entity.Property(e => e.SupplySourceId).HasColumnName("SupplySourceID");
+            entity.Property(e => e.CreatedAt).HasPrecision(3).HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.RowVersion).IsRowVersion().IsConcurrencyToken();
+            entity.HasIndex(e => new { e.SolineId, e.SupplySourceId }, "UQ_SalesOrderSourcePlan_LineSource").IsUnique();
+            entity.HasOne(e => e.SalesOrderLine).WithMany(e => e.SourcePlans)
+                .HasForeignKey(e => e.SolineId).OnDelete(DeleteBehavior.ClientSetNull);
+            entity.HasOne(e => e.SupplySource).WithMany(e => e.SalesOrderSourcePlans)
+                .HasForeignKey(e => e.SupplySourceId).OnDelete(DeleteBehavior.ClientSetNull);
+        });
+
         modelBuilder.Entity<SupplySource>(entity =>
         {
             entity.ToTable("SupplySource", tb =>
@@ -2153,6 +2175,12 @@ public partial class EwmsDbContext : DbContext
                 .IsUnicode(false);
             entity.Property(e => e.TransferReceiptId).HasColumnName("TransferReceiptID");
             entity.Property(e => e.WarehouseId).HasColumnName("WarehouseID");
+
+            entity.Property(e => e.TransferLineId).HasColumnName("TransferLineID");
+            entity.HasIndex(e => e.TransferLineId, "UX_SupplySource_TransferIncomingLine")
+                .IsUnique().HasFilter("([TransferLineID] IS NOT NULL)");
+            entity.HasOne(e => e.IncomingTransferLine).WithMany(e => e.IncomingSupplySources)
+                .HasForeignKey(e => e.TransferLineId).OnDelete(DeleteBehavior.ClientSetNull);
 
             entity.HasOne(d => d.Adjustment).WithMany(p => p.SupplySources)
                 .HasForeignKey(d => d.AdjustmentId)

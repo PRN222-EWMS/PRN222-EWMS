@@ -1,14 +1,13 @@
-@model PRN222_EWMS_Web.ViewModels.Purchasing.PoFormViewModel
+﻿@model PRN222_EWMS_Web.ViewModels.Purchasing.PoFormViewModel
 @{
     ViewData["Title"] = "Tạo đơn mua hàng";
 }
 
-<div class="po-page">
+<div class="po-page order-workspace">
     <div class="workspace-heading">
         <div>
             <p class="eyebrow">MUA HÀNG / TẠO MỚI</p>
             <h1>Tạo đơn mua hàng</h1>
-            <p class="muted">Tạo mới đơn đặt mua hàng hóa từ đối tác cung ứng về kho tiếp nhận.</p>
         </div>
         <div class="po-toolbar">
             <a class="workspace-button sales-button-secondary" asp-action="Index">
@@ -24,14 +23,15 @@
             <partial name="_Form" model="Model" />
         </section>
 
-        <section class="workspace-card">
-            <div class="d-flex justify-content-end align-items-center gap-2">
+        <section class="order-actions">
+            <p class="order-actions-note">Chỉ đơn đã xác nhận được tính là hàng sắp về.</p>
+            <div class="d-flex flex-wrap justify-content-end align-items-center gap-2">
                 <a class="workspace-button sales-button-secondary" asp-action="Index">Thoát</a>
                 <button type="submit" name="action" value="draft" class="workspace-button sales-button-secondary">
                     <i class="bi bi-file-earmark me-1" aria-hidden="true"></i> Lưu bản nháp
                 </button>
-                <button type="submit" name="action" value="confirm" class="workspace-button" style="background: #0e733b;">
-                    <i class="bi bi-check-circle me-1" aria-hidden="true"></i> Lưu & Xác nhận đơn
+                <button type="submit" name="action" value="confirm" class="workspace-button">
+                    <i class="bi bi-check-circle me-1" aria-hidden="true"></i> Xác nhận đơn
                 </button>
             </div>
         </section>

@@ -12,6 +12,7 @@
 <div class="row g-4">
     <!-- CỘT TRÁI: THÔNG TIN CHÍNH -->
     <div class="col-lg-6">
+        <h2 class="mb-3">Nhà cung cấp và kho nhận</h2>
         <div class="mb-3">
             <label asp-for="SupplierId" class="form-label fw-semibold">
                 Nhà cung cấp <span class="text-danger">*</span>
@@ -36,7 +37,6 @@
                         <option value="@s.Id" selected="@(Model.SupplierId == s.Id)">@s.Name</option>
                     }
                 </select>
-                <div class="form-text">Danh mục sản phẩm bên dưới sẽ tự động tải theo nhà cung cấp này.</div>
             }
             <span asp-validation-for="SupplierId" class="text-danger small"></span>
         </div>
@@ -58,6 +58,7 @@
 
     <!-- CỘT PHẢI: MỐC THỜI GIAN & GHI CHÚ -->
     <div class="col-lg-6">
+        <h2 class="mb-3">Thông tin đơn hàng</h2>
         @if (Model.IsEditMode)
         {
             <div class="mb-3">
@@ -69,9 +70,9 @@
         {
             <div class="mb-3">
                 <label asp-for="Pocode" class="form-label fw-semibold">Mã đơn mua</label>
-                <input asp-for="Pocode" class="form-control" id="PoCodeInput" placeholder="Nhập mã đơn mua (để trống để hệ thống tự sinh)..." maxlength="40" autocomplete="off" />
+                <input asp-for="Pocode" class="form-control" id="PoCodeInput" placeholder="Để trống để tạo mã tự động" maxlength="40" autocomplete="off" />
                 <span asp-validation-for="Pocode" class="text-danger small d-block mt-1" id="PoCodeValidationMsg"></span>
-                <div class="form-text text-muted" id="PoCodeHint">Để trống nếu muốn hệ thống tự động sinh mã theo định dạng PO-YYYY-XXX.</div>
+                <div class="form-text text-muted" id="PoCodeHint">Có thể nhập mã riêng, tối đa 40 ký tự.</div>
             </div>
         }
 
@@ -97,7 +98,6 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
         <h3 class="h5 mb-0">Danh sách sản phẩm đặt hàng <span class="text-danger">*</span></h3>
-        <p class="text-muted small mb-0">Bắt buộc tối thiểu 1 sản phẩm. Số lượng phải là số nguyên dương lớn hơn 0.</p>
     </div>
     <button type="button" class="workspace-button sales-button-small" id="btnAddLine">
         <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> Thêm sản phẩm
@@ -169,7 +169,7 @@
 
 <div id="noLinesWarning" class="sales-empty" style="@(Model.Lines.Count > 0 ? "display: none;" : "")">
     <i class="bi bi-cart-x" style="font-size: 28px;"></i>
-    <p class="mt-2 mb-0">Chưa có sản phẩm nào trong đơn hàng. Vui lòng bấm <strong>"Thêm sản phẩm"</strong> để thêm hàng.</p>
+    <p class="mt-2 mb-0">Chưa có sản phẩm. Chọn <strong>Thêm sản phẩm</strong> để bắt đầu.</p>
 </div>
 
 <script>

@@ -95,8 +95,16 @@ public class StocktakeExecutionService(IStocktakeRepository repo) : IStocktakeEx
                     Scope = $"Đếm lại sản phẩm #{request.ProductId} · " + RequestLabel(request, locations) });
         }
         page = Math.Clamp(page, 1, Math.Max(1, (rows.Count + StocktakeExecutionListViewModel.PageSize - 1) / StocktakeExecutionListViewModel.PageSize));
+        var pageRows = rows.Skip((page - 1) * StocktakeExecutionListViewModel.PageSize)
+            .Take(StocktakeExecutionListViewModel.PageSize).ToList();
+        foreach (var row in pageRows.Where(row => !row.IsRecount))
+        {
+            var investigation = await repo.InvestigationForAsync(row.Id, ct);
+            row.IsShortageSearch = investigation?.ShortageObservationIds.Count > 0;
+            if (row.IsShortageSearch) row.Scope = "Toàn kho, gồm hàng chờ xếp";
+        }
         return new StocktakeExecutionListViewModel { Page = page, TotalCount = rows.Count, Search = search,
-            Items = rows.Skip((page - 1) * StocktakeExecutionListViewModel.PageSize).Take(StocktakeExecutionListViewModel.PageSize).ToList() };
+            Items = pageRows };
     }
 
     public async Task<StocktakeExecutionViewModel> GetDetailsAsync(int actorId, long id, long? recountRequestId, CancellationToken ct)
@@ -126,8 +134,14 @@ public class StocktakeExecutionService(IStocktakeRepository repo) : IStocktakeEx
         var ownRunning = request is null ? assignments.Any(a => a.Status == "IN_PROGRESS") : request.Status == "IN_PROGRESS";
         var canCount = current?.Status == "OPEN" && ownRunning && plan.Status == (request is null ? "COUNTING" : "RECOUNTING");
         var investigation = await repo.InvestigationForAsync(id, ct);
+        var shortageSearch = investigation?.ShortageObservationIds.Count > 0;
+        if (current is null && investigation is not null && shortageSearch)
+            observations = await repo.Query<StocktakeObservation>().AsNoTracking()
+                .Where(o => o.StocktakeId == investigation.StocktakeId
+                    && investigation.ShortageObservationIds.Contains(o.ObservationId))
+                .OrderBy(o => o.ScannedSerial).ToListAsync(ct);
         return new StocktakeExecutionViewModel { Plan = plan, Assignments = assignments,
-            IsShortageSearch = investigation?.ShortageObservationIds.Count > 0,
+            IsShortageSearch = shortageSearch,
             Handling = (await repo.HandlingAsync(id, ct)).Where(h => h.RecordedByUserId == actorId).ToList(),
             Requests = request is null ? [] : [request], Rounds = rounds, Observations = observations,
             Locations = locations,
@@ -140,7 +154,8 @@ public class StocktakeExecutionService(IStocktakeRepository repo) : IStocktakeEx
                     && StocktakeScopeRules.InAssignment(a, l.LocationId, planLocations, locations)))).ToList(),
             Products = await repo.Query<Product>().AsNoTracking().OrderBy(p => p.ProductName).ToListAsync(ct),
             RecountRequestId = recountRequestId, ActorId = actorId, Version = Convert.ToBase64String(plan.RowVersion),
-            ScopeLabel = request is null ? string.Join("; ", assignments.Select(a => AssignmentLabel(a, locations))) : RequestLabel(request, locations),
+            ScopeLabel = shortageSearch ? "Toàn kho, gồm hàng chờ xếp"
+                : request is null ? string.Join("; ", assignments.Select(a => AssignmentLabel(a, locations))) : RequestLabel(request, locations),
             CanStart = request is null
                 ? plan.Status is "PLANNED" or "COUNTING" && assignments.Any(a => a.Status == "ASSIGNED")
                 : plan.Status == "REVIEWING" && request.Status == "REQUESTED" && rounds.All(r => r.Status != "OPEN"),

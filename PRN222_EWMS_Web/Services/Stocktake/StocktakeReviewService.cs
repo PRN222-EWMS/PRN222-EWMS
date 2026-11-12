@@ -64,7 +64,7 @@ public partial class StocktakeReviewService(IStocktakeRepository repo) : IStockt
         model.ConfirmedShortageIds = model.Investigations.SelectMany(i => i.StillMissingObservationIds).ToHashSet();
         if (canRequest && model.InvestigationContext is null && requests.All(r => r.Status is not ("REQUESTED" or "IN_PROGRESS"))
             && model.Handling.All(h => h.Status != "WAITING"))
-            model.SearchableShortageIds = model.Observations.Where(o => CanSearchShortage(o, rounds, requests)
+            model.SearchableShortageIds = model.Observations.Where(o => CanSearchShortage(o)
                 && !model.ConfirmedShortageIds.Contains(o.ObservationId)
                 && !applied.Contains(o.ScannedSerial, StringComparer.OrdinalIgnoreCase)).Select(o => o.ObservationId).ToHashSet();
         if (canRequest)
@@ -87,7 +87,7 @@ public partial class StocktakeReviewService(IStocktakeRepository repo) : IStockt
         }
         if (canRequest && model.InvestigationContext is null)
         foreach (var productId in model.Observations.Where(o => o.ProductId.HasValue
-            && o.DifferenceType is not ("MATCHED" or "PENDING") && o.ReviewStatus != "RESOLVED")
+            && NeedsLocalRecount(o) && o.ReviewStatus != "RESOLVED")
             .Select(o => o.ProductId!.Value).Distinct())
         {
             var candidates = model.Locations.Where(l => l.Status == "ACTIVE"
@@ -102,7 +102,7 @@ public partial class StocktakeReviewService(IStocktakeRepository repo) : IStockt
                 var selected = model.Observations.Where(o => o.ReviewStatus != "RESOLVED" && (o.ExpectedQuantity == 1 || o.ActualQuantity == 1)
                     && StocktakeScopeRules.InRequest(candidate, o.ProductId,
                         o.ActualQuantity == 1 ? o.ActualLocationId : o.ExpectedLocationId, model.Locations)).ToList();
-                if (!selected.Any(o => o.DifferenceType is not ("MATCHED" or "PENDING") && o.ReviewStatus != "RESOLVED")
+                if (!selected.Any(NeedsLocalRecount)
                     || selected.Any(o => applied.Contains(o.ScannedSerial, StringComparer.OrdinalIgnoreCase))
                     || requests.Any(r => r.Status is "REQUESTED" or "IN_PROGRESS" && Overlaps(r, candidate, model.Locations))) continue;
                 var staffIds = model.Staff.Where(staff => !CountedPreviously(staff.UserId, selected,
@@ -165,8 +165,8 @@ public partial class StocktakeReviewService(IStocktakeRepository repo) : IStockt
                 && StocktakeScopeRules.InRequest(request, o.ProductId,
                     o.ActualQuantity == 1 ? o.ActualLocationId : o.ExpectedLocationId, locations))
                 .ToList();
-            if (!selected.Any(o => o.DifferenceType is not ("MATCHED" or "PENDING") && o.ReviewStatus != "RESOLVED"))
-                throw new StocktakeWorkflowException("Chưa có chênh lệch cần đếm lại của sản phẩm trong khu vực đã chọn.");
+            if (!selected.Any(NeedsLocalRecount))
+                throw new StocktakeWorkflowException("Chưa có chênh lệch cần đếm lại tại khu vực. Với serial thiếu, hãy giao tìm toàn kho.");
             var appliedSerials = await repo.Query<InventoryAdjustmentLine>().Where(l => l.StocktakeId == input.Id
                 && l.IsActive && l.Adjustment.Status == "APPLIED").Select(l => l.ScannedSerial).ToListAsync(token);
             if (selected.Any(o => appliedSerials.Contains(o.ScannedSerial, StringComparer.OrdinalIgnoreCase)))
@@ -373,6 +373,9 @@ public partial class StocktakeReviewService(IStocktakeRepository repo) : IStockt
         if (reason.Length is < 1 or > 1000) throw new StocktakeWorkflowException("Nhập lý do từ 1 đến 1.000 ký tự.");
         return reason;
     }
+
+    private static bool NeedsLocalRecount(StocktakeObservation row) =>
+        row.DifferenceType is not ("MATCHED" or "PENDING" or "MISSING");
 
     private static bool CountedPreviously(int staffId, IEnumerable<StocktakeObservation> selected,
         IEnumerable<StocktakeRecountRequest> requests, IEnumerable<StocktakeRound> rounds,

@@ -25,6 +25,8 @@ public partial class SupplySource
 
     public long? TransferReceiptId { get; set; }
 
+    public long? TransferLineId { get; set; }
+
     public long? AdjustmentId { get; set; }
 
     public int EligibleQuantity { get; set; }
@@ -66,6 +68,10 @@ public partial class SupplySource
     public virtual ICollection<TransferDispatchItem> TransferDispatchItemSupplySources { get; set; } = new List<TransferDispatchItem>();
 
     public virtual TransferReceipt? TransferReceipt { get; set; }
+
+    public virtual TransferOrderLine? IncomingTransferLine { get; set; }
+
+    public virtual ICollection<SalesOrderSourcePlan> SalesOrderSourcePlans { get; set; } = new List<SalesOrderSourcePlan>();
 
     public virtual Warehouse Warehouse { get; set; } = null!;
 }

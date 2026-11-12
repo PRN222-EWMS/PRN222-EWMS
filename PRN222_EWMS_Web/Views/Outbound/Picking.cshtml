@@ -1,4 +1,4 @@
-@model PRN222_EWMS_Web.ViewModels.Outbound.PickingWorkbenchViewModel
+﻿@model PRN222_EWMS_Web.ViewModels.Outbound.PickingWorkbenchViewModel
 @{
     ViewData["Title"] = "Xuất kho " + Model.IssueCode;
     var canAdd = Model.Lines.Any(line => line.CanPickMoreQuantity > 0);
@@ -15,7 +15,7 @@
         @foreach (var line in Model.Lines)
         {
             <div class="col-md-6 col-xl-4"><article class="workspace-card p-3 h-100"><h2 class="h6 mb-1">@line.ProductCode</h2><p class="muted mb-3">@line.ProductName</p><dl class="row row-cols-2 g-3 mb-0"><div class="col"><dt class="small muted fw-normal">Còn phải xuất</dt><dd class="mb-0 fw-semibold">@line.RemainingQuantity</dd></div><div class="col"><dt class="small muted fw-normal">Có thể lấy ngay</dt><dd class="mb-0 fw-semibold text-primary">@line.MaxIssueNow</dd></div><div class="col"><dt class="small muted fw-normal">Đã chọn phiếu này</dt><dd class="mb-0 fw-semibold">@line.InThisReceiptCount</dd></div><div class="col"><dt class="small muted fw-normal">Còn chọn thêm</dt><dd class="mb-0 fw-semibold text-primary">@line.CanPickMoreQuantity</dd></div><div class="col"><dt class="small muted fw-normal">Hàng dự kiến về</dt><dd class="mb-0">@line.IncomingReservedBalance</dd></div><div class="col"><dt class="small muted fw-normal">Chưa có hàng để xuất</dt><dd class="mb-0">@Math.Max(0, line.RemainingQuantity - line.MaxIssueNow)</dd></div></dl>
-                @if (line.Sources.Count > 0) { <details class="mt-3"><summary class="small text-primary">Nguồn hàng</summary><ul class="small ps-3 mt-2 mb-0">@foreach (var source in line.Sources) { <li class="my-1">@(source.SupplyState == "INCOMING" ? "Dự kiến từ PO" : "Nguồn thực tế") · @source.SourceCode: <strong>@source.Balance</strong></li> }</ul></details> }
+                <partial name="_SourceBalances" model="line" />
             </article></div>
         }
     </div></section>

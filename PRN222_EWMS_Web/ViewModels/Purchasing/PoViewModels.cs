@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using PRN222_EWMS_Web.Models;
 
 namespace PRN222_EWMS_Web.ViewModels.Purchasing;
@@ -185,7 +185,7 @@ public class PoFormViewModel
 
     [Required(ErrorMessage = "Vui lòng nhập Ngày dự kiến giao hàng.")]
     [Display(Name = "Ngày dự kiến đến")]
-    public DateOnly ExpectedArrivalDate { get; set; } = DateOnly.FromDateTime(DateTime.Today.AddDays(7));
+    public DateOnly ExpectedArrivalDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
 
     [MaxLength(1000, ErrorMessage = "Ghi chú không được vượt quá 1000 ký tự.")]
     [Display(Name = "Ghi chú đơn mua")]

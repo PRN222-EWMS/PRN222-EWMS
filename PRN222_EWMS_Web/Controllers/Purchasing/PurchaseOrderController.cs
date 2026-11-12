@@ -112,12 +112,13 @@ public class PurchaseOrderController(
     // 4. CHỈNH SỬA ĐƠN MUA HÀNG (PURCHASING STAFF & MANAGER)
     // =========================================================================
     [HttpGet]
+    [Authorize(Roles = "PURCHASING_STAFF")]
     public async Task<IActionResult> Edit(long id)
     {
         var model = await poService.GetEditFormAsync(id, CurrentUserId, CurrentUserRole);
         if (model == null)
         {
-            TempData["ErrorMessage"] = "Đơn mua hàng không tồn tại hoặc đã phát sinh phiếu nhận hàng (Inbound) nên đã bị khóa sửa.";
+            TempData["ErrorMessage"] = "Chỉ người tạo được sửa PO Draft. PO đã Confirm khóa nội dung kể cả chưa có phiếu nhập.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
@@ -126,8 +127,14 @@ public class PurchaseOrderController(
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Roles = "PURCHASING_STAFF")]
     public async Task<IActionResult> Edit([FromRoute] long id, PoFormViewModel model, string action = "draft")
     {
+        if (model.PurchaseOrderId != id) return BadRequest();
+        var current = await poService.GetEditFormAsync(id, CurrentUserId, CurrentUserRole);
+        if (current == null) return Forbid();
+        model.Status = current.Status;
+        model.Pocode = current.Pocode;
         bool confirmNow = string.Equals(action, "confirm", StringComparison.OrdinalIgnoreCase);
 
         if (!ModelState.IsValid)

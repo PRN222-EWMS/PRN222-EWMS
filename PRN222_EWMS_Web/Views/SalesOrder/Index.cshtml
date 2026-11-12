@@ -1,8 +1,8 @@
-@model PRN222_EWMS_Web.ViewModels.Sales.SalesOrderListViewModel
+﻿@model PRN222_EWMS_Web.ViewModels.Sales.SalesOrderListViewModel
 @using PRN222_EWMS_Web.ViewModels.Sales
 @{ ViewData["Title"] = "Đơn bán hàng"; }
 
-<div class="sales-page">
+<div class="sales-page order-workspace">
 <div class="workspace-heading">
     <div>
         <p class="eyebrow">BÁN HÀNG</p>
@@ -80,7 +80,7 @@
                     <td style="white-space: nowrap;">@order.OrderDate.ToString("dd/MM/yyyy")</td>
                     <td>@order.CreatedByName</td>
                     <td style="white-space: nowrap;">
-                        <span class="sales-status">@SalesDisplay.Status(order.Status)</span>
+                        <span class="sales-status" data-status="@order.Status">@SalesDisplay.Status(order.Status)</span>
                         @if (order.HasShortage)
                         {
                             <div class="sales-muted-small text-danger">Thiếu nguồn</div>

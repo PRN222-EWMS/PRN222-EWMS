@@ -21,6 +21,7 @@ public class StocktakeTaskRow
     public string Status { get; set; } = "";
     public DateTime? PlannedAt { get; set; }
     public bool IsRecount { get; set; }
+    public bool IsShortageSearch { get; set; }
     public long? RecountRequestId { get; set; }
 }
 
