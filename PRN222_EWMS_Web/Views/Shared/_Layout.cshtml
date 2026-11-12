@@ -69,6 +69,10 @@
     {
         <link rel="stylesheet" href="~/css/product-transfer.css" asp-append-version="true" />
     }
+    @if (ViewContext.RouteData.Values["controller"]?.ToString() is "SalesOrder" or "PurchaseOrder" or "Outbound")
+    {
+        <link rel="stylesheet" href="~/css/order-workspace.css" asp-append-version="true" />
+    }
 </head>
 <body class="ewms-shell">
     <partial name="_Sidebar" />

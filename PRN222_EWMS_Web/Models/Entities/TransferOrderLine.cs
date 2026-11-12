@@ -17,6 +17,8 @@ public partial class TransferOrderLine
 
     public virtual Product Product { get; set; } = null!;
 
+    public virtual ICollection<SupplySource> IncomingSupplySources { get; set; } = new List<SupplySource>();
+
     public virtual ICollection<Reservation> ReservationTransferLines { get; set; } = new List<Reservation>();
 
     public virtual ICollection<Reservation> ReservationTransferOrderLines { get; set; } = new List<Reservation>();

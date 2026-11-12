@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Models;
 using WarehouseEntity = PRN222_EWMS_Web.Models.Warehouse;
 using PRN222_EWMS_Web.ViewModels.Sales;
@@ -27,11 +27,13 @@ public class SalesRepository(EwmsDbContext db) : ISalesRepository
 
     public Task<SalesOrder?> FindOrderForEditAsync(long id)
     {
-        return db.SalesOrders
+        return db.SalesOrders.AsNoTracking()
             .Include(o => o.Customer)
             .Include(o => o.Warehouse)
             .Include(o => o.SalesOrderLines)
                 .ThenInclude(l => l.Product)
+            .Include(o => o.SalesOrderLines)
+                .ThenInclude(l => l.SourcePlans)
             .Include(o => o.Outbounds)
             .Include(o => o.Reservations)
             .SingleOrDefaultAsync(o => o.SalesOrderId == id);
@@ -44,23 +46,16 @@ public class SalesRepository(EwmsDbContext db) : ISalesRepository
 
     public async Task<string> GenerateNextSoCodeAsync()
     {
-        var year = DateTime.UtcNow.Year;
+        var year = DateTime.UtcNow.AddHours(7).Year;
         var prefix = $"SO-{year}-";
 
-        var latestCode = await db.SalesOrders
+        var codes = await db.SalesOrders
             .Where(p => p.Socode.StartsWith(prefix))
-            .OrderByDescending(p => p.Socode)
             .Select(p => p.Socode)
-            .FirstOrDefaultAsync();
+            .ToListAsync();
 
         var nextSeq = 1;
-        if (!string.IsNullOrEmpty(latestCode) && latestCode.Length > prefix.Length)
-        {
-            if (int.TryParse(latestCode[prefix.Length..], out var seq))
-            {
-                nextSeq = seq + 1;
-            }
-        }
+        nextSeq += codes.Select(code => int.TryParse(code[prefix.Length..], out var seq) ? seq : 0).DefaultIfEmpty().Max();
         return $"{prefix}{nextSeq:D3}";
     }
 

@@ -99,6 +99,7 @@ public class OutboundDetailsViewModel
 
 public class OutboundLineProgressDto
 {
+    public bool HasSourcePlan { get; set; }
     public long SolineId { get; set; }
     public int ProductId { get; set; }
     public string ProductCode { get; set; } = null!;
@@ -248,7 +249,8 @@ public class SuggestedSerialPickDto
         : (ManufacturingYear.HasValue ? $"{ManufacturingYear.Value}" : RegisteredAt.ToString("MM/yyyy"));
 }
 
-public record OutboundSourceBalanceDto(long SupplySourceId, string SourceCode, string SupplyState, long Balance, bool IsReplacement);
+public record OutboundSourceBalanceDto(long SupplySourceId, string SourceCode, string SupplyState, long Balance, bool IsReplacement,
+    long ReadyQuantity = 0, string SourceType = "", DateOnly? AvailableFrom = null);
 public record OutboundSupplySnapshot(List<OutboundLineProgressDto> Lines, List<SuggestedSerialPickDto> Candidates);
 
 

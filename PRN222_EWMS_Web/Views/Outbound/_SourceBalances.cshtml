@@ -1,0 +1,26 @@
+@model PRN222_EWMS_Web.ViewModels.Outbound.OutboundLineProgressDto
+<div class="order-source-summary">
+    <div class="order-source-summary-title">@(Model.HasSourcePlan ? "Nguồn Sales đã chọn" : "Nguồn có thể sử dụng")</div>
+    <ul>
+        @foreach (var source in Model.Sources)
+        {
+            <li>
+                <span class="order-source-summary-label">@source.SourceCode</span>
+                <strong>@source.Balance.ToString("N0")</strong>
+                @if (source.SupplyState == "INCOMING")
+                {
+                    <span class="order-source-summary-meta">Chờ @(source.SourceType == "TRANSFER_INCOMING" ? "chuyển kho" : "hàng mua") · Đến @(source.AvailableFrom?.ToString("dd/MM/yyyy") ?? "chưa rõ")</span>
+                }
+                else
+                {
+                    <span class="order-source-summary-meta">Có thể xuất ngay: @source.ReadyQuantity.ToString("N0")</span>
+                }
+            </li>
+        }
+    </ul>
+    <div class="order-source-summary-metrics">
+        <span>Sẵn sàng <strong>@Model.MaxIssueNow.ToString("N0")</strong></span>
+        <span>Chờ hàng <strong>@Model.IncomingReservedBalance.ToString("N0")</strong></span>
+        <span class="@(Model.ShortageQuantity > 0 ? "is-short" : "")">Thiếu <strong>@Model.ShortageQuantity.ToString("N0")</strong></span>
+    </div>
+</div>

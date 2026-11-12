@@ -48,6 +48,8 @@ public class SalesOrderListViewModel
 
 public class SalesOrderDetailsViewModel : SalesOrderRowViewModel
 {
+    public bool CanCancel { get; set; }
+    public bool CanReplaceSources { get; set; }
     public DateTime? RequestedDate { get; set; }
     public DateTime? SubmittedAt { get; set; }
     public DateTime? ClosedAt { get; set; }
@@ -61,12 +63,24 @@ public class SalesOrderDetailsViewModel : SalesOrderRowViewModel
 
 public class SalesOrderLineViewModel
 {
+    public long Id { get; set; }
+    public List<SalesSourceSummary> Sources { get; set; } = [];
     public string ProductCode { get; set; } = "";
     public string ProductName { get; set; } = "";
     public int RequestedQuantity { get; set; }
     public int IssuedQuantity { get; set; }
     public int CancelledQuantity { get; set; }
     public int RemainingQuantity => RequestedQuantity - IssuedQuantity - CancelledQuantity;
+}
+
+public class SalesSourceSummary
+{
+    public string Label { get; set; } = "";
+    public string SupplyState { get; set; } = "";
+    public int OriginalQuantity { get; set; }
+    public long HeldQuantity { get; set; }
+    public long ConsumedQuantity { get; set; }
+    public long ReleasedQuantity { get; set; }
 }
 
 public class OutboundSummaryViewModel
@@ -126,6 +140,7 @@ public class CustomerFormViewModel
 
 public class SalesOrderFormViewModel
 {
+    public string RequestToken { get; set; } = Guid.NewGuid().ToString("N");
     public long Id { get; set; }
     public string Code { get; set; } = "";
 
@@ -176,6 +191,31 @@ public class SalesOrderLineFormDto
     public int? RequestedQuantity { get; set; }
 
     public long AvailableQuantity { get; set; }
+
+    public List<SalesSourceChoiceInput> Sources { get; set; } = [];
+}
+
+public class SalesSourceChoiceInput
+{
+    public long SupplySourceId { get; set; }
+    // Existing transfers can be previewed before their forecast row has been created.
+    public long? TransferLineId { get; set; }
+    [Range(1, int.MaxValue, ErrorMessage = "Số lượng từ mỗi nguồn phải là số nguyên dương.")] public int Quantity { get; set; }
+}
+
+public class SalesSourceOption
+{
+    public long SupplySourceId { get; set; }
+    public long? TransferLineId { get; set; }
+    public int ProductId { get; set; }
+    public string SourceType { get; set; } = "";
+    public string SupplyState { get; set; } = "";
+    public string Label { get; set; } = "";
+    public DateOnly? AvailableFrom { get; set; }
+    public long AvailableQuantity { get; set; }
+    public long HeldForOrder { get; set; }
+    public bool CanSelect { get; set; }
+    public string? Warning { get; set; }
 }
 
 public class ProductStockLookupDto

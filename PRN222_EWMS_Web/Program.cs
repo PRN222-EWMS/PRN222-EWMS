@@ -45,6 +45,8 @@ builder.Services.AddScoped<PRN222_EWMS_Web.Services.WarehouseStaff.IPutawayServi
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Warehouse.IOutboundService, PRN222_EWMS_Web.Services.Warehouse.OutboundService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Repositories.Warehouse.IOutboundRepository, PRN222_EWMS_Web.Repositories.Warehouse.OutboundRepository>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Warehouse.IOutboundSupplyService, PRN222_EWMS_Web.Services.Warehouse.OutboundSupplyService>();
+builder.Services.AddScoped<ISourceReservationService, SourceReservationService>();
+builder.Services.AddScoped<PRN222_EWMS_Web.Services.Sales.SalesOrderSourceService>();
 builder.Services.AddScoped<PRN222_EWMS_Web.Services.Warehouse.ITransferOrderService, PRN222_EWMS_Web.Services.Warehouse.TransferOrderService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<TransferStockService>();

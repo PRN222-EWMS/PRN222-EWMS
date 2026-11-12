@@ -1,4 +1,4 @@
-@model PRN222_EWMS_Web.ViewModels.Outbound.CreateOutboundViewModel
+﻿@model PRN222_EWMS_Web.ViewModels.Outbound.CreateOutboundViewModel
 @{ ViewData["Title"] = "Tạo phiếu xuất kho"; }
 
 <div class="outbound-page">
@@ -38,7 +38,7 @@
                 <details class="mt-3" open="@selected"><summary class="workspace-link px-0">Sản phẩm và nguồn hàng</summary><div class="table-wrap mt-2"><table class="workspace-table"><thead><tr><th>Sản phẩm</th><th>Đã xuất</th><th>Còn phải xuất</th><th>Có thể lấy ngay</th><th>Chưa có hàng để xuất</th><th>Hàng dự kiến về</th></tr></thead><tbody>
                     @foreach (var line in order.Lines)
                     {
-                        <tr><td><strong>@line.ProductCode</strong><small class="d-block muted">@line.ProductName</small>@foreach (var source in line.Sources) { <small class="d-block muted">@(source.SupplyState == "INCOMING" ? "Dự kiến từ PO" : "Nguồn thực tế") · @source.SourceCode: @source.Balance</small> }</td><td>@line.DoneQuantity</td><td>@line.RemainingQuantity</td><td class="fw-bold text-primary">@line.MaxIssueNow</td><td>@Math.Max(0, line.RemainingQuantity - line.MaxIssueNow)</td><td>@line.IncomingReservedBalance</td></tr>
+                        <tr><td><strong>@line.ProductCode</strong><small class="d-block muted">@line.ProductName</small><partial name="_SourceBalances" model="line" /></td><td>@line.DoneQuantity</td><td>@line.RemainingQuantity</td><td class="fw-bold text-primary">@line.MaxIssueNow</td><td>@Math.Max(0, line.RemainingQuantity - line.MaxIssueNow)</td><td>@line.IncomingReservedBalance</td></tr>
                     }
                 </tbody></table></div></details>
             </article>

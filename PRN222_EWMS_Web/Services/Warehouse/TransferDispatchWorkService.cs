@@ -6,7 +6,7 @@ using PRN222_EWMS_Web.Services.Warehouse;
 
 namespace PRN222_EWMS_Web.Services.WarehouseStaff;
 
-public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService expiry)
+public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService expiry, ISourceReservationService commitments)
 {
     private IQueryable<TransferOrder> SourceOrderForUpdate(long orderId, int userId) =>
         db.TransferOrders
@@ -145,7 +145,14 @@ public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService
 
     public async Task<(bool Success, string Message)> CompleteAsync(long orderId, long dispatchId, int userId)
     {
+        var context = await db.TransferOrders.AsNoTracking().Where(o => o.TransferOrderId == orderId
+                && db.Users.Any(u => u.UserId == userId && u.Status == "ACTIVE" && u.Role.RoleName == "WAREHOUSE_STAFF"
+                    && u.WarehouseId == o.FromWarehouseId))
+            .Select(o => new { o.FromWarehouseId, o.ToWarehouseId }).SingleOrDefaultAsync();
+        if (context == null) return (false, "Lệnh không thuộc kho làm việc của bạn.");
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        foreach (var warehouseId in new[] { context.FromWarehouseId, context.ToWarehouseId }.Distinct().Order())
+            await commitments.LockWarehouseAsync(warehouseId);
         var order = await SourceOrderForUpdate(orderId, userId).SingleOrDefaultAsync();
         if (order is null)
             return (false, "Lệnh không thuộc kho nguồn của bạn.");
@@ -262,6 +269,7 @@ public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService
         dispatch.IsActivePicking = false;
         order.Status = "IN_PROGRESS";
         await SaveAsActorAsync(userId);
+        await SaveAsActorAsync(userId, () => commitments.AfterDispatchAsync(orderId));
         await transaction.CommitAsync();
         return (true, $"Đã xuất {items.Count} serial trên phiếu {dispatch.DispatchCode}.");
     }
@@ -290,11 +298,12 @@ public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService
         return (true, "Đã gỡ serial khỏi phiếu xuất.");
     }
 
-    private async Task SaveAsActorAsync(int userId)
+    private async Task SaveAsActorAsync(int userId, Func<Task>? sourceWork = null)
     {
         await db.Database.ExecuteSqlInterpolatedAsync($"EXEC sys.sp_set_session_context @key=N'ActorUserID', @value={userId}");
         try
         {
+            if (sourceWork != null) await sourceWork();
             await db.SaveChangesAsync();
         }
         finally
