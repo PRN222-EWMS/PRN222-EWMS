@@ -1,14 +1,14 @@
-@model PRN222_EWMS_Web.ViewModels.Purchasing.PoListViewModel
+﻿@model PRN222_EWMS_Web.ViewModels.Purchasing.PoListViewModel
 @{
     ViewData["Title"] = "Đơn mua hàng";
 }
 
-<div class="po-page">
+<div class="po-page order-workspace">
     <div class="workspace-heading">
         <div>
             <p class="eyebrow">MUA HÀNG & TIẾP NHẬN</p>
             <h1>Đơn mua hàng</h1>
-            <p class="muted">Theo dõi và giám sát tiến độ thực hiện đơn mua hàng từ nhà cung cấp về các kho.</p>
+            <p class="muted">Theo dõi số lượng đã nhận, còn chờ và đã đóng.</p>
         </div>
         @if (Model.CanCreateNew)
         {
@@ -70,12 +70,12 @@
                 <label for="Status">Trạng thái đơn</label>
                 <select id="Status" name="Status">
                     <option value="">-- Tất cả trạng thái --</option>
-                    <option value="DRAFT" selected="@(Model.Status == "DRAFT")">Bản nháp (DRAFT)</option>
-                    <option value="CONFIRMED" selected="@(Model.Status == "CONFIRMED")">Đã xác nhận (CONFIRMED)</option>
-                    <option value="PARTIALLY_RECEIVED" selected="@(Model.Status == "PARTIALLY_RECEIVED")">Đang nhận một phần (PARTIALLY_RECEIVED)</option>
-                    <option value="RECEIVED" selected="@(Model.Status == "RECEIVED")">Đã nhận đủ (RECEIVED)</option>
-                    <option value="CLOSED" selected="@(Model.Status == "CLOSED")">Đã đóng đơn (CLOSED)</option>
-                    <option value="CANCELLED" selected="@(Model.Status == "CANCELLED")">Đã hủy (CANCELLED)</option>
+                    <option value="DRAFT" selected="@(Model.Status == "DRAFT")">Bản nháp</option>
+                    <option value="CONFIRMED" selected="@(Model.Status == "CONFIRMED")">Đã xác nhận</option>
+                    <option value="PARTIALLY_RECEIVED" selected="@(Model.Status == "PARTIALLY_RECEIVED")">Nhận một phần</option>
+                    <option value="RECEIVED" selected="@(Model.Status == "RECEIVED")">Đã nhận đủ</option>
+                    <option value="CLOSED" selected="@(Model.Status == "CLOSED")">Đã đóng đơn</option>
+                    <option value="CANCELLED" selected="@(Model.Status == "CANCELLED")">Đã hủy</option>
                 </select>
             </div>
 

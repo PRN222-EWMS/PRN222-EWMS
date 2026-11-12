@@ -4,44 +4,34 @@ using PRN222_EWMS_Web.ViewModels.Outbound;
 
 namespace PRN222_EWMS_Web.Services.Warehouse;
 
-public class OutboundSupplyService(EwmsDbContext db) : IOutboundSupplyService
+public class OutboundSupplyService(EwmsDbContext db, ISourceReservationService commitments) : IOutboundSupplyService
 {
     private static readonly string[] OpenOrders = ["SUBMITTED", "PARTIALLY_FULFILLED"];
     private static readonly string[] StocktakeLocks = ["COUNTING", "RECOUNTING", "REVIEWING", "PENDING_APPROVAL"];
 
-    public async Task LockWarehouseAsync(int warehouseId, CancellationToken ct = default)
-    {
-        RequireTransaction();
-        var resource = $"EWMS:WarehouseSupply:{warehouseId}";
-        await db.Database.ExecuteSqlInterpolatedAsync($@"
-            DECLARE @result int;
-            EXEC @result=sys.sp_getapplock @Resource={resource}, @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=15000;
-            IF @result<0 THROW 51260,N'Không lấy được quyền cập nhật nguồn hàng. Vui lòng thử lại.',1;", ct);
-        await db.SupplySources.FromSqlInterpolated($"SELECT * FROM dbo.SupplySource WITH (UPDLOCK,HOLDLOCK) WHERE WarehouseID={warehouseId}")
-            .AsNoTracking().Select(s => s.SupplySourceId).ToListAsync(ct);
-        await db.Reservations.FromSqlInterpolated($"SELECT * FROM dbo.Reservation WITH (UPDLOCK,HOLDLOCK) WHERE WarehouseID={warehouseId}")
-            .AsNoTracking().Select(r => r.ReservationId).ToListAsync(ct);
-    }
+    public Task LockWarehouseAsync(int warehouseId, CancellationToken ct = default) =>
+        commitments.LockWarehouseAsync(warehouseId, ct);
 
     public async Task ReconcileWarehouseAsync(int warehouseId, CancellationToken ct = default)
     {
-        await LockWarehouseAsync(warehouseId, ct);
-        var state = await LoadAsync(warehouseId, true, ct);
-        ReleaseUnpickedPlans(state);
-        UpdateShortages(state);
-        await db.SaveChangesAsync(ct);
+        await commitments.ReconcileWarehouseAsync(warehouseId, "Đối soát nguồn phục vụ xuất hàng.", ct);
+        await RefreshLegacyAsync(warehouseId, ct);
     }
 
     public async Task AfterInboundPostedAsync(long inboundId, CancellationToken ct = default)
     {
-        RequireTransaction();
-        var receipt = await db.Inbounds.AsNoTracking().Where(i => i.InboundId == inboundId)
-            .Select(i => new { i.Status, WarehouseId = i.PurchaseOrder.WarehouseId }).SingleOrDefaultAsync(ct)
-            ?? throw new InvalidOperationException("Không tìm thấy phiếu nhập để cập nhật nguồn hàng.");
-        if (receipt.Status != "DONE") throw new InvalidOperationException("Phiếu nhập chưa hoàn tất.");
-        // Incoming is a forecast, not an exclusive assignment to an SO. Received
-        // GOOD remains available until a warehouse operator actually selects it.
-        await ReconcileWarehouseAsync(receipt.WarehouseId, ct);
+        await commitments.AfterInboundAsync(inboundId, ct);
+        var warehouseId = await db.Inbounds.AsNoTracking().Where(i => i.InboundId == inboundId)
+            .Select(i => i.PurchaseOrder.WarehouseId).SingleAsync(ct);
+        await RefreshLegacyAsync(warehouseId, ct);
+    }
+
+    private async Task RefreshLegacyAsync(int warehouseId, CancellationToken ct)
+    {
+        var state = await LoadAsync(warehouseId, true, ct);
+        ReleaseUnpickedPlans(state);
+        UpdateShortages(state);
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task<OutboundSupplySnapshot> GetAvailabilityAsync(long salesOrderId, long? outboundId = null, CancellationToken ct = default)
@@ -74,32 +64,40 @@ public class OutboundSupplyService(EwmsDbContext db) : IOutboundSupplyService
             }
             var maxNow = Math.Min(remaining, budgets.Values.Sum());
             var incomingNeed = Math.Max(0, remaining - maxNow);
-            var breakdown = budgets.Where(pair => pair.Value > 0).Select(pair => new OutboundSourceBalanceDto(
-                pair.Key, SourceCode(sources[pair.Key]), "PHYSICAL", pair.Value, false)).ToList();
+            var planned = state.PlannedOrders.Contains(salesOrderId);
+            var ownHolds = Active(state).Where(r => r.SolineId == line.SolineId).ToList();
+            var breakdown = state.Sources.Where(source => source.ProductId == line.ProductId && IsPhysical(source))
+                .Select(source => new OutboundSourceBalanceDto(source.SupplySourceId, SourceCode(source), "PHYSICAL",
+                    planned ? ownHolds.Where(r => r.SupplySourceId == source.SupplySourceId).Sum(Balance) : budgets.GetValueOrDefault(source.SupplySourceId),
+                    false, budgets.GetValueOrDefault(source.SupplySourceId), source.SourceType, source.AvailableFrom))
+                .Where(source => source.Balance > 0).ToList();
             var incoming = 0L;
             foreach (var source in ForecastSources(state, line).OrderBy(s => s.AvailableFrom).ThenBy(s => s.SupplySourceId))
             {
-                var take = Math.Min(incomingNeed - incoming, IncomingCapacity(source));
+                var take = planned ? IncomingForOrder(state, source, salesOrderId)
+                    : Math.Min(incomingNeed - incoming, IncomingForOrder(state, source, salesOrderId));
                 if (take <= 0) continue;
-                breakdown.Add(new OutboundSourceBalanceDto(source.SupplySourceId, SourceCode(source), "INCOMING", take, false));
+                breakdown.Add(new OutboundSourceBalanceDto(source.SupplySourceId, SourceCode(source), "INCOMING", take, false, 0, source.SourceType, source.AvailableFrom));
                 incoming += take;
             }
             var pickedLine = selected.Count(i => i.SolineId == line.SolineId);
             lines.Add(new OutboundLineProgressDto
             {
+                HasSourcePlan = planned,
                 SolineId = line.SolineId, ProductId = line.ProductId, ProductCode = line.Product.ProductCode,
                 ProductName = line.Product.ProductName, Model = line.Product.Model, Unit = line.Product.Unit,
                 RequestedQuantity = line.RequestedQuantity, CancelledQuantity = line.CancelledQuantity,
                 DoneQuantity = state.Issued.GetValueOrDefault(line.SolineId), RemainingQuantity = remaining,
-                ReservedBalance = state.Claims.LongCount(c => c.SalesOrderId == salesOrderId && c.ProductId == line.ProductId),
-                PhysicalReservedBalance = state.Claims.LongCount(c => c.SalesOrderId == salesOrderId && c.ProductId == line.ProductId),
-                IncomingReservedBalance = incoming, ShortageQuantity = Math.Max(0, remaining - maxNow - incoming),
+                ReservedBalance = planned ? ownHolds.Sum(Balance) : state.Claims.LongCount(c => c.SalesOrderId == salesOrderId && c.ProductId == line.ProductId),
+                PhysicalReservedBalance = planned ? ownHolds.Where(r => r.SupplyState == "PHYSICAL").Sum(Balance) : state.Claims.LongCount(c => c.SalesOrderId == salesOrderId && c.ProductId == line.ProductId),
+                IncomingReservedBalance = incoming, ShortageQuantity = Math.Max(0, remaining - (planned ? ownHolds.Sum(Balance) : maxNow + incoming)),
                 FallbackAvailableQuantity = 0, MaxIssueNow = maxNow, InThisReceiptCount = pickedLine, Sources = breakdown
             });
             var eligible = candidates.Where(s => s.ProductId == line.ProductId && budgets.GetValueOrDefault(s.CurrentSupplySourceId!.Value) > 0)
                 .OrderBy(s => s.ManufacturingYear ?? short.MaxValue).ThenBy(s => s.ManufacturingMonth ?? byte.MaxValue)
                 .ThenBy(s => s.OriginalInbound?.PurchaseOrder.OrderDate ?? DateOnly.MaxValue).ThenBy(s => s.SerialItemId).ToList();
-            var priority = eligible.FirstOrDefault(s => !selectedIds.Contains(s.SerialItemId));
+            var priority = eligible.FirstOrDefault(s => !selectedIds.Contains(s.SerialItemId) && pickedLine < maxNow
+                && selected.LongCount(i => i.SolineId == line.SolineId && i.SourceAtIssueId == s.CurrentSupplySourceId) < budgets[s.CurrentSupplySourceId!.Value]);
             foreach (var serial in eligible)
             {
                 var sourceId = serial.CurrentSupplySourceId!.Value;
@@ -138,6 +136,8 @@ public class OutboundSupplyService(EwmsDbContext db) : IOutboundSupplyService
             throw new InvalidOperationException("Nguồn GOOD đang được phiên khác lấy hoặc không còn đủ số lượng cho phiếu này.");
         var existing = Active(state).Where(r => r.SolineId == lineId && r.SupplySourceId == sourceId).Sum(Balance);
         var additional = Math.Max(0, minimumBalance - existing);
+        if (additional > 0 && state.PlannedOrders.Contains(salesOrderId))
+            throw new InvalidOperationException("Nguồn này chưa được Sales phân bổ cho SO. Cần xác nhận thay nguồn trước khi lấy serial.");
         if (additional > 0)
         {
             var reservation = new Reservation
@@ -169,9 +169,11 @@ public class OutboundSupplyService(EwmsDbContext db) : IOutboundSupplyService
         IQueryable<Reservation> reservationQuery = db.Reservations.Where(r => r.WarehouseId == warehouseId);
         IQueryable<SalesOrderLine> lineQuery = db.SalesOrderLines.Where(l => l.SalesOrder.WarehouseId == warehouseId);
         if (!tracking) { sourceQuery = sourceQuery.AsNoTracking(); reservationQuery = reservationQuery.AsNoTracking(); lineQuery = lineQuery.AsNoTracking(); }
-        var sources = await sourceQuery.Include(s => s.Poline).ThenInclude(l => l!.PurchaseOrder)
+        var sources = await sourceQuery.Include(s => s.Poline).ThenInclude(l => l!.PurchaseOrder).ThenInclude(p => p.Supplier)
             .Include(s => s.Inbound).ThenInclude(i => i!.PurchaseOrder).Include(s => s.ReturnReceipt)
-            .Include(s => s.TransferReceipt).Include(s => s.Adjustment).AsSplitQuery().ToListAsync(ct);
+            .Include(s => s.TransferReceipt).Include(s => s.Adjustment)
+            .Include(s => s.IncomingTransferLine).ThenInclude(l => l!.TransferOrder).ThenInclude(o => o.FromWarehouse)
+            .AsSplitQuery().ToListAsync(ct);
         var reservations = await reservationQuery.ToListAsync(ct);
         var lines = await lineQuery.Include(l => l.Product).Include(l => l.SalesOrder).ToListAsync(ct);
         var serials = await db.SerialItems.AsNoTracking().Where(s => s.CurrentWarehouseId == warehouseId
@@ -180,16 +182,20 @@ public class OutboundSupplyService(EwmsDbContext db) : IOutboundSupplyService
             .Include(s => s.Product).Include(s => s.OriginalInbound).ThenInclude(i => i!.PurchaseOrder).AsSplitQuery().ToListAsync(ct);
         var claims = await db.PickingClaims.AsNoTracking().Where(c => c.SerialItem.CurrentWarehouseId == warehouseId)
             .Select(c => new SourceClaim(c.SerialItemId, c.SerialItem.CurrentSupplySourceId ?? 0, c.SerialItem.ProductId,
-                c.OutboundId, c.DispatchId, c.Outbound == null ? null : c.Outbound.SalesOrderId)).ToListAsync(ct);
+                c.OutboundId, c.DispatchId, c.Outbound == null ? null : c.Outbound.SalesOrderId,
+                c.Dispatch == null ? null : (long?)c.Dispatch.TransferOrderId)).ToListAsync(ct);
         var issued = await db.OutboundItems.AsNoTracking().Where(i => i.Outbound.SalesOrder.WarehouseId == warehouseId && i.IsActive && i.Outbound.Status == "DONE")
             .GroupBy(i => i.SolineId).Select(g => new { Id = g.Key, Count = g.LongCount() }).ToDictionaryAsync(g => g.Id, g => g.Count, ct);
         var locations = await db.StorageLocations.AsNoTracking().Where(l => l.WarehouseId == warehouseId).ToListAsync(ct);
-        return new SupplyState(sources, reservations, lines, serials, claims, issued, locations);
+        var plannedOrders = (await db.SalesOrderSourcePlans.AsNoTracking()
+            .Where(p => p.SalesOrderLine.SalesOrder.WarehouseId == warehouseId)
+            .Select(p => p.SalesOrderLine.SalesOrderId).Distinct().ToListAsync(ct)).ToHashSet();
+        return new SupplyState(sources, reservations, lines, serials, claims, issued, locations, plannedOrders);
     }
 
     private static void ReleaseUnpickedPlans(SupplyState state)
     {
-        foreach (var group in Active(state).Where(r => r.SolineId.HasValue).GroupBy(r => new { r.SolineId, r.SupplySourceId }).ToList())
+        foreach (var group in Active(state).Where(r => r.SolineId.HasValue && !state.PlannedOrders.Contains(r.SalesOrderId ?? 0)).GroupBy(r => new { r.SolineId, r.SupplySourceId }).ToList())
         {
             var line = state.Lines.SingleOrDefault(l => l.SolineId == group.Key.SolineId);
             var needed = line is null ? 0L : state.Claims.LongCount(c => c.SalesOrderId == line.SalesOrderId
@@ -207,15 +213,23 @@ public class OutboundSupplyService(EwmsDbContext db) : IOutboundSupplyService
 
     private static long CapacityForOrder(SupplyState state, SupplySource source, long salesOrderId)
     {
-        var capacity = PhysicalCapacity(state, source);
-        var transferHeld = Active(state).Where(r => r.SupplySourceId == source.SupplySourceId
-            && (r.TransferOrderId.HasValue || r.TransferLineId.HasValue)).Sum(Balance);
-        var dispatchClaims = state.Claims.LongCount(c => c.SupplySourceId == source.SupplySourceId && c.DispatchId.HasValue);
-        var otherSalesClaims = state.Claims.LongCount(c => c.SupplySourceId == source.SupplySourceId && !c.DispatchId.HasValue
-            && c.SalesOrderId != salesOrderId);
-        // Transfer claims already belong to transfer reservations: take the maximum,
-        // not their sum. Other outbound claims are separate physical commitments.
-        return Math.Max(0, capacity - Math.Max(transferHeld, dispatchClaims) - otherSalesClaims);
+        var others = Active(state).Where(r => r.SupplySourceId == source.SupplySourceId && r.SalesOrderId != salesOrderId).ToList();
+        var claims = state.Claims.Where(c => c.SupplySourceId == source.SupplySourceId && c.SalesOrderId != salesOrderId).ToList();
+        var covered = claims.GroupBy(c => (c.SalesOrderId, c.TransferOrderId)).Sum(g => Math.Min((long)g.Count(),
+            others.Where(r => r.SalesOrderId == g.Key.SalesOrderId && r.TransferOrderId == g.Key.TransferOrderId).Sum(Balance)));
+        var capacity = Math.Max(0, PhysicalCapacity(state, source) - others.Sum(Balance) - Math.Max(0, claims.Count-covered));
+        return state.PlannedOrders.Contains(salesOrderId)
+            ? Math.Min(capacity, Active(state).Where(r => r.SupplySourceId == source.SupplySourceId && r.SalesOrderId == salesOrderId).Sum(Balance))
+            : capacity;
+    }
+
+    private static long IncomingForOrder(SupplyState state, SupplySource source, long salesOrderId)
+    {
+        var capacity = Math.Max(0, IncomingCapacity(source)-Active(state)
+            .Where(r => r.SupplySourceId == source.SupplySourceId && r.SalesOrderId != salesOrderId).Sum(Balance));
+        return state.PlannedOrders.Contains(salesOrderId)
+            ? Math.Min(capacity, Active(state).Where(r => r.SupplySourceId == source.SupplySourceId && r.SalesOrderId == salesOrderId).Sum(Balance))
+            : capacity;
     }
 
     private static void UpdateShortages(SupplyState state)
@@ -229,9 +243,10 @@ public class OutboundSupplyService(EwmsDbContext db) : IOutboundSupplyService
                     foreach (var line in group) line.SalesOrder.HasShortage = false;
                 continue;
             }
-            var shortage = group.Any(line => Remaining(state, line) > state.Sources
-                .Where(s => s.ProductId == line.ProductId && IsPhysical(s)).Sum(s => CapacityForOrder(state, s, line.SalesOrderId))
-                + ForecastSources(state, line).Sum(IncomingCapacity));
+            var shortage = group.Any(line => Remaining(state, line) > (state.PlannedOrders.Contains(line.SalesOrderId)
+                ? Active(state).Where(r => r.SolineId == line.SolineId).Sum(Balance)
+                : state.Sources.Where(s => s.ProductId == line.ProductId && IsPhysical(s)).Sum(s => CapacityForOrder(state, s, line.SalesOrderId))
+                    + ForecastSources(state, line).Sum(s => IncomingForOrder(state, s, line.SalesOrderId))));
             foreach (var line in group) line.SalesOrder.HasShortage = shortage;
         }
     }
@@ -248,24 +263,12 @@ public class OutboundSupplyService(EwmsDbContext db) : IOutboundSupplyService
     private static long Balance(Reservation reservation) => Math.Max(0, (long)reservation.ReservedQuantity - reservation.ConsumedQuantity - reservation.ReleasedQuantity);
     private static IEnumerable<Reservation> Active(SupplyState state) => state.Reservations.Where(r => r.Status == "ACTIVE" && Balance(r) > 0);
     private static long Remaining(SupplyState state, SalesOrderLine line) => Math.Max(0, (long)line.RequestedQuantity - line.CancelledQuantity - state.Issued.GetValueOrDefault(line.SolineId));
-    private static bool IsPhysical(SupplySource source) => source.SupplyState == "PHYSICAL" && source.ItemCondition == "GOOD" && (source.SourceType switch
-    {
-        "INBOUND" => source.Inbound?.Status == "DONE", "RETURN" => source.ReturnReceipt?.Status == "DONE",
-        "TRANSFER_RECEIPT" or "TRANSFER" => source.TransferReceipt?.Status == "DONE",
-        "ADJUSTMENT" => source.Adjustment?.Status == "APPLIED", _ => false
-    });
+    private static bool IsPhysical(SupplySource source) => SourceReservationService.IsPhysical(source);
     private static long PhysicalCapacity(SupplyState state, SupplySource source) => Math.Max(0,
         Math.Min(Math.Min(source.RemainingQuantity, source.EligibleQuantity), state.Serials.LongCount(s => s.CurrentSupplySourceId == source.SupplySourceId && s.ProductId == source.ProductId)));
-    private static long IncomingCapacity(SupplySource source) => source.SupplyState == "INCOMING" && source.ItemCondition == "GOOD"
-        && source.Poline?.PurchaseOrder.Status is "CONFIRMED" or "PARTIALLY_RECEIVED"
+    private static long IncomingCapacity(SupplySource source) => SourceReservationService.IsIncoming(source)
         ? Math.Max(0, Math.Min(source.RemainingQuantity, source.EligibleQuantity)) : 0;
-    private static string SourceCode(SupplySource source) => source.SupplyState == "INCOMING" ? "Chờ PO " + (source.Poline?.PurchaseOrder.Pocode ?? $"#{source.PolineId}") : source.SourceType switch
-    {
-        "INBOUND" => $"Nhập {source.Inbound?.ReceiptCode} · PO {source.Inbound?.PurchaseOrder.Pocode}",
-        "RETURN" => $"Nhận trả {source.ReturnReceipt?.ReceiptCode}",
-        "TRANSFER_RECEIPT" or "TRANSFER" => $"Nhận chuyển {source.TransferReceipt?.ReceiptCode}",
-        "ADJUSTMENT" => $"Điều chỉnh {source.Adjustment?.AdjustmentCode}", _ => $"Nguồn #{source.SupplySourceId}"
-    };
+    private static string SourceCode(SupplySource source) => SourceReservationService.Label(source);
 
     private async Task<LocationLocks> GetLocksAsync(int warehouseId, CancellationToken ct)
     {
@@ -296,9 +299,9 @@ public class OutboundSupplyService(EwmsDbContext db) : IOutboundSupplyService
     {
         if (db.Database.CurrentTransaction is null) throw new InvalidOperationException("Cập nhật nguồn hàng phải nằm trong transaction.");
     }
-    private sealed record SourceClaim(long SerialItemId, long SupplySourceId, int ProductId, long? OutboundId, long? DispatchId, long? SalesOrderId);
+    private sealed record SourceClaim(long SerialItemId, long SupplySourceId, int ProductId, long? OutboundId, long? DispatchId, long? SalesOrderId, long? TransferOrderId);
     private sealed record SupplyState(List<SupplySource> Sources, List<Reservation> Reservations, List<SalesOrderLine> Lines,
-        List<SerialItem> Serials, List<SourceClaim> Claims, Dictionary<long, long> Issued, List<StorageLocation> Locations);
+        List<SerialItem> Serials, List<SourceClaim> Claims, Dictionary<long, long> Issued, List<StorageLocation> Locations, HashSet<long> PlannedOrders);
     private sealed record LocationLocks(bool Whole, bool Awaiting, HashSet<int> Roots, Dictionary<int, StorageLocation> Locations)
     {
         public bool Blocks(int? id)
