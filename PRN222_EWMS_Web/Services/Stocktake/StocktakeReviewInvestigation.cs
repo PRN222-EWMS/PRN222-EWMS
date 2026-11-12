@@ -30,9 +30,12 @@ public partial class StocktakeReviewService
             // One whole-warehouse investigation at a time. Its child plan is the ordinary stocktake lock contract.
             var investigationIds = (await repo.InvestigationsAsync(null, token)).Where(i => i.ClosedAt == null)
                 .Select(i => i.InvestigationStocktakeId).ToList();
-            if (await repo.Query<StocktakePlan>().AnyAsync(s => s.WarehouseId == warehouseId
-                    && investigationIds.Contains(s.StocktakeId) && s.Status != "CANCELLED" && s.Status != "COMPLETED", token))
-                throw new StocktakeWorkflowException("Kho đã có yêu cầu đối soát toàn kho chưa kết luận.");
+            var openInvestigationCode = await repo.Query<StocktakePlan>()
+                .Where(s => s.WarehouseId == warehouseId && investigationIds.Contains(s.StocktakeId)
+                    && s.Status != "CANCELLED" && s.Status != "COMPLETED")
+                .OrderBy(s => s.StocktakeId).Select(s => s.StocktakeCode).FirstOrDefaultAsync(token);
+            if (openInvestigationCode is not null)
+                throw new StocktakeWorkflowException($"Kho đã có nhiệm vụ đối soát {openInvestigationCode} chưa kết luận.");
             var rounds = await repo.Query<StocktakeRound>().AsNoTracking().Where(r => r.StocktakeId == parent.StocktakeId).ToListAsync(token);
             var recounts = await repo.Query<StocktakeRecountRequest>().AsNoTracking().Where(r => r.StocktakeId == parent.StocktakeId).ToListAsync(token);
             var observations = await repo.Query<StocktakeObservation>().AsNoTracking().Where(o => o.StocktakeId == parent.StocktakeId).ToListAsync(token);
@@ -45,11 +48,27 @@ public partial class StocktakeReviewService
                     .SelectMany(i => i.StillMissingObservationIds).ToHashSet();
                 var applied = await repo.Query<InventoryAdjustmentLine>().Where(l => l.StocktakeId == parent.StocktakeId
                     && l.IsActive && l.Adjustment.Status == "APPLIED").Select(l => l.ScannedSerial).ToListAsync(token);
-                var eligible = effective.Where(o => CanSearchShortage(o, rounds, recounts)
+                var eligible = effective.Where(o => CanSearchShortage(o)
                     && !confirmed.Contains(o.ObservationId) && !applied.Contains(o.ScannedSerial, StringComparer.OrdinalIgnoreCase))
                     .Where(o => shortageIds.Contains(o.ObservationId)).ToList();
                 if (eligible.Count != shortageIds.Count)
-                    throw new StocktakeWorkflowException("Chỉ tìm toàn kho các serial còn thiếu sau vòng đếm lại đã gửi.");
+                    throw new StocktakeWorkflowException("Chỉ tìm toàn kho các serial đang báo thiếu trong kết quả kiểm kê đã gửi.");
+                var conflict = await repo.Query<StocktakePlan>().AsNoTracking()
+                    .Where(s => s.WarehouseId == warehouseId && s.StocktakeId != parent.StocktakeId
+                        && StocktakeScopeRules.LockedStatuses.Contains(s.Status))
+                    .OrderBy(s => s.StocktakeId).Select(s => s.StocktakeCode).FirstOrDefaultAsync(token);
+                if (conflict is not null)
+                    throw new StocktakeWorkflowException($"Kho đang có đợt kiểm kê khóa phạm vi {conflict}. Hãy xử lý đợt đó trước khi giao tìm toàn kho.");
+                var locations = await LocationsAsync(warehouseId, token);
+                var scopes = await repo.Query<StocktakeScope>().AsNoTracking()
+                    .Where(s => s.StocktakeId == parent.StocktakeId).ToListAsync(token);
+                var assignments = await repo.Query<StocktakeAssignment>().AsNoTracking()
+                    .Where(a => a.StocktakeId == parent.StocktakeId).ToListAsync(token);
+                var targetSerials = eligible.Select(o => o.ScannedSerial).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var initialCounts = observations.Where(o => o.RoundNumber == 1 && targetSerials.Contains(o.ScannedSerial));
+                if (CountedPreviously(input.AssignedToUserId, initialCounts, recounts, rounds, assignments,
+                    StocktakeScopeRules.PlanLocations(parent, scopes, locations), locations))
+                    throw new StocktakeWorkflowException("Hãy giao tìm cho nhân viên khác người phụ trách đếm lần đầu của các serial đã chọn.");
                 var serialIds = eligible.Select(o => o.SerialItemId!.Value).ToArray();
                 var stock = await repo.Query<SerialItem>().AsNoTracking()
                     .Where(s => serialIds.Contains(s.SerialItemId)).ToDictionaryAsync(s => s.SerialItemId, token);
@@ -158,12 +177,9 @@ public partial class StocktakeReviewService
         }, ct);
     }
 
-    private static bool CanSearchShortage(StocktakeObservation row, List<StocktakeRound> rounds,
-        List<StocktakeRecountRequest> requests) =>
+    private static bool CanSearchShortage(StocktakeObservation row) =>
         row.DifferenceType == "MISSING" && row.ExpectedQuantity == 1 && row.ActualQuantity == 0
-        && row.ReviewStatus != "RESOLVED" && row.SerialItemId.HasValue && row.ProductId.HasValue
-        && rounds.Any(r => r.RoundNumber == row.RoundNumber && r.Status == "CLOSED"
-            && requests.Any(request => request.ResultRoundId == r.RoundId && request.Status == "SUBMITTED"));
+        && row.ReviewStatus != "RESOLVED" && row.SerialItemId.HasValue && row.ProductId.HasValue;
 }
 
 internal static class StocktakeUnknownSerialRules
