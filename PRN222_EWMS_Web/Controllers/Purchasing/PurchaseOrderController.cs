@@ -202,28 +202,6 @@ public class PurchaseOrderController(
         return RedirectToAction(nameof(Details), new { id });
     }
 
-    // =========================================================================
-    // 6. ĐÓNG SỐ LƯỢNG CÒN LẠI (CLOSE REMAINDER)
-    // =========================================================================
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CloseRemainder(CloseRemainderRequestDto request)
-    {
-        if (string.IsNullOrWhiteSpace(request.Reason))
-        {
-            TempData["ErrorMessage"] = "Vui lòng nhập lý do đóng số lượng còn lại.";
-            return RedirectToAction(nameof(Details), new { id = request.PurchaseOrderId });
-        }
-
-        var (success, message) = await poService.CloseRemainderAsync(request.PurchaseOrderId, request.Reason, CurrentUserId, CurrentUserRole);
-
-        if (success)
-            TempData["SuccessMessage"] = message;
-        else
-            TempData["ErrorMessage"] = message;
-
-        return RedirectToAction(nameof(Details), new { id = request.PurchaseOrderId });
-    }
 
     // =========================================================================
     // 6.1. HỦY ĐƠN MUA HÀNG (CANCEL PO)

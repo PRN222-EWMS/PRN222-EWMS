@@ -11,7 +11,6 @@ public interface IPurchaseOrderService
     Task<(bool Success, string Message, long PoId)> CreateOrderAsync(PoFormViewModel model, bool confirmNow, int actorId);
     Task<(bool Success, string Message)> UpdateOrderAsync(long id, PoFormViewModel model, int actorId, string role);
     Task<(bool Success, string Message)> ConfirmOrderAsync(long id, int actorId, string role);
-    Task<(bool Success, string Message)> CloseRemainderAsync(long id, string reason, int actorId, string role);
     Task<(bool Success, string Message)> CancelOrderAsync(long id, int actorId, string role, string? reason = null);
     Task<List<ProductLookupDto>> GetProductsBySupplierAsync(int supplierId);
     Task<bool> IsPoCodeDuplicateAsync(string poCode);

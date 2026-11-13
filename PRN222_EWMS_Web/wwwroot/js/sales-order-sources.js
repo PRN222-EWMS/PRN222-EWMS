@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try { initial = JSON.parse(document.getElementById('initialSourcesJson')?.textContent || '[]'); }
     catch { /* Server validation remains authoritative if form metadata cannot be read. */ }
     const key = source => source.supplySourceId > 0 ? `S:${source.supplySourceId}` : `T:${source.transferLineId}`;
+    const isAvailable = source => source?.canSelect && source.availableQuantity > 0;
     const rows = () => Array.from(body.children).filter(row => row.tagName === 'TR');
     const productId = row => Number(row.querySelector('.product-select')?.value || row.dataset.productId || 0);
     const demand = row => Number(row.querySelector('.qty-input')?.value || 0);
@@ -53,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function render(row) {
         const entry = state.get(row);
-        const options = catalog.filter(s => s.productId === productId(row));
+        const options = catalog.filter(s => s.productId === productId(row) && isAvailable(s));
         entry.list.replaceChildren();
         entry.add.disabled = !ready || !productId(row);
         entry.empty.hidden = entry.choices.length > 0;
@@ -64,13 +65,11 @@ document.addEventListener('DOMContentLoaded', () => {
             select.append(new Option('-- Chọn nguồn --', ''));
             options.forEach(option => {
                 const optionKey = key(option);
+                if (optionKey !== choice.key && entry.choices.some((c, i) => i !== index && c.key === optionKey)) return;
                 const item = new Option(describe(option), optionKey, false, optionKey === choice.key);
-                item.disabled = optionKey !== choice.key && (!option.canSelect || entry.choices.some((c, i) => i !== index && c.key === optionKey));
                 select.append(item);
             });
-            if (choice.key && !options.some(option => key(option) === choice.key))
-                select.append(new Option('Nguồn đã chọn không còn khả dụng', choice.key, true, true));
-            select.value = choice.key;
+            select.value = options.some(option => key(option) === choice.key) ? choice.key : '';
             const quantity = element('input', 'form-control form-control-sm sales-source-quantity');
             quantity.type = 'number'; quantity.min = '1'; quantity.max = '2147483647'; quantity.step = '1';
             quantity.value = choice.quantity;
@@ -119,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
             wrapper.querySelector('.sales-source-quantity').name = `Lines[${lineIndex}].Sources[${index}].Quantity`;
             const qty = Number(choice.quantity);
             total += Number.isFinite(qty) ? qty : 0;
-            if (!option?.canSelect) message = 'Nguồn không còn đủ điều kiện. Chọn lại nguồn.';
+            if (!isAvailable(option)) message = 'Nguồn không còn đủ điều kiện. Chọn lại nguồn.';
             else if (!Number.isInteger(qty) || qty <= 0 || qty > option.availableQuantity) message = `Nhập số nguyên từ 1 đến ${option.availableQuantity}.`;
             if (used.has(choice.key)) message = 'Nguồn bị chọn trùng.';
             used.add(choice.key);

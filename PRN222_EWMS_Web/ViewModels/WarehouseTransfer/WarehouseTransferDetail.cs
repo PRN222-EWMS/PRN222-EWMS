@@ -14,6 +14,7 @@ public class WarehouseTransferDetail
     public List<TransferProgressRow> Lines { get; set; } = [];
     public List<WarehouseTransferDocument> Documents { get; set; } = [];
     public List<string> IncomingSerials { get; set; } = [];
+    public List<ReceiptSerialOption> ReceiptSerialOptions { get; set; } = [];
     public List<DispatchSerialOption> DispatchSerialOptions { get; set; } = [];
     public Dictionary<int, string> PickLocations { get; set; } = [];
     public bool IsDispatchQuantityCovered { get; set; }
@@ -22,6 +23,12 @@ public class WarehouseTransferDetail
 public record DispatchSerialOption(string ProductCode, string ProductName, string Location, string SerialNumber,
     byte? ManufacturingMonth, short? ManufacturingYear, string ItemCondition)
 {
+    public int ProductId { get; init; }
+    public long SupplySourceId { get; init; }
+    public int? LocationId { get; init; }
+    public string SourceCode { get; init; } = "";
+    public int LineRemaining { get; init; }
+    public int SourceRemaining { get; init; }
     public string ManufacturingDateDisplay => (ManufacturingYear, ManufacturingMonth) switch
     {
         ({ } year, { } month) => $"{month:D2}/{year}",
@@ -32,7 +39,22 @@ public record DispatchSerialOption(string ProductCode, string ProductName, strin
 
 public record TransferProgressRow(
     string ProductCode, string ProductName, int Requested, int Cancelled,
-    int Dispatched, int Received, int InTransit);
+    int Dispatched, int Received, int InTransit)
+{
+    public int ProductId { get; init; }
+    public int Picking { get; init; }
+    public int ReadyToPick { get; init; }
+    public int RemainingToDispatch => Math.Max(0, Requested - Cancelled - Dispatched);
+}
+
+public record ReceiptSerialOption(string SerialNumber, string ProductCode, string ProductName,
+    string DispatchedCondition, byte? ManufacturingMonth, short? ManufacturingYear)
+{
+    public int ProductId { get; init; }
+    public string ManufacturingDateDisplay => ManufacturingYear.HasValue
+        ? ManufacturingMonth.HasValue ? $"{ManufacturingMonth.Value:D2}/{ManufacturingYear.Value}" : ManufacturingYear.Value.ToString()
+        : "Chưa có dữ liệu";
+}
 
 public record WarehouseTransferDocument(
     string Code, DateOnly Date, string Status, string? StaffName,
@@ -46,6 +68,7 @@ public record WarehouseTransferDocument(
 
 public record WarehouseTransferSerial(string ProductCode, string SerialNumber, string? Condition)
 {
+    public string ProductName { get; init; } = "";
     public long ItemId { get; init; }
     public int? LocationId { get; init; }
     public string? ConditionNote { get; init; }
