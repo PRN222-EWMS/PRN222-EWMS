@@ -43,7 +43,7 @@ public class ReturnReceiveRepository(EwmsDbContext db):IReturnReceiveRepository
   var received=await db.ReturnReceiptItems.Where(i=>i.ReturnOrderId==receipt.ReturnOrderId&&i.IsActive&&i.ReturnReceipt.Status=="DONE")
    .GroupBy(i=>i.ReturnLineId).Select(g=>new {Id=g.Key,Count=g.Count()}).ToDictionaryAsync(g=>g.Id,g=>g.Count);
   receipt.ReturnOrder.Status=receipt.ReturnOrder.CustomerReturnOrderLineReturnOrders.All(l=>received.GetValueOrDefault(l.ReturnLineId)>=l.RequestedQuantity-l.CancelledQuantity)?"RECEIVED":"PARTIALLY_RECEIVED";
-  db.Entry(receipt.ReturnOrder).Property(o=>o.Reason).IsModified=true;
+  db.Entry(receipt.ReturnOrder).Property(o=>o.Status).IsModified=true;
   await db.SaveChangesAsync();
  }
 }
