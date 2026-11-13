@@ -103,19 +103,28 @@ public class OutboundController : Controller
 
     [HttpGet]
     [Authorize(Roles = "WAREHOUSE_STAFF")]
-    public async Task<IActionResult> Picking(long id)
+    public async Task<IActionResult> Picking(long id, bool fragment = false)
     {
         var model = await _outboundService.GetPickingWorkbenchAsync(id, CurrentUserId);
 
         if (model == null)
         {
+            if (fragment) return NotFound(new { message = "Không tìm thấy phiếu hoặc tài khoản không còn quyền tại kho này." });
             TempData["Error"] = "Không tìm thấy phiên lấy hàng hoặc bạn không có quyền truy cập.";
             return RedirectToAction(nameof(Index));
         }
 
         if (model.Status is "DONE" or "CANCELLED")
+        {
+            if (fragment) return Conflict(new { redirectUrl = Url.Action(nameof(Details), new { id }) });
             return RedirectToAction(nameof(Details), new { id });
+        }
 
+        if (fragment)
+        {
+            ViewData["PickingFragment"] = true;
+            return PartialView("Picking", model);
+        }
         return View(model);
     }
 
@@ -126,16 +135,17 @@ public class OutboundController : Controller
     {
         var result = await _outboundService.ScanSerialAsync(outboundId, serialNumber, CurrentUserId, version ?? "");
 
-        if (!result.Success)
-        {
-            TempData["Error"] = result.Error;
-        }
-        else
-        {
-            TempData["Success"] = $"Đã thêm serial '{serialNumber.Trim()}' thành công!";
-        }
+        return SelectionResult(outboundId, result, "Đã thêm serial vào phiếu.");
+    }
 
-        return RedirectToAction(nameof(Picking), new { id = outboundId });
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [Authorize(Roles = "WAREHOUSE_STAFF")]
+    public async Task<IActionResult> ScanSerials(long outboundId, string[]? serialNumbers, string? version)
+    {
+        var numbers = serialNumbers ?? [];
+        var result = await _outboundService.ScanSerialsAsync(outboundId, numbers, CurrentUserId, version ?? "");
+        return SelectionResult(outboundId, result, $"Đã thêm {numbers.Length} serial vào phiếu.");
     }
 
     [HttpPost]
@@ -145,15 +155,15 @@ public class OutboundController : Controller
     {
         var result = await _outboundService.RemoveSerialAsync(outboundId, serialItemId, CurrentUserId, version ?? "");
 
-        if (!result.Success)
-        {
-            TempData["Error"] = result.Error;
-        }
-        else
-        {
-            TempData["Success"] = "Đã bỏ chọn serial.";
-        }
+        return SelectionResult(outboundId, result, "Đã bỏ chọn serial.");
+    }
 
+    private IActionResult SelectionResult(long outboundId, (bool Success, string? Error) result, string successMessage)
+    {
+        var message = result.Success ? successMessage : result.Error ?? "Không thể cập nhật phiếu. Hãy cập nhật lại danh sách.";
+        if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            return Json(new { success = result.Success, message });
+        TempData[result.Success ? "Success" : "Error"] = message;
         return RedirectToAction(nameof(Picking), new { id = outboundId });
     }
 

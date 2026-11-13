@@ -1,54 +1,145 @@
 ﻿@model PRN222_EWMS_Web.ViewModels.Outbound.PickingWorkbenchViewModel
 @{
-    ViewData["Title"] = "Xuất kho " + Model.IssueCode;
+    ViewData["Title"] = "Xuất kho " + Model.Socode;
+    if (ViewData["PickingFragment"] is true) { Layout = null; }
     var canAdd = Model.Lines.Any(line => line.CanPickMoreQuantity > 0);
     var invalidSelection = Model.Lines.Any(line => line.InThisReceiptCount > line.MaxIssueNow);
     DateTime Local(DateTime value) => DateTime.SpecifyKind(value, DateTimeKind.Utc).AddHours(7);
 }
-<div class="outbound-page">
+<div class="outbound-page outbound-picking-page" data-outbound-workbench
+     data-refresh-url="@Url.Action("Picking", new { id = Model.OutboundId, fragment = true })"
+     data-version="@Model.Version" data-can-add="@canAdd.ToString().ToLowerInvariant()">
     <header class="workspace-heading">
-        <div><p class="eyebrow">PHIẾU XUẤT KHO</p><h1>@Model.IssueCode</h1><p class="muted mb-0">@Model.Socode · @Model.CustomerName · @Model.WarehouseName</p></div>
-        <div class="outbound-toolbar"><a asp-action="Index" class="workspace-button sales-button-secondary"><i class="bi bi-arrow-left me-2" aria-hidden="true"></i>Phiếu xuất kho</a><button type="button" class="workspace-button sales-button-danger" data-bs-toggle="modal" data-bs-target="#cancelPickingModal">Hủy phiếu</button><form asp-action="Complete" method="post" data-outbound-submit-once data-outbound-confirm="Xác nhận xuất @Model.TotalScanned serial trên phiếu @Model.IssueCode? Tồn kho sẽ giảm ngay."><input type="hidden" name="outboundId" value="@Model.OutboundId" /><input type="hidden" name="version" value="@Model.Version" /><button type="submit" class="workspace-button" disabled="@(Model.TotalScanned == 0 || invalidSelection)"><i class="bi bi-check-circle me-2" aria-hidden="true"></i>Hoàn tất xuất kho</button></form></div>
-    </header>
-    @if (invalidSelection) { <div class="outbound-notice outbound-notice-warning" role="alert">Hạn mức đã thay đổi. Kiểm tra lại các serial đã chọn trước khi xuất.</div> }
-    <section class="outbound-progress-section" aria-label="Hạn mức theo sản phẩm"><div class="row g-3">
-        @foreach (var line in Model.Lines)
-        {
-            <div class="col-md-6 col-xl-4"><article class="workspace-card p-3 h-100"><h2 class="h6 mb-1">@line.ProductCode</h2><p class="muted mb-3">@line.ProductName</p><dl class="row row-cols-2 g-3 mb-0"><div class="col"><dt class="small muted fw-normal">Còn phải xuất</dt><dd class="mb-0 fw-semibold">@line.RemainingQuantity</dd></div><div class="col"><dt class="small muted fw-normal">Có thể lấy ngay</dt><dd class="mb-0 fw-semibold text-primary">@line.MaxIssueNow</dd></div><div class="col"><dt class="small muted fw-normal">Đã chọn phiếu này</dt><dd class="mb-0 fw-semibold">@line.InThisReceiptCount</dd></div><div class="col"><dt class="small muted fw-normal">Còn chọn thêm</dt><dd class="mb-0 fw-semibold text-primary">@line.CanPickMoreQuantity</dd></div><div class="col"><dt class="small muted fw-normal">Hàng dự kiến về</dt><dd class="mb-0">@line.IncomingReservedBalance</dd></div><div class="col"><dt class="small muted fw-normal">Chưa có hàng để xuất</dt><dd class="mb-0">@Math.Max(0, line.RemainingQuantity - line.MaxIssueNow)</dd></div></dl>
-                <partial name="_SourceBalances" model="line" />
-            </article></div>
-        }
-    </div></section>
-    <div class="row g-4 outbound-work-grid">
-        <div class="col-lg-5"><section class="workspace-card p-4"><h2 class="h5 mb-3"><i class="bi bi-upc-scan text-primary me-2" aria-hidden="true"></i>Quét serial</h2>
-            @if (!canAdd) { <p class="muted">Không còn hạn mức chọn thêm trong đợt này.</p> }
-            <form asp-action="ScanSerial" method="post" id="scanSerialForm" data-outbound-submit-once><input type="hidden" name="outboundId" value="@Model.OutboundId" /><input type="hidden" name="version" value="@Model.Version" />
-                <partial name="_SerialCapture" model="@(new PRN222_EWMS_Web.ViewModels.Shared.SerialCaptureViewModel { SerialName = "serialNumber", MethodName = "captureMethod", HelpText = "Camera, ảnh tem hoặc máy quét barcode.", Hint = "Nhập serial và nhấn Enter để thêm." })" />
-                <button type="submit" class="workspace-button w-100 mt-3" disabled="@(!canAdd)"><i class="bi bi-plus-lg me-2" aria-hidden="true"></i>Thêm serial</button>
+        <div>
+            <p class="eyebrow">PHIẾU XUẤT KHO</p>
+            <h1>Xuất kho @Model.Socode</h1>
+            <p class="muted mb-1">@Model.CustomerName · @Model.WarehouseName</p>
+            <p class="outbound-document-reference mb-0">@Model.IssueCode</p>
+        </div>
+        <div class="outbound-toolbar" data-outbound-fragment="actions">
+            <a asp-action="Index" class="workspace-button sales-button-secondary"><i class="bi bi-arrow-left me-2" aria-hidden="true"></i>Phiếu xuất kho</a>
+            <button type="button" class="workspace-button sales-button-secondary" data-outbound-refresh><i class="bi bi-arrow-clockwise me-2" aria-hidden="true"></i>Cập nhật</button>
+            <button type="button" class="workspace-button sales-button-danger" data-bs-toggle="modal" data-bs-target="#cancelPickingModal">Hủy phiếu</button>
+            <form asp-action="Complete" method="post" data-outbound-submit-once data-outbound-confirm="Xác nhận xuất @Model.TotalScanned serial trên phiếu @Model.IssueCode? Tồn kho sẽ giảm ngay.">
+                <input type="hidden" name="outboundId" value="@Model.OutboundId" /><input type="hidden" name="version" value="@Model.Version" />
+                <button type="submit" class="workspace-button" disabled="@(Model.TotalScanned == 0 || invalidSelection)"><i class="bi bi-check-circle me-2" aria-hidden="true"></i>Hoàn tất xuất kho</button>
             </form>
-        </section></div>
-        <div class="col-lg-7"><section class="workspace-card p-0 overflow-hidden"><div class="p-3 border-bottom"><h2 class="h5 mb-0">Serial đã chọn <span class="outbound-badge outbound-badge-picking">@Model.TotalScanned</span></h2></div><div class="table-wrap"><table class="workspace-table outbound-selected-table"><thead><tr><th>Serial / Sản phẩm</th><th>Nguồn hàng</th><th>Đã chọn lúc</th><th></th></tr></thead><tbody>
-            @foreach (var item in Model.ScannedSerials.Where(serial => serial.IsActive))
-            {
-                <tr><td><strong class="font-monospace">@item.SerialNumber</strong><small class="d-block muted">@item.ProductCode · @item.ProductName</small></td><td><span class="small">@item.SourceCode</span>@if (!string.IsNullOrWhiteSpace(item.LocationPath)) { <small class="d-block muted">@item.LocationPath</small> }</td><td><small>@Local(item.ScannedAt).ToString("HH:mm dd/MM/yyyy")</small></td><td><form asp-action="RemoveSerial" method="post" data-outbound-submit-once><input type="hidden" name="outboundId" value="@Model.OutboundId" /><input type="hidden" name="serialItemId" value="@item.SerialItemId" /><input type="hidden" name="version" value="@Model.Version" /><button type="submit" class="btn btn-outline-danger btn-sm" aria-label="Bỏ chọn serial @item.SerialNumber"><i class="bi bi-trash" aria-hidden="true"></i></button></form></td></tr>
-            }
-            @if (Model.TotalScanned == 0) { <tr><td colspan="4" class="text-center muted py-5">Chưa chọn serial nào.</td></tr> }
-        </tbody></table></div></section></div>
+        </div>
+    </header>
+    <div id="outbound-work-message" class="outbound-notice" role="status" aria-live="polite" hidden></div>
+    <div data-outbound-fragment="alerts" hidden="@(!invalidSelection)">
+        @if (invalidSelection) { <div class="outbound-notice outbound-notice-warning" role="alert">Hạn mức đã thay đổi. Kiểm tra lại các serial đã chọn trước khi xuất.</div> }
     </div>
-    <section class="workspace-card p-0 overflow-hidden">
-        <header class="p-3 border-bottom"><div class="d-flex justify-content-between align-items-center flex-wrap gap-3"><h2 class="h5 mb-0"><i class="bi bi-geo-alt text-primary me-2" aria-hidden="true"></i>Gợi ý vị trí và serial</h2><div><label for="outbound-serial-search" class="visually-hidden">Tìm serial, sản phẩm, vị trí hoặc nguồn</label><input type="search" id="outbound-serial-search" class="form-control" maxlength="150" placeholder="Serial, vị trí hoặc nguồn hàng..." /></div></div>
-            @if (Model.Lines.Count > 1) { <div class="outbound-filters-bar mt-3" role="group" aria-label="Lọc gợi ý theo sản phẩm"><button type="button" class="outbound-filter-pill active" data-product-filter="ALL" aria-pressed="true">Tất cả sản phẩm</button>@foreach (var line in Model.Lines) { <button type="button" class="outbound-filter-pill" data-product-filter="@line.ProductId" aria-pressed="false">@line.ProductCode</button> }</div> }
-        </header>
-        <div class="table-wrap"><table class="workspace-table" id="suggestedSerialsTable"><thead><tr><th>Serial</th><th>Sản phẩm</th><th>Sản xuất</th><th>Vị trí lấy hàng</th><th>Nguồn hàng</th><th>Chọn</th></tr></thead><tbody>
-            @foreach (var item in Model.SuggestedSerials)
+    <section class="workspace-card outbound-line-overview" aria-label="Hạn mức theo sản phẩm" data-outbound-fragment="progress">
+        <div class="outbound-panel-heading"><h2 class="h5 mb-0">Hạn mức xuất theo sản phẩm</h2><span class="muted small">@Model.TotalScanned serial đã chọn</span></div>
+        <div class="table-wrap"><table class="workspace-table">
+            <thead><tr><th>Sản phẩm / nguồn</th><th>Còn phải xuất</th><th>Có thể lấy ngay</th><th>Đã chọn phiếu này</th><th>Còn chọn thêm</th><th>Chờ hàng về</th><th>Thiếu nguồn</th></tr></thead>
+            <tbody>
+            @foreach (var line in Model.Lines)
             {
-                var line = Model.Lines.FirstOrDefault(product => product.ProductId == item.ProductId);
-                var selectable = item.CanSelect && !item.IsAlreadyPickedInSession && line?.CanPickMoreQuantity > 0;
-                <tr class="suggested-serial-row @(item.IsAlreadyPickedInSession ? "outbound-picked-row" : item.IsPriority ? "outbound-priority-row" : "")" data-product-id="@item.ProductId" data-suggestion-search="@item.SerialNumber @item.ProductCode @item.ProductName @item.LocationPath @item.SourceCode"><td><strong class="font-monospace">@item.SerialNumber</strong>@if (item.IsPriority) { <span class="outbound-fifo-badge d-inline-flex mt-1"><i class="bi bi-star-fill me-1" aria-hidden="true"></i>Ưu tiên lấy</span> }</td><td><strong>@item.ProductCode</strong><small class="d-block muted">@item.ProductName</small></td><td><span class="outbound-mfg-chip">@item.MfgDateDisplay</span></td><td><span class="outbound-location-chip"><i class="bi bi-geo-alt me-1" aria-hidden="true"></i>@item.LocationPath</span></td><td><span class="small">@item.SourceCode</span></td><td>@if (item.IsAlreadyPickedInSession) { <span class="outbound-badge outbound-badge-draft">Đã chọn</span> } else { <button type="button" class="workspace-button sales-button-small btn-quick-pick" data-serial="@item.SerialNumber" disabled="@(!selectable)">Chọn lấy</button> }</td></tr>
+                <tr>
+                    <td><strong>@line.ProductName</strong><small class="d-block muted">@line.ProductCode</small>
+                        <details class="outbound-source-details" data-source-details="@line.ProductId"><summary>Nguồn đã phân bổ (@line.Sources.Count)</summary><partial name="_SourceBalances" model="line" /></details>
+                    </td>
+                    <td>@line.RemainingQuantity</td><td class="text-primary fw-semibold">@line.MaxIssueNow</td><td class="fw-semibold">@line.InThisReceiptCount</td><td>@line.CanPickMoreQuantity</td><td>@line.IncomingReservedBalance</td><td class="@(line.ShortageQuantity > 0 ? "text-danger fw-semibold" : "")">@line.ShortageQuantity</td>
+                </tr>
             }
-            @if (Model.SuggestedSerials.Count == 0) { <tr><td colspan="6" class="text-center muted py-5">Chưa có serial đủ điều kiện để chọn.</td></tr> }
-        </tbody></table></div><p id="outbound-suggestions-empty" class="muted text-center p-3 mb-0 d-none" role="status">Không có serial phù hợp bộ lọc.</p>
+            </tbody>
+        </table></div>
     </section>
+    <div class="outbound-picking-grid">
+        <section class="workspace-card outbound-suggestions-panel" data-outbound-fragment="suggestions">
+            <form asp-action="ScanSerials" method="post" id="bulkPickForm" data-outbound-ajax data-outbound-batch>
+                <input type="hidden" name="outboundId" value="@Model.OutboundId" /><input type="hidden" name="version" value="@Model.Version" />
+                <header class="outbound-panel-heading">
+                    <div><h2 class="h5 mb-1"><i class="bi bi-geo-alt text-primary me-2" aria-hidden="true"></i>Vị trí và serial có thể lấy</h2><p class="muted small mb-0">Tích các serial cần lấy, sau đó thêm vào phiếu.</p></div>
+                    <div class="outbound-search-box"><label for="outbound-serial-search" class="visually-hidden">Tìm serial, sản phẩm, vị trí hoặc nguồn</label><input type="search" id="outbound-serial-search" class="form-control" maxlength="150" placeholder="Serial, sản phẩm, vị trí hoặc nguồn..." /></div>
+                </header>
+                @if (Model.Lines.Count > 1)
+                {
+                    <div class="outbound-filters-bar outbound-product-filters" role="group" aria-label="Lọc gợi ý theo sản phẩm">
+                        <button type="button" class="outbound-filter-pill active" data-product-filter="ALL" aria-pressed="true">Tất cả sản phẩm</button>
+                        @foreach (var line in Model.Lines) { <button type="button" class="outbound-filter-pill" data-product-filter="@line.ProductId" aria-pressed="false">@line.ProductCode</button> }
+                    </div>
+                }
+                <div class="outbound-bulk-toolbar">
+                    <label class="outbound-check-label" for="outbound-select-all"><input type="checkbox" id="outbound-select-all" />Tích tất cả trong hạn mức</label>
+                    <span class="muted small" id="outbound-checked-count" aria-live="polite">Chưa tích serial</span>
+                    <button type="submit" class="workspace-button sales-button-small" id="outbound-add-checked" disabled>Thêm vào phiếu <span data-checked-total>(0)</span></button>
+                </div>
+                <div class="table-wrap outbound-suggestion-scroll" data-outbound-scroll="suggestions">
+                    <table class="workspace-table" id="suggestedSerialsTable">
+                        <thead><tr><th class="outbound-check-column">Tích</th><th>Serial / sản phẩm</th><th>Vị trí lấy hàng</th><th>Sản xuất</th><th>Nguồn hàng</th></tr></thead><tbody>
+                        @foreach (var item in Model.SuggestedSerials)
+                        {
+                            var line = Model.Lines.FirstOrDefault(product => product.ProductId == item.ProductId);
+                            var sourceReady = line?.Sources.FirstOrDefault(source => source.SupplySourceId == item.SupplySourceId && source.SupplyState == "PHYSICAL")?.ReadyQuantity ?? 0;
+                            var sourcePicked = Model.ScannedSerials.Count(serial => serial.IsActive && serial.SourceAtIssueId == item.SupplySourceId);
+                            var sourceRemaining = Math.Max(0, sourceReady - sourcePicked);
+                            var selectable = item.CanSelect && !item.IsAlreadyPickedInSession && line?.CanPickMoreQuantity > 0 && sourceRemaining > 0;
+                            <tr class="suggested-serial-row @(item.IsAlreadyPickedInSession ? "outbound-picked-row" : item.IsPriority ? "outbound-priority-row" : "")"
+                                data-product-id="@item.ProductId" data-suggestion-search="@item.SerialNumber @item.ProductCode @item.ProductName @item.LocationPath @item.SourceCode">
+                                <td class="outbound-check-column">
+                                    @if (item.IsAlreadyPickedInSession) { <input type="checkbox" checked disabled aria-label="Serial @item.SerialNumber đã có trong phiếu" /> }
+                                    else
+                                    {
+                                        <input type="checkbox" name="serialNumbers" value="@item.SerialNumber" class="outbound-pick-check"
+                                               data-selectable="@selectable.ToString().ToLowerInvariant()" data-product-id="@item.ProductId"
+                                               data-source-id="@item.SupplySourceId" data-product-limit="@line?.CanPickMoreQuantity" data-source-limit="@sourceRemaining"
+                                               disabled="@(!selectable)" aria-label="Chọn serial @item.SerialNumber" />
+                                    }
+                                </td>
+                                <td><strong class="font-monospace">@item.SerialNumber</strong><small class="d-block muted">@item.ProductName</small>
+                                    @if (item.IsAlreadyPickedInSession) { <span class="outbound-badge outbound-badge-draft">Đã thêm</span> }
+                                    else if (item.IsPriority) { <span class="outbound-fifo-badge d-inline-flex mt-1"><i class="bi bi-star-fill me-1" aria-hidden="true"></i>Ưu tiên lấy</span> }
+                                </td>
+                                <td><span class="outbound-location-chip"><i class="bi bi-geo-alt me-1" aria-hidden="true"></i>@item.LocationPath</span></td>
+                                <td><span class="outbound-mfg-chip">@item.MfgDateDisplay</span></td>
+                                <td class="outbound-suggestion-source"><span class="small">@item.SourceCode</span></td>
+                            </tr>
+                        }
+                        @if (Model.SuggestedSerials.Count == 0) { <tr><td colspan="5" class="text-center muted py-4">Chưa có serial đủ điều kiện để chọn.</td></tr> }
+                        </tbody>
+                    </table>
+                </div>
+                <p id="outbound-suggestions-empty" class="muted text-center p-3 mb-0 d-none" role="status">Không có serial phù hợp bộ lọc.</p>
+            </form>
+        </section>
+        <aside class="outbound-picking-sidebar">
+            <section class="workspace-card outbound-scan-panel">
+                <h2 class="h5 mb-3"><i class="bi bi-upc-scan text-primary me-2" aria-hidden="true"></i>Quét hoặc nhập serial</h2>
+                <p class="muted small" data-outbound-scan-limit hidden="@canAdd">Đã chọn đủ hạn mức có thể lấy trong đợt này.</p>
+                <form asp-action="ScanSerial" method="post" id="scanSerialForm" data-outbound-ajax>
+                    <input type="hidden" name="outboundId" value="@Model.OutboundId" /><input type="hidden" name="version" value="@Model.Version" />
+                    <partial name="_SerialCapture" model="@(new PRN222_EWMS_Web.ViewModels.Shared.SerialCaptureViewModel { SerialName = "serialNumber", MethodName = "captureMethod", HelpText = "Dùng máy quét, camera hoặc ảnh tem.", Hint = "Nhập serial rồi nhấn Enter để thêm." })" />
+                    <button type="submit" class="workspace-button w-100 mt-3" data-outbound-scan-submit disabled="@(!canAdd)"><i class="bi bi-plus-lg me-2" aria-hidden="true"></i>Thêm serial</button>
+                </form>
+            </section>
+            <section class="workspace-card outbound-selected-panel" data-outbound-fragment="selected">
+                <div class="outbound-panel-heading"><h2 class="h5 mb-0">Đã chọn <span class="outbound-badge outbound-badge-picking">@Model.TotalScanned</span></h2></div>
+                <div class="table-wrap outbound-selected-scroll" data-outbound-scroll="selected"><table class="workspace-table outbound-selected-table">
+                    <thead><tr><th>Serial / sản phẩm</th><th>Vị trí / nguồn</th><th></th></tr></thead><tbody>
+                    @foreach (var item in Model.ScannedSerials.Where(serial => serial.IsActive))
+                    {
+                        <tr><td><strong class="font-monospace">@item.SerialNumber</strong><small class="d-block muted">@item.ProductName</small><small class="d-block muted">@Local(item.ScannedAt).ToString("HH:mm dd/MM/yyyy")</small></td>
+                            <td><span class="small">@item.LocationPath</span><small class="d-block muted outbound-source-ellipsis" title="@item.SourceCode">@item.SourceCode</small></td>
+                            <td><form asp-action="RemoveSerial" method="post" data-outbound-ajax><input type="hidden" name="outboundId" value="@Model.OutboundId" /><input type="hidden" name="serialItemId" value="@item.SerialItemId" /><input type="hidden" name="version" value="@Model.Version" /><button type="submit" class="btn btn-outline-danger btn-sm" aria-label="Bỏ chọn serial @item.SerialNumber"><i class="bi bi-trash" aria-hidden="true"></i></button></form></td>
+                        </tr>
+                    }
+                    @if (Model.TotalScanned == 0) { <tr><td colspan="3" class="text-center muted py-4">Chưa chọn serial nào.</td></tr> }
+                    </tbody>
+                </table></div>
+            </section>
+        </aside>
+    </div>
 </div>
-<div class="modal fade outbound-modal" id="cancelPickingModal" tabindex="-1" aria-labelledby="cancelPickingModalLabel" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h2 class="modal-title h5" id="cancelPickingModalLabel">Hủy phiếu @Model.IssueCode?</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button></div><div class="modal-body">Bỏ chọn @Model.TotalScanned serial và kết thúc phiếu này. Các serial chưa xuất được trả lại danh sách có thể chọn.</div><div class="modal-footer"><button type="button" class="workspace-button sales-button-secondary" data-bs-dismiss="modal">Giữ lại phiếu</button><form asp-action="CancelPicking" method="post" data-outbound-submit-once><input type="hidden" name="outboundId" value="@Model.OutboundId" /><input type="hidden" name="version" value="@Model.Version" /><button type="submit" class="workspace-button sales-button-danger">Xác nhận hủy</button></form></div></div></div></div>
+<div class="modal fade outbound-modal" id="cancelPickingModal" tabindex="-1" aria-labelledby="cancelPickingModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <div class="modal-header"><h2 class="modal-title h5" id="cancelPickingModalLabel">Hủy phiếu xuất kho?</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button></div>
+        <div class="modal-body">Bỏ các serial đang chọn và kết thúc phiếu @Model.IssueCode. Tồn kho chưa xuất giữ nguyên.</div>
+        <div class="modal-footer"><button type="button" class="workspace-button sales-button-secondary" data-bs-dismiss="modal">Giữ lại phiếu</button>
+            <form asp-action="CancelPicking" method="post" data-outbound-submit-once><input type="hidden" name="outboundId" value="@Model.OutboundId" /><input type="hidden" name="version" value="@Model.Version" /><button type="submit" class="workspace-button sales-button-danger">Xác nhận hủy</button></form>
+        </div>
+    </div></div>
+</div>
 @section Scripts { <partial name="_SerialCaptureScripts" /><script src="~/js/outbound.js" asp-append-version="true"></script> }

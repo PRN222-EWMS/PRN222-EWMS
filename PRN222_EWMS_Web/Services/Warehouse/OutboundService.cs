@@ -194,34 +194,83 @@ public class OutboundService(IOutboundRepository repo, IOutboundSupplyService su
     }
 
     public Task<(bool Success, string? Error)> ScanSerialAsync(long outboundId, string serialNumber, int userId, string version) =>
+        ScanSerialsAsync(outboundId, [serialNumber], userId, version);
+
+    public Task<(bool Success, string? Error)> ScanSerialsAsync(long outboundId, IReadOnlyCollection<string> serialNumbers, int userId, string version) =>
         ChangeAsync(outboundId, userId, version, async (outbound, order) =>
         {
             RequireOpenOrder(order);
-            if (string.IsNullOrWhiteSpace(serialNumber) || serialNumber.Trim().Length > 100) throw new OutboundRuleException("Vui lòng nhập mã serial hợp lệ, tối đa 100 ký tự.");
-            var serial = await repo.SerialForUpdateAsync(serialNumber.Trim()) ?? throw new OutboundRuleException("Không tìm thấy serial trong hệ thống.");
+            if (serialNumbers.Count is < 1 or > 1000)
+                throw new OutboundRuleException("Chọn từ 1 đến 1.000 serial mỗi lượt.");
+            var numbers = serialNumbers.Select(number => number?.Trim() ?? "").ToArray();
+            if (numbers.Any(number => number.Length is < 1 or > 100 || number.Any(char.IsControl)))
+                throw new OutboundRuleException("Serial phải dài 1–100 ký tự và không chứa ký tự điều khiển.");
+            if (numbers.Distinct(StringComparer.OrdinalIgnoreCase).Count() != numbers.Length)
+                throw new OutboundRuleException("Danh sách có serial trùng. Hãy kiểm tra lại lựa chọn.");
+
             var snapshot = await supply.GetAvailabilityAsync(order.SalesOrderId, outboundId);
-            var candidate = snapshot.Candidates.SingleOrDefault(c => c.SerialItemId == serial.SerialItemId);
-            if (candidate is null || !candidate.CanSelect) throw new OutboundRuleException("Serial không còn đủ điều kiện hoặc vượt hạn mức lấy hàng. Hãy tải lại gợi ý để kiểm tra nguồn và vị trí.");
-            var line = snapshot.Lines.SingleOrDefault(l => l.ProductId == serial.ProductId)
-                ?? throw new OutboundRuleException("Sản phẩm của serial không thuộc SO.");
-            if (line.CanPickMoreQuantity <= 0) throw new OutboundRuleException("Đã chọn đủ hạn mức có thể xuất của sản phẩm trong đợt này.");
-            if (await repo.Claims.AnyAsync(c => c.SerialItemId == serial.SerialItemId)) throw new OutboundRuleException("Serial đã được chọn trong phiếu này hoặc đang được phiên khác sử dụng.");
-            if (!serial.CurrentSupplySourceId.HasValue || serial.CurrentSupplySourceId != candidate.SupplySourceId)
-                throw new OutboundRuleException("Nguồn thực tế của serial không hợp lệ. Không được tự gán nguồn thay thế.");
+            var candidates = snapshot.Candidates.ToDictionary(candidate => candidate.SerialItemId);
+            var chosen = new List<(SerialItem Serial, SuggestedSerialPickDto Candidate, OutboundLineProgressDto Line)>();
+            foreach (var number in numbers.Order(StringComparer.OrdinalIgnoreCase))
+            {
+                var serial = await repo.SerialForUpdateAsync(number)
+                    ?? throw new OutboundRuleException($"Không tìm thấy serial {number}.");
+                if (!candidates.TryGetValue(serial.SerialItemId, out var candidate) || !candidate.CanSelect
+                    || serial.StockState != "IN_WAREHOUSE" || serial.ItemCondition != "GOOD"
+                    || serial.CurrentWarehouseId != order.WarehouseId || serial.CurrentSupplyState != "PHYSICAL"
+                    || serial.CurrentSupplySourceId != candidate.SupplySourceId)
+                    throw new OutboundRuleException($"Serial {number} không còn đủ điều kiện tại nguồn và vị trí đã chọn. Hãy cập nhật danh sách.");
+                var line = snapshot.Lines.SingleOrDefault(line => line.ProductId == serial.ProductId)
+                    ?? throw new OutboundRuleException("Sản phẩm của serial không thuộc SO.");
+                chosen.Add((serial, candidate, line));
+            }
+            if (chosen.Select(item => item.Serial.SerialItemId).Distinct().Count() != chosen.Count)
+                throw new OutboundRuleException("Danh sách đang trỏ đến cùng một serial nhiều lần.");
+            foreach (var group in chosen.GroupBy(item => item.Line.SolineId))
+                if (group.Count() > group.First().Line.CanPickMoreQuantity)
+                    throw new OutboundRuleException($"{group.First().Line.ProductName}: số lượng đã tích vượt hạn mức có thể chọn thêm.");
+
+            var ids = chosen.Select(item => item.Serial.SerialItemId).ToArray();
+            if (await repo.Claims.AnyAsync(claim => ids.Contains(claim.SerialItemId)))
+                throw new OutboundRuleException("Có serial đã được phiếu này hoặc phiên khác giữ. Chưa thêm danh sách; hãy cập nhật lại.");
+
+            var previousItems = await repo.Items.Where(item => item.OutboundId == outboundId && ids.Contains(item.SerialItemId))
+                .OrderByDescending(item => item.OutboundItemId).ToListAsync();
+            var previousBySerial = previousItems.GroupBy(item => item.SerialItemId).ToDictionary(group => group.Key, group => group.First());
+            if (previousBySerial.Values.Any(item => item.IsActive))
+                throw new OutboundRuleException("Có serial đã nằm trong phiếu xuất.");
+
+            foreach (var group in chosen.GroupBy(item => (item.Line.SolineId, item.Candidate.SupplySourceId)))
+            {
+                var selected = await repo.Items.CountAsync(item => item.OutboundId == outboundId
+                    && item.SolineId == group.Key.SolineId && item.SourceAtIssueId == group.Key.SupplySourceId && item.IsActive);
+                var ready = group.First().Line.Sources.SingleOrDefault(source =>
+                    source.SupplySourceId == group.Key.SupplySourceId && source.SupplyState == "PHYSICAL")?.ReadyQuantity ?? 0;
+                if ((long)selected + group.Count() > ready)
+                    throw new OutboundRuleException($"{group.First().Line.ProductName}: số lượng đã tích vượt phần nguồn dành cho SO.");
+            }
+
             await ActivateDraftAsync(outbound, order, userId, snapshot);
-            var selectedCount = await repo.Items.CountAsync(i => i.OutboundId == outboundId && i.SolineId == line.SolineId
-                && i.SourceAtIssueId == candidate.SupplySourceId && i.IsActive);
-            await supply.EnsureSourceReservationAsync(order.SalesOrderId, line.SolineId, candidate.SupplySourceId, selectedCount + 1);
-            var previous = await repo.Items.Where(i => i.OutboundId == outboundId && i.SerialItemId == serial.SerialItemId)
-                .OrderByDescending(i => i.OutboundItemId).FirstOrDefaultAsync();
-            if (previous?.IsActive == true) throw new OutboundRuleException("Serial đã có trong phiếu xuất.");
-            var item = previous ?? new OutboundItem();
-            item.OutboundId = outboundId; item.SalesOrderId = order.SalesOrderId; item.SolineId = line.SolineId;
-            item.SerialItemId = serial.SerialItemId; item.ProductId = serial.ProductId; item.WarehouseId = order.WarehouseId;
-            item.SourceAtIssueId = candidate.SupplySourceId; item.ItemCondition = "GOOD"; item.SupplyState = "PHYSICAL";
-            item.IsActive = true; item.ScannedAt = DateTime.UtcNow;
-            if (previous is null) repo.Add(item);
-            repo.Add(new PickingClaim { SerialItemId = serial.SerialItemId, OutboundId = outboundId, ClaimedByUserId = userId, ClaimedAt = DateTime.UtcNow });
+            foreach (var group in chosen.GroupBy(item => (item.Line.SolineId, item.Candidate.SupplySourceId)))
+            {
+                var selected = await repo.Items.CountAsync(item => item.OutboundId == outboundId
+                    && item.SolineId == group.Key.SolineId && item.SourceAtIssueId == group.Key.SupplySourceId && item.IsActive);
+                await supply.EnsureSourceReservationAsync(order.SalesOrderId, group.Key.SolineId,
+                    group.Key.SupplySourceId, selected + group.Count());
+            }
+
+            var now = DateTime.UtcNow;
+            foreach (var (serial, candidate, line) in chosen)
+            {
+                var previous = previousBySerial.GetValueOrDefault(serial.SerialItemId);
+                var item = previous ?? new OutboundItem();
+                item.OutboundId = outboundId; item.SalesOrderId = order.SalesOrderId; item.SolineId = line.SolineId;
+                item.SerialItemId = serial.SerialItemId; item.ProductId = serial.ProductId; item.WarehouseId = order.WarehouseId;
+                item.SourceAtIssueId = candidate.SupplySourceId; item.ItemCondition = "GOOD"; item.SupplyState = "PHYSICAL";
+                item.IsActive = true; item.ScannedAt = now;
+                if (previous is null) repo.Add(item);
+                repo.Add(new PickingClaim { SerialItemId = serial.SerialItemId, OutboundId = outboundId, ClaimedByUserId = userId, ClaimedAt = now });
+            }
             outbound.Status = "PICKING"; outbound.IsActivePicking = true; outbound.AssignedToUserId = userId;
             repo.Touch(outbound);
             await repo.SaveAsync();

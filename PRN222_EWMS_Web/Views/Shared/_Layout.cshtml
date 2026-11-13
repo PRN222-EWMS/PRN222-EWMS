@@ -25,7 +25,7 @@
     {
         <link rel="stylesheet" href="~/css/inbound.css" asp-append-version="true" />
     }
-    @if (string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "Outbound", StringComparison.OrdinalIgnoreCase))
+    @if (ViewContext.RouteData.Values["controller"]?.ToString() is "Outbound" or "WarehouseTransfer")
     {
         <link rel="stylesheet" href="~/css/outbound.css" asp-append-version="true" />
     }

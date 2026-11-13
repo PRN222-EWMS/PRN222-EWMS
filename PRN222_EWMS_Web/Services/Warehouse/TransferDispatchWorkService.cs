@@ -85,13 +85,20 @@ public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService
         return (true, $"Bạn đã nhận phiếu xuất {dispatch.DispatchCode}.");
     }
 
-    public async Task<(bool Success, string Message)> ScanAsync(
-        long orderId, long dispatchId, string? serialNumber, int userId)
-    {
-        if (string.IsNullOrWhiteSpace(serialNumber))
-            return (false, "Vui lòng nhập serial.");
+    public Task<(bool Success, string Message)> ScanAsync(long orderId, long dispatchId, string? serialNumber, int userId) =>
+        ScanBatchAsync(orderId, dispatchId, [serialNumber ?? ""], userId);
 
-        var number = serialNumber.Trim();
+    public async Task<(bool Success, string Message)> ScanBatchAsync(long orderId, long dispatchId,
+        IReadOnlyCollection<string> serialNumbers, int userId)
+    {
+        if (serialNumbers.Count is < 1 or > 1000)
+            return (false, "Chọn từ 1 đến 1.000 serial mỗi lượt.");
+        var numbers = serialNumbers.Select(number => number?.Trim() ?? "").ToArray();
+        if (numbers.Any(number => number.Length is < 1 or > 100 || number.Any(char.IsControl)))
+            return (false, "Serial phải dài 1–100 ký tự và không chứa ký tự điều khiển.");
+        if (numbers.Distinct(StringComparer.OrdinalIgnoreCase).Count() != numbers.Length)
+            return (false, "Danh sách có serial trùng.");
+
         var warehouses = await WorkWarehousesAsync(orderId, userId);
         if (warehouses.Length == 0) return (false, "Lệnh không thuộc kho nguồn của bạn.");
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
@@ -100,71 +107,77 @@ public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService
         if (order is null || order.FromWarehouseId != warehouses[0] || order.ToWarehouseId != warehouses[1]
             || order.Status is not ("RELEASED" or "IN_PROGRESS"))
             return (false, "Lệnh chưa sẵn sàng xuất tại kho của bạn.");
-
-        var canScan = await db.TransferDispatches.AnyAsync(d => d.TransferOrderId == orderId
-            && d.DispatchId == dispatchId && d.AssignedToUserId == userId && d.Status == "DRAFT");
-        if (!canScan)
+        if (!await db.TransferDispatches.AnyAsync(dispatch => dispatch.TransferOrderId == orderId
+            && dispatch.DispatchId == dispatchId && dispatch.AssignedToUserId == userId && dispatch.Status == "DRAFT"))
             return (false, "Bạn chỉ có thể quét vào phiếu nháp mình đã nhận.");
 
-        // Serialize claims on this physical unit across transfer orders.
-        var serial = await db.SerialItems
-            .FromSqlInterpolated($"SELECT * FROM dbo.SerialItem WITH (UPDLOCK, HOLDLOCK) WHERE SerialNumber = {number}")
-            .SingleOrDefaultAsync();
-        if (serial is null || serial.CurrentWarehouseId != order.FromWarehouseId
-            || serial.StockState != "IN_WAREHOUSE"
-            || serial.ItemCondition != order.ItemCondition || serial.CurrentSupplyState != "PHYSICAL"
-            || serial.CurrentSupplySourceId is not long sourceId)
-            return (false, "Serial không thuộc tồn kho nguồn đủ điều kiện xuất.");
+        var serials = new List<SerialItem>();
+        foreach (var number in numbers.Order(StringComparer.OrdinalIgnoreCase))
+        {
+            var serial = await db.SerialItems
+                .FromSqlInterpolated($"SELECT * FROM dbo.SerialItem WITH (UPDLOCK, HOLDLOCK) WHERE SerialNumber = {number}")
+                .SingleOrDefaultAsync();
+            if (serial is null || serial.CurrentWarehouseId != order.FromWarehouseId || serial.StockState != "IN_WAREHOUSE"
+                || serial.ItemCondition != order.ItemCondition || serial.CurrentSupplyState != "PHYSICAL"
+                || serial.CurrentSupplySourceId is null)
+                return (false, $"Serial {number} không thuộc tồn kho nguồn đủ điều kiện xuất.");
+            serials.Add(serial);
+        }
+        if (serials.Select(serial => serial.SerialItemId).Distinct().Count() != serials.Count)
+            return (false, "Danh sách đang trỏ đến cùng một serial nhiều lần.");
+        var block = await commitments.GetStocktakeBlockReasonAsync(order.FromWarehouseId,
+            serials.Select(serial => serial.CurrentLocationId).Distinct().ToArray());
+        if (block is not null) return (false, block);
+        var serialIds = serials.Select(serial => serial.SerialItemId).ToArray();
+        if (await db.PickingClaims.AnyAsync(claim => serialIds.Contains(claim.SerialItemId)))
+            return (false, "Có serial đang được phiếu này hoặc phiên khác giữ. Chưa thêm danh sách; hãy cập nhật lại.");
 
-        var stocktakeBlock = await commitments.GetStocktakeBlockReasonAsync(order.FromWarehouseId, [serial.CurrentLocationId]);
-        if (stocktakeBlock is not null) return (false, stocktakeBlock);
-
-        var claim = await db.PickingClaims.FindAsync(serial.SerialItemId);
-        if (claim != null)
-            return (false, claim.DispatchId == dispatchId ? "Serial đã được quét vào phiếu này."
-                : "Serial đang được giữ cho phiếu khác.");
-
-        var line = await db.TransferOrderLines.SingleOrDefaultAsync(l =>
-            l.TransferOrderId == orderId && l.ProductId == serial.ProductId);
-        if (line is null)
+        var lines = await db.TransferOrderLines.Where(line => line.TransferOrderId == orderId).ToDictionaryAsync(line => line.ProductId);
+        if (serials.Any(serial => !lines.ContainsKey(serial.ProductId)))
             return (false, "Sản phẩm của serial không thuộc lệnh chuyển kho.");
-
-        var lineItems = db.TransferDispatchItems.Where(i => i.TransferLineId == line.TransferLineId && i.IsActive);
-        var openItems = lineItems.Where(i => i.Dispatch.Status == "DRAFT" || i.Dispatch.IsActivePicking);
-        var counted = await lineItems.CountAsync(i => i.Dispatch.Status == "DONE"
-            || i.Dispatch.Status == "DRAFT" || i.Dispatch.IsActivePicking);
-        if (counted >= line.RequestedQuantity - line.CancelledQuantity)
-            return (false, "Dòng sản phẩm đã đủ số lượng.");
-
-        var reserved = await db.Reservations.Where(r => r.TransferLineId == line.TransferLineId
-            && r.SupplySourceId == sourceId && r.Status == "ACTIVE" && r.SupplyState == "PHYSICAL")
-            .SumAsync(r => (int?)(r.ReservedQuantity - r.ConsumedQuantity - r.ReleasedQuantity)) ?? 0;
-        if (reserved <= await openItems.CountAsync(i => i.SourceAtDispatchId == sourceId))
-            return (false, "Nguồn tồn của serial không còn số lượng giữ chỗ cho dòng này.");
-
+        foreach (var group in serials.GroupBy(serial => serial.ProductId))
+        {
+            var line = lines[group.Key];
+            var lineItems = db.TransferDispatchItems.Where(item => item.TransferLineId == line.TransferLineId && item.IsActive);
+            var used = await lineItems.CountAsync(item => item.Dispatch.Status == "DONE" || item.Dispatch.Status == "DRAFT" || item.Dispatch.IsActivePicking);
+            if ((long)used + group.Count() > line.RequestedQuantity - line.CancelledQuantity)
+                return (false, "Số lượng đã tích vượt phần còn phải xuất của sản phẩm.");
+            foreach (var sourceGroup in group.GroupBy(serial => serial.CurrentSupplySourceId!.Value))
+            {
+                var reserved = await db.Reservations.Where(reservation => reservation.TransferLineId == line.TransferLineId
+                    && reservation.SupplySourceId == sourceGroup.Key && reservation.Status == "ACTIVE" && reservation.SupplyState == "PHYSICAL")
+                    .SumAsync(reservation => (long?)(reservation.ReservedQuantity - reservation.ConsumedQuantity - reservation.ReleasedQuantity)) ?? 0;
+                var picked = await lineItems.CountAsync(item => item.SourceAtDispatchId == sourceGroup.Key
+                    && (item.Dispatch.Status == "DRAFT" || item.Dispatch.IsActivePicking));
+                if ((long)picked + sourceGroup.Count() > reserved)
+                    return (false, "Số lượng đã tích vượt phần nguồn được giữ cho lệnh.");
+            }
+        }
         var now = DateTime.UtcNow;
-        db.PickingClaims.Add(new PickingClaim
+        foreach (var serial in serials)
         {
-            SerialItemId = serial.SerialItemId, DispatchId = dispatchId,
-            ClaimedByUserId = userId, ClaimedAt = now
-        });
-        db.TransferDispatchItems.Add(new TransferDispatchItem
-        {
-            DispatchId = dispatchId, TransferOrderId = orderId, TransferLineId = line.TransferLineId,
-            SerialItemId = serial.SerialItemId, ProductId = serial.ProductId, WarehouseId = order.FromWarehouseId,
-            SourceAtDispatchId = sourceId, SupplyState = "PHYSICAL", DispatchedCondition = serial.ItemCondition,
-            ScannedAt = now, IsActive = true
-        });
+            db.PickingClaims.Add(new PickingClaim
+            {
+                SerialItemId = serial.SerialItemId, DispatchId = dispatchId, ClaimedByUserId = userId, ClaimedAt = now
+            });
+            db.TransferDispatchItems.Add(new TransferDispatchItem
+            {
+                DispatchId = dispatchId, TransferOrderId = orderId, TransferLineId = lines[serial.ProductId].TransferLineId,
+                SerialItemId = serial.SerialItemId, ProductId = serial.ProductId, WarehouseId = order.FromWarehouseId,
+                SourceAtDispatchId = serial.CurrentSupplySourceId!.Value, SupplyState = "PHYSICAL", DispatchedCondition = serial.ItemCondition,
+                ScannedAt = now, IsActive = true
+            });
+        }
         try
         {
             await SaveAsActorAsync(userId);
             await transaction.CommitAsync();
+            return (true, $"Đã thêm {serials.Count} serial vào phiếu xuất nháp.");
         }
         catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
         {
-            return (false, "Serial đã được quét hoặc đang được giữ cho phiếu khác.");
+            return (false, "Có serial vừa được phiếu khác giữ. Chưa thêm danh sách; hãy cập nhật lại.");
         }
-        return (true, $"Đã thêm serial {serial.SerialNumber} vào phiếu xuất nháp.");
     }
 
     public async Task<(bool Success, string Message)> CompleteAsync(long orderId, long dispatchId, int userId)
