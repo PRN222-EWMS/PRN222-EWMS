@@ -6,7 +6,8 @@ using PRN222_EWMS_Web.ViewModels.Outbound;
 
 namespace PRN222_EWMS_Web.Services.Warehouse;
 
-public class OutboundService(IOutboundRepository repo, IOutboundSupplyService supply, ILogger<OutboundService> logger) : IOutboundService
+public class OutboundService(IOutboundRepository repo, IOutboundSupplyService supply, ILogger<OutboundService> logger,
+    DocumentCodeGenerator codes) : IOutboundService
 {
     private static readonly string[] OpenStates = ["DRAFT", "PICKING", "READY"];
     private static readonly string[] States = ["DRAFT", "PICKING", "READY", "DONE", "CANCELLED"];
@@ -126,16 +127,19 @@ public class OutboundService(IOutboundRepository repo, IOutboundSupplyService su
         var actor = await StaffAsync(userId);
         if (actor?.WarehouseId is null) return (false, "Bạn phải là Warehouse Staff đang hoạt động và thuộc kho xuất.", 0);
         if (requestToken is not null && !Guid.TryParseExact(requestToken, "N", out _)) return (false, "Yêu cầu tạo phiếu không hợp lệ. Vui lòng tải lại trang.", 0);
-        var code = "OUT-" + (requestToken ?? Guid.NewGuid().ToString("N")).ToLowerInvariant();
+        var token = requestToken ?? Guid.NewGuid().ToString("N");
         try
         {
-            return await repo.InTransactionAsync(userId, async () =>
+            return await repo.InTransactionAsync(userId, () => codes.WithRequestAsync(DocumentType.Outbound, token, userId, async previousId =>
             {
                 await supply.LockWarehouseAsync(actor.WarehouseId.Value);
                 await EnsureStaffAsync(userId, actor.WarehouseId.Value);
                 var order = await repo.OrderForUpdateAsync(salesOrderId);
                 if (order is null || order.WarehouseId != actor.WarehouseId) throw new OutboundRuleException("Đơn bán hàng không thuộc kho của bạn.");
-                var retry = await repo.Outbounds.SingleOrDefaultAsync(o => o.IssueCode == code);
+                var retry = previousId.HasValue ? await repo.Outbounds.SingleOrDefaultAsync(o => o.OutboundId == previousId.Value)
+                    : await repo.Outbounds.SingleOrDefaultAsync(o => o.IssueCode == "OUT-" + token.ToLowerInvariant());
+                if (previousId.HasValue && retry is null)
+                    throw new OutboundRuleException("Yêu cầu tạo này đã được xử lý. Vui lòng tải lại danh sách phiếu xuất.");
                 if (retry is not null)
                 {
                     if (retry.SalesOrderId != salesOrderId) throw new OutboundRuleException("Yêu cầu tạo đã được dùng cho đơn bán khác. Vui lòng tải lại trang.");
@@ -153,7 +157,7 @@ public class OutboundService(IOutboundRepository repo, IOutboundSupplyService su
                 var now = DateTime.UtcNow;
                 var outbound = new Outbound
                 {
-                    SalesOrderId = salesOrderId, IssueCode = code, CreatedByUserId = userId, AssignedToUserId = userId,
+                    SalesOrderId = salesOrderId, IssueCode = await codes.NextAsync(DocumentType.Outbound), CreatedByUserId = userId, AssignedToUserId = userId,
                     Status = "PICKING", IsActivePicking = true, StartedAt = now, CreatedAt = now,
                     IssueDate = DateOnly.FromDateTime(now.AddHours(7)),
                     CustomerNameSnapshot = order.CustomerNameSnapshot ?? order.Customer.CustomerName,
@@ -163,7 +167,7 @@ public class OutboundService(IOutboundRepository repo, IOutboundSupplyService su
                 repo.Add(outbound);
                 await repo.SaveAsync();
                 return (true, (string?)null, outbound.OutboundId);
-            });
+            }, result => result.Item3));
         }
         catch (Exception ex) when (ex is not OperationCanceledException) { return (false, Failure(ex), 0); }
     }

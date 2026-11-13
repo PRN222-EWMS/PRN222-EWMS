@@ -5,7 +5,8 @@ using PRN222_EWMS_Web.ViewModels.Inbound;
 
 namespace PRN222_EWMS_Web.Services.WarehouseStaff;
 
-public class InboundService(IInboundRepository repo, PRN222_EWMS_Web.Services.Warehouse.IOutboundSupplyService supply) : IInboundService
+public class InboundService(IInboundRepository repo, PRN222_EWMS_Web.Services.Warehouse.IOutboundSupplyService supply,
+    DocumentCodeGenerator codes) : IInboundService
 {
     private const int PageSize = 10;
     private static readonly TimeZoneInfo VietnamTime = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
@@ -87,11 +88,18 @@ public class InboundService(IInboundRepository repo, PRN222_EWMS_Web.Services.Wa
         var warehouseId = await WarehouseAsync(userId);
         if (input.Note?.Length > 1000 || !Guid.TryParseExact(input.RequestToken, "N", out _))
             throw new ArgumentException("Dữ liệu phiếu không hợp lệ.");
-        var code = "IB-" + input.RequestToken.ToLowerInvariant();
-        return await repo.InTransactionAsync(userId, async () =>
+        return await repo.InTransactionAsync(userId, () => codes.WithRequestAsync(DocumentType.Inbound, input.RequestToken, userId, async previousId =>
         {
-            var retry = await repo.GetByCodeAsync(code, warehouseId);
-            if (retry is not null) return retry.InboundId;
+            var retry = previousId.HasValue ? await repo.GetInboundAsync(previousId.Value, warehouseId)
+                : await repo.GetByCodeAsync("IB-" + input.RequestToken.ToLowerInvariant(), warehouseId);
+            if (previousId.HasValue && retry is null)
+                throw new InvalidOperationException("Yêu cầu tạo này đã được xử lý. Vui lòng tải lại danh sách phiếu nhập.");
+            if (retry is not null)
+            {
+                if (retry.PurchaseOrderId != input.PurchaseOrderId)
+                    throw new InvalidOperationException("Yêu cầu tạo đã được dùng cho PO khác. Vui lòng tải lại form.");
+                return retry.InboundId;
+            }
             var order = await repo.GetOrderAsync(input.PurchaseOrderId, warehouseId)
                 ?? throw new ArgumentException("Đơn mua không thuộc kho của bạn.");
             if (order.Status is not ("CONFIRMED" or "PARTIALLY_RECEIVED"))
@@ -105,13 +113,13 @@ public class InboundService(IInboundRepository repo, PRN222_EWMS_Web.Services.Wa
             var inbound = new Inbound
             {
                 PurchaseOrderId = order.PurchaseOrderId, CreatedByUserId = userId,
-                ReceiptCode = code, ReceiptDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, VietnamTime)),
+                ReceiptCode = await codes.NextAsync(DocumentType.Inbound), ReceiptDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, VietnamTime)),
                 Status = "DRAFT", Note = input.Note?.Trim()
             };
             repo.AddInbound(inbound);
             await repo.SaveAsync();
             return inbound.InboundId;
-        });
+        }, id => id));
     }
 
     private static void CheckVersion(Inbound inbound, string version)

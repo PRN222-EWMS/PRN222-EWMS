@@ -338,26 +338,7 @@ public class PurchaseOrderService(
 
         // Capacity is validated once inside the warehouse transaction below.
 
-        // Kiểm tra mã đơn mua (POCode) nếu người dùng nhập
-        string poCode;
-        if (!string.IsNullOrWhiteSpace(model.Pocode))
-        {
-            poCode = model.Pocode.Trim();
-            if (poCode.Length > 40)
-                return (false, "Mã đơn mua không được vượt quá 40 ký tự.", 0);
-
-            // Kiểm tra trùng mã đơn mua: Nếu trùng phải thông báo lỗi, tuyệt đối không tự tạo mới mã đơn!
-            var isDuplicate = await repo.Orders.AnyAsync(p => p.Pocode == poCode);
-            if (isDuplicate)
-                return (false, $"Mã đơn mua '{poCode}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.", 0);
-        }
-        else
-        {
-            poCode = await repo.GenerateNextPoCodeAsync();
-            var isDuplicateGenerated = await repo.Orders.AnyAsync(p => p.Pocode == poCode);
-            if (isDuplicateGenerated)
-                return (false, $"Mã đơn mua tự sinh '{poCode}' đã tồn tại. Vui lòng thử lại.", 0);
-        }
+        string poCode = "";
 
         // Bắt đầu Transaction
         using var transaction = await repo.BeginTransactionAsync();
@@ -367,6 +348,7 @@ public class PurchaseOrderService(
             await sources.LockWarehouseAsync(model.WarehouseId);
             var validationError = await ValidateFormAsync(model, null);
             if (validationError != null) return (false, validationError, 0);
+            poCode = await repo.GenerateNextPoCodeAsync();
             var now = DateTime.UtcNow;
 
             var po = new PurchaseOrder
@@ -428,7 +410,7 @@ public class PurchaseOrderService(
             logger.LogError(ex, "Cannot create purchase order");
             if (ex.InnerException?.Message.Contains("UX_PurchaseOrder_01") == true || ex.Message.Contains("UX_PurchaseOrder_01"))
             {
-                return (false, $"Mã đơn mua '{poCode}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.", 0);
+                return (false, "Mã PO vừa được sử dụng. Vui lòng thử lưu lại để hệ thống cấp mã mới.", 0);
             }
             return (false, "Không thể lưu PO. Vui lòng tải lại số liệu và thử lại.", 0);
         }

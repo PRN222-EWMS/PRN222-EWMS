@@ -62,4 +62,6 @@ public interface IWarehouseCapacityEngine
         IReadOnlyCollection<int> locationIds, CancellationToken ct = default);
     Task<PlacementCapacityAssessment> AssessPlacementsAsync(int warehouseId, long serialId,
         IReadOnlyCollection<int> locationIds, CancellationToken ct = default);
+    Task<PlacementCapacityAssessment> AssessStocktakePlacementsAsync(int warehouseId, long serialId, string condition,
+        IReadOnlyCollection<int> locationIds, IReadOnlyCollection<long> stocktakeIds, CancellationToken ct = default);
 }

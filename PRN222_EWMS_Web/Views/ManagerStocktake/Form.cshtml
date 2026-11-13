@@ -45,13 +45,9 @@
 
 <div class="warehouse-list">
     <header class="workspace-heading"><div><p class="eyebrow">KẾ HOẠCH KIỂM KÊ</p><h1>@ViewData["Title"]</h1>@if (editing) { <p class="muted mb-0">@Model.Code</p> }</div><div class="warehouse-heading-actions"><a asp-action="@(editing ? "Details" : "Index")" asp-route-id="@(editing ? Model.Id : null)" class="warehouse-small-button" data-manager-stocktake-back><i class="bi bi-arrow-left me-2" aria-hidden="true"></i>Quay lại</a><a asp-action="Index" class="workspace-link">Danh sách kiểm kê</a></div></header>
-    <div class="warehouse-config-note mb-0">Lưu kế hoạch chưa tạo snapshot và chưa khóa kho. Tồn gốc chỉ được chụp khi nhân viên bắt đầu kiểm kê. Một vị trí được chọn luôn bao gồm toàn bộ vị trí con.</div>
-    @foreach (var warning in Model.Warnings) { <div class="alert alert-warning mb-0" role="alert">@warning</div> }
-
     <form asp-action="@(editing ? "Edit" : "Create")" asp-route-id="@Model.Id" method="post" id="manager-stocktake-form" class="workspace-form mt-0" data-planning-url="@Url.Action("PlanningData", "ManagerStocktake")" data-editing="@editing.ToString().ToLowerInvariant()">
         @if (editing) { <input asp-for="Id" type="hidden" /><input asp-for="RowVersion" type="hidden" /> }
-        <div asp-validation-summary="All" class="text-danger" role="alert"></div>
-        <div id="manager-stocktake-form-notice" class="alert alert-info d-none mb-0" role="status" aria-live="polite"></div>
+        <div asp-validation-summary="ModelOnly" class="text-danger" role="alert"></div>
 
         <section class="workspace-card">
             <h2>Thông tin kế hoạch</h2>
@@ -70,6 +66,8 @@
                         <small class="muted">Chỉ lập đợt cho kho đang hoạt động và còn hạn thuê.</small>
                     }
                     <span asp-validation-for="WarehouseId"></span>
+                    <div id="manager-stocktake-form-notice" class="small d-none mt-2" role="status" aria-live="polite"></div>
+                    @foreach (var warning in Model.Warnings) { <small class="d-block text-danger mt-2" role="alert">@warning</small> }
                 </div>
                 <div><label asp-for="PlannedAt">Ngày, giờ dự kiến (giờ Việt Nam)</label><input asp-for="PlannedAt" type="datetime-local" asp-format="{0:yyyy-MM-ddTHH:mm}" /><span asp-validation-for="PlannedAt"></span><small class="muted">Bắt buộc khi hoàn tất kế hoạch; kho thuê phải còn hạn vào ngày này.</small></div>
             </div>
@@ -116,9 +114,18 @@
                         {
                             var assignment = visibleAssignments[i];
                             <tr data-assignment-row>
-                                <td><label class="visually-hidden" for="manager-stocktake-user-@i">Nhân viên phân công @(i + 1)</label><select name="Assignments[@i].UserId" id="manager-stocktake-user-@i" data-assignment-user><option value="0">Chọn nhân viên</option>@if (assignment.UserId > 0 && Model.Staff.All(s => s.Id != assignment.UserId)) { <option value="@assignment.UserId" selected>Nhân viên #@assignment.UserId (không còn hợp lệ)</option> }@foreach (var staff in Model.Staff) { <option value="@staff.Id" selected="@(staff.Id == assignment.UserId)">@staff.Name</option> }</select></td>
-                                <td><label class="visually-hidden" for="manager-stocktake-kind-@i">Loại phân công @(i + 1)</label><select name="Assignments[@i].ScopeKind" id="manager-stocktake-kind-@i" data-assignment-kind>@if (!scopeKinds.Contains(assignment.ScopeKind)) { <option value="@assignment.ScopeKind" selected>Loại không hợp lệ</option> }<option value="LOCATION" selected="@(assignment.ScopeKind == "LOCATION")">Nhánh vị trí</option>@if (includeAwaiting) { <option value="AWAITING_PUTAWAY" selected="@(assignment.ScopeKind == "AWAITING_PUTAWAY")">Chỉ hàng chờ xếp</option> }<option value="ALL_SCOPE" selected="@(assignment.ScopeKind == "ALL_SCOPE")">Toàn phạm vi đợt</option></select></td>
-                                <td><label class="visually-hidden" for="manager-stocktake-position-@i">Nhánh vị trí phân công @(i + 1)</label><select name="Assignments[@i].LocationId" id="manager-stocktake-position-@i" data-assignment-location disabled="@(assignment.ScopeKind != "LOCATION")"><option value="">Chọn nhánh vị trí</option>@if (assignment.LocationId.HasValue && Model.Locations.All(l => l.Id != assignment.LocationId)) { <option value="@assignment.LocationId" selected>Vị trí #@assignment.LocationId (không còn hợp lệ)</option> }@foreach (var location in Model.Locations) { <option value="@location.Id" selected="@(assignment.LocationId == location.Id)">@location.Path</option> }</select></td>
+                                <td>
+                                    <label class="visually-hidden" for="manager-stocktake-user-@i">Nhân viên phân công @(i + 1)</label><select name="Assignments[@i].UserId" id="manager-stocktake-user-@i" data-assignment-user><option value="0">Chọn nhân viên</option>@if (assignment.UserId > 0 && Model.Staff.All(s => s.Id != assignment.UserId)) { <option value="@assignment.UserId" selected>Nhân viên #@assignment.UserId (không còn hợp lệ)</option> }@foreach (var staff in Model.Staff) { <option value="@staff.Id" selected="@(staff.Id == assignment.UserId)">@staff.Name</option> }</select>
+                                    <span asp-validation-for="Assignments[i].UserId" class="text-danger small d-block" data-assignment-error="user" aria-live="polite"></span>
+                                </td>
+                                <td>
+                                    <label class="visually-hidden" for="manager-stocktake-kind-@i">Loại phân công @(i + 1)</label><select name="Assignments[@i].ScopeKind" id="manager-stocktake-kind-@i" data-assignment-kind>@if (!scopeKinds.Contains(assignment.ScopeKind)) { <option value="@assignment.ScopeKind" selected>Loại không hợp lệ</option> }<option value="LOCATION" selected="@(assignment.ScopeKind == "LOCATION")">Nhánh vị trí</option>@if (includeAwaiting) { <option value="AWAITING_PUTAWAY" selected="@(assignment.ScopeKind == "AWAITING_PUTAWAY")">Chỉ hàng chờ xếp</option> }<option value="ALL_SCOPE" selected="@(assignment.ScopeKind == "ALL_SCOPE")">Toàn phạm vi đợt</option></select>
+                                    <span asp-validation-for="Assignments[i].ScopeKind" class="text-danger small d-block" data-assignment-error="kind" aria-live="polite"></span>
+                                </td>
+                                <td>
+                                    <label class="visually-hidden" for="manager-stocktake-position-@i">Nhánh vị trí phân công @(i + 1)</label><select name="Assignments[@i].LocationId" id="manager-stocktake-position-@i" data-assignment-location disabled="@(assignment.ScopeKind != "LOCATION")"><option value="">Chọn nhánh vị trí</option>@if (assignment.LocationId.HasValue && Model.Locations.All(l => l.Id != assignment.LocationId)) { <option value="@assignment.LocationId" selected>Vị trí #@assignment.LocationId (không còn hợp lệ)</option> }@foreach (var location in Model.Locations) { <option value="@location.Id" selected="@(assignment.LocationId == location.Id)">@location.Path</option> }</select>
+                                    <span asp-validation-for="Assignments[i].LocationId" class="text-danger small d-block" data-assignment-error="location" aria-live="polite"></span>
+                                </td>
                                 <td><button type="button" class="btn btn-outline-danger" data-remove-assignment aria-label="Xóa phân công @(i + 1)"><i class="bi bi-trash" aria-hidden="true"></i></button></td>
                             </tr>
                         }

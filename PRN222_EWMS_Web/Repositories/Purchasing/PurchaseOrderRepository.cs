@@ -1,11 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using PRN222_EWMS_Web.Models;
+using PRN222_EWMS_Web.Services;
 using WarehouseEntity = PRN222_EWMS_Web.Models.Warehouse;
 
 namespace PRN222_EWMS_Web.Repositories.Purchasing;
 
-public class PurchaseOrderRepository(EwmsDbContext db) : IPurchaseOrderRepository
+public class PurchaseOrderRepository(EwmsDbContext db, DocumentCodeGenerator codes) : IPurchaseOrderRepository
 {
     public IQueryable<PurchaseOrder> Orders => db.PurchaseOrders.AsNoTracking();
     public IQueryable<VwPurchaseOrderProgress> Progress => db.VwPurchaseOrderProgresses.AsNoTracking();
@@ -49,24 +50,7 @@ public class PurchaseOrderRepository(EwmsDbContext db) : IPurchaseOrderRepositor
             .AnyAsync(i => i.PurchaseOrderId == purchaseOrderId);
     }
 
-    public async Task<string> GenerateNextPoCodeAsync()
-    {
-        var year = DateTime.UtcNow.Year;
-        var prefix = $"PO-{year}-";
-        
-        var latestCode = await db.PurchaseOrders
-            .Where(p => p.Pocode.StartsWith(prefix))
-            .OrderByDescending(p => p.Pocode)
-            .Select(p => p.Pocode)
-            .FirstOrDefaultAsync();
-
-        if (latestCode != null && int.TryParse(latestCode.Replace(prefix, ""), out int lastSeq))
-        {
-            return $"{prefix}{(lastSeq + 1):D3}";
-        }
-
-        return $"{prefix}001";
-    }
+    public Task<string> GenerateNextPoCodeAsync() => codes.NextAsync(DocumentType.PurchaseOrder);
 
     public async Task<IDbContextTransaction> BeginTransactionAsync()
     {

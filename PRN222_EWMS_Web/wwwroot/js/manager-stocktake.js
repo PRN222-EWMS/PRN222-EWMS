@@ -28,6 +28,7 @@
     let loading = false;
 
     const locationMap = () => new Map(planning.locations.map(location => [Number(location.id), location]));
+    const assignmentRows = () => [...rows.querySelectorAll('[data-assignment-row]')];
     const selectedRoots = () => [...explicitScopeIds];
     const locationType = type => ({ ZONE: 'Zone', ROW: 'Dãy', RACK: 'Kệ', TIER: 'Tầng', FLOOR_SLOT: 'Ô sàn' })[type] || type;
     const ancestorIn = (id, selected, map) => {
@@ -44,8 +45,8 @@
     const notify = (message, error = false) => {
         notice.textContent = message;
         notice.classList.toggle('d-none', !message);
-        notice.classList.toggle('alert-danger', error);
-        notice.classList.toggle('alert-info', !error);
+        notice.classList.toggle('text-danger', error);
+        notice.classList.toggle('muted', !error);
         notice.setAttribute('role', error ? 'alert' : 'status');
     };
     const option = (value, text) => {
@@ -76,6 +77,17 @@
         });
     };
 
+    function overlapsAssignment(row, id, map) {
+        return assignmentRows().some(other => {
+            if (other === row) return false;
+            const kind = other.querySelector('[data-assignment-kind]').value;
+            if (kind === 'ALL_SCOPE') return true;
+            const otherId = Number(other.querySelector('[data-assignment-location]').value);
+            return kind === 'LOCATION' && otherId > 0 && (id === otherId
+                || ancestorIn(id, new Set([otherId]), map) || ancestorIn(otherId, new Set([id]), map));
+        });
+    }
+
     function updateAssignment(row) {
         const select = row.querySelector('[data-assignment-location]');
         const kind = row.querySelector('[data-assignment-kind]').value;
@@ -84,13 +96,78 @@
         select.replaceChildren(option('', kind === 'LOCATION' ? 'Chọn nhánh vị trí' : 'Không áp dụng'));
         if (kind === 'LOCATION') {
             const locations = allowedLocations();
+            const map = locationMap();
             if (oldValue && !locations.some(location => Number(location.id) === Number(oldValue))) {
                 select.append(option(oldValue, (previousLabel || `Vị trí #${oldValue}`) + ' (ngoài phạm vi hoặc không còn hợp lệ)'));
             }
-            locations.forEach(location => select.append(option(location.id, location.path || location.name)));
+            locations.forEach(location => {
+                const item = option(location.id, location.path || location.name);
+                item.disabled = overlapsAssignment(row, Number(location.id), map);
+                if (item.disabled) item.title = 'Nhánh này trùng hoặc bao gồm phần đã giao ở dòng khác.';
+                select.append(item);
+            });
             select.value = oldValue;
         }
-        select.disabled = kind !== 'LOCATION';
+        select.disabled = loading || kind !== 'LOCATION';
+    }
+
+    function validateAssignments(requireValues = false) {
+        const map = locationMap();
+        const allowed = new Set(allowedLocations().map(location => Number(location.id)));
+        const staff = new Set(planning.staff.map(person => Number(person.id)));
+        const assignments = assignmentRows();
+        let valid = true;
+        assignments.forEach(row => {
+            const user = row.querySelector('[data-assignment-user]');
+            const kind = row.querySelector('[data-assignment-kind]');
+            const location = row.querySelector('[data-assignment-location]');
+            const id = Number(location.value);
+            const errors = { user: '', kind: '', location: '' };
+            if (!staff.has(Number(user.value)) && (Number(user.value) > 0 || requireValues || user.dataset.touched))
+                errors.user = 'Chọn nhân viên kho đang hoạt động, thuộc kho kiểm kê.';
+            if (kind.value === 'ALL_SCOPE' && assignments.length > 1)
+                errors.kind = 'Toàn phạm vi đợt phải được giao trong một phân công duy nhất.';
+            else if (kind.value === 'AWAITING_PUTAWAY' && (!awaitingInScope() || assignments.some(other => other !== row
+                && ['AWAITING_PUTAWAY', 'ALL_SCOPE'].includes(other.querySelector('[data-assignment-kind]').value))))
+                errors.kind = 'Hàng chờ xếp chỉ được giao một lần và phải thuộc phạm vi kiểm kê.';
+            else if (!['LOCATION', 'AWAITING_PUTAWAY', 'ALL_SCOPE'].includes(kind.value))
+                errors.kind = 'Chọn loại phân công hợp lệ.';
+            if (kind.value === 'LOCATION') {
+                if (!id && (requireValues || location.dataset.touched)) errors.location = 'Chọn nhánh vị trí cần giao.';
+                else if (id && !allowed.has(id)) errors.location = 'Nhánh vị trí nằm ngoài phạm vi kiểm kê.';
+                else if (id && overlapsAssignment(row, id, map)) errors.location = 'Nhánh này trùng với phần đã giao. Chọn nhánh khác.';
+            }
+            for (const part of ['user', 'kind', 'location']) {
+                const select = row.querySelector(`[data-assignment-${part}]`);
+                const message = row.querySelector(`[data-assignment-error="${part}"]`);
+                message.textContent = errors[part];
+                message.classList.toggle('field-validation-error', !!errors[part]);
+                message.classList.toggle('field-validation-valid', !errors[part]);
+                select.classList.toggle('input-validation-error', !!errors[part]);
+                select.setAttribute('aria-invalid', String(!!errors[part]));
+                if (errors[part]) valid = false;
+            }
+        });
+        return valid;
+    }
+
+    function refreshAssignments() {
+        reindexAssignments();
+        const assignments = assignmentRows();
+        assignments.forEach(row => {
+            const others = assignments.filter(other => other !== row);
+            const kinds = others.map(other => other.querySelector('[data-assignment-kind]').value);
+            const kind = row.querySelector('[data-assignment-kind]');
+            [...kind.options].forEach(item => {
+                item.disabled = item.value === 'ALL_SCOPE' ? assignments.length > 1
+                    : kinds.includes('ALL_SCOPE') || item.value === 'AWAITING_PUTAWAY' && kinds.includes('AWAITING_PUTAWAY');
+            });
+            row.querySelector('[data-assignment-user]').disabled = loading;
+            kind.disabled = loading;
+            updateAssignment(row);
+        });
+        addButton.disabled = loading || activeWarehouse <= 0 || assignments.some(row => row.querySelector('[data-assignment-kind]').value === 'ALL_SCOPE');
+        validateAssignments();
     }
 
     function syncAssignmentKinds() {
@@ -105,9 +182,8 @@
             if (current && !options.some(item => item.value === current)) options.unshift(option(current, 'Loại không hợp lệ'));
             select.replaceChildren(...options);
             select.value = current || 'LOCATION';
-            updateAssignment(row);
         });
-        reindexAssignments();
+        refreshAssignments();
     }
 
     function reindexAssignments() {
@@ -118,6 +194,10 @@
                 select.name = `Assignments[${index}].${property}`;
                 select.id = `manager-stocktake-assignment-${part}-${index}`;
                 if (label?.tagName === 'LABEL') label.htmlFor = select.id;
+                const message = row.querySelector(`[data-assignment-error="${part}"]`);
+                message.id = `${select.id}-error`;
+                message.setAttribute('data-valmsg-for', select.name);
+                select.setAttribute('aria-describedby', message.id);
             });
             row.querySelector('[data-remove-assignment]').setAttribute('aria-label', `Xóa phân công ${index + 1}`);
         });
@@ -297,7 +377,12 @@
             const select = document.createElement('select');
             select.dataset[`assignment${part[0].toUpperCase()}${part.slice(1)}`] = '';
             select.append(...options);
-            cell.append(label, select);
+            const message = document.createElement('span');
+            message.className = 'text-danger small d-block field-validation-valid';
+            message.dataset.assignmentError = part;
+            message.setAttribute('data-valmsg-replace', 'true');
+            message.setAttribute('aria-live', 'polite');
+            cell.append(label, select, message);
             row.append(cell);
         });
         const actions = document.createElement('td');
@@ -312,19 +397,18 @@
         actions.append(remove);
         row.append(actions);
         rows.append(row);
-        updateAssignment(row);
-        reindexAssignments();
+        refreshAssignments();
         row.querySelector('select').focus();
     }
 
     function setLoading(value) {
         loading = value;
         form.querySelectorAll('[data-save-plan]').forEach(button => { button.disabled = value; });
-        addButton.disabled = value || activeWarehouse <= 0;
         scopeType.disabled = value;
         form.querySelectorAll('[data-expand-scope], [data-collapse-scope]').forEach(button => { button.disabled = value; });
         form.setAttribute('aria-busy', String(value));
         syncScopeSelection();
+        refreshAssignments();
     }
 
     async function changeWarehouse() {
@@ -342,7 +426,7 @@
             updateScope();
             noStaff.classList.add('d-none');
             setLoading(false);
-            notify('Chưa chọn kho. Phạm vi và phân công trước đó đã được đặt lại.');
+            notify('');
             return;
         }
         currentRequest = new AbortController();
@@ -364,8 +448,8 @@
             reindexAssignments();
             updateScope();
             noStaff.classList.toggle('d-none', data.staff.length > 0);
-            const warnings = Array.isArray(data.warnings) && data.warnings.length ? ` ${data.warnings.join(' ')}` : '';
-            notify('Đã tải kho mới. Phạm vi và phân công trước đó đã được đặt lại; vui lòng chọn lại.' + warnings);
+            const warnings = Array.isArray(data.warnings) ? data.warnings.join(' ') : '';
+            notify(warnings, !!warnings);
         } catch (error) {
             if (error.name === 'AbortError' || sequence !== requestNumber) return;
             warehouse.value = String(activeWarehouse);
@@ -391,7 +475,7 @@
             if (branch && Number(branch.dataset.locationId) === id && !search.value.trim()) branch.open = false;
         } else explicitScopeIds.delete(id);
         syncScopeSelection();
-        rows.querySelectorAll('[data-assignment-row]').forEach(updateAssignment);
+        refreshAssignments();
     });
     // Choosing a checkbox/label should not also toggle its enclosing <details>.
     scopeOptions.addEventListener('click', event => {
@@ -409,7 +493,7 @@
         if (!remove) return;
         explicitScopeIds.delete(Number(remove.dataset.removeScope));
         syncScopeSelection();
-        rows.querySelectorAll('[data-assignment-row]').forEach(updateAssignment);
+        refreshAssignments();
     });
     search.addEventListener('input', filterScope);
     form.querySelector('[data-expand-scope]').addEventListener('click', () => scopeOptions.querySelectorAll('details[data-scope-node]').forEach(branch => { branch.open = true; }));
@@ -423,16 +507,23 @@
     }));
     addButton.addEventListener('click', addAssignment);
     rows.addEventListener('change', event => {
-        if (event.target.matches('[data-assignment-kind]')) updateAssignment(event.target.closest('[data-assignment-row]'));
+        if (!event.target.matches('[data-assignment-user], [data-assignment-kind], [data-assignment-location]')) return;
+        event.target.dataset.touched = 'true';
+        refreshAssignments();
     });
     rows.addEventListener('click', event => {
         const remove = event.target.closest('[data-remove-assignment]');
         if (!remove) return;
         remove.closest('[data-assignment-row]').remove();
-        reindexAssignments();
+        refreshAssignments();
     });
     form.addEventListener('submit', event => {
         if (loading) { event.preventDefault(); notify('Đợi tải xong cấu trúc kho trước khi lưu.', true); return; }
+        if (!validateAssignments(true)) {
+            event.preventDefault();
+            rows.querySelector('[aria-invalid="true"]')?.focus();
+            return;
+        }
         // Preserve the selected submit action before disabling buttons to prevent double clicks.
         const mode = document.createElement('input');
         mode.type = 'hidden';
@@ -442,6 +533,10 @@
         form.querySelectorAll('[data-save-plan]').forEach(button => { button.disabled = true; });
     });
 
+    rows.querySelectorAll('[data-assignment-error]').forEach(message => {
+        if (message.textContent.trim()) message.closest('[data-assignment-row]')
+            .querySelector(`[data-assignment-${message.dataset.assignmentError}]`).dataset.touched = 'true';
+    });
     updateScope();
     const initialMap = locationMap();
     scopeOptions.querySelectorAll('details[data-scope-node]').forEach(branch => {

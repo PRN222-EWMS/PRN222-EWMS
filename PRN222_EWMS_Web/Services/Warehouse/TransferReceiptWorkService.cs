@@ -6,7 +6,8 @@ using PRN222_EWMS_Web.Services.Warehouse;
 
 namespace PRN222_EWMS_Web.Services.WarehouseStaff;
 
-public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock, ISourceReservationService commitments)
+public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock, ISourceReservationService commitments,
+    DocumentCodeGenerator codes)
 {
     private async Task<int[]> WorkWarehousesAsync(long orderId, int userId)
     {
@@ -64,7 +65,7 @@ public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock, IS
             receipt = new TransferReceipt
             {
                 TransferOrderId = orderId,
-                ReceiptCode = $"TRR-{Guid.NewGuid():N}",
+                ReceiptCode = await codes.NextAsync(DocumentType.TransferReceipt),
                 ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow),
                 CreatedByUserId = userId,
                 Status = "DRAFT"

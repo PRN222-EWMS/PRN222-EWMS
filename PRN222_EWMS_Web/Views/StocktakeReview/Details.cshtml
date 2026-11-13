@@ -72,9 +72,9 @@
     @if (Model.Observations.Count == 0) { <tr><td colspan="6" class="text-center muted py-4">Chưa có kết quả vòng đếm đã hoàn tất để rà soát.</td></tr> }
     </tbody></table></div></section>
     @if (Model.Handling.Count > 0) {
-        <section class="workspace-card"><h2>Xử lý vị trí và hàng hỏng</h2><div class="table-wrap"><table class="workspace-table"><thead><tr><th>Serial / sản phẩm</th><th>Nơi phát hiện</th><th>Vị trí ban đầu</th><th>Đích chuyển</th><th>Người thực hiện</th><th>Trạng thái</th></tr></thead><tbody>
+        <section class="workspace-card"><h2>Xử lý vị trí và hàng hỏng</h2><div class="table-wrap"><table class="workspace-table"><thead><tr><th>Serial / sản phẩm</th><th>Nơi phát hiện</th><th>Vị trí ban đầu</th><th>Vị trí sau xử lý</th><th>Người thực hiện</th><th>Trạng thái</th></tr></thead><tbody>
         @foreach (var handling in Model.Handling.OrderBy(h => h.Status == "MOVED").ThenBy(h => h.ScannedSerial)) {
-            <tr><td><strong>@handling.ScannedSerial</strong><small class="d-block muted">@Product(handling.ProductId) · @Condition(handling.ActualCondition)</small></td><td>@Location(handling.FoundLocationId)</td><td>@Location(handling.OriginalLocationId)</td><td>@(handling.TargetLocationId.HasValue ? Location(handling.TargetLocationId) : "Chưa chọn")</td><td>@Staff(handling.MovedByUserId ?? handling.RecordedByUserId)<small class="d-block muted">@StocktakeDisplay.Time(handling.MovedAt)</small></td><td>@(handling.Status == "MOVED" ? "Đã chuyển" : handling.Status == "CANCELLED" ? "Đã sửa ghi nhận" : "Chờ chuyển")</td></tr>
+            <tr><td><strong>@handling.ScannedSerial</strong><small class="d-block muted">@Product(handling.ProductId) · @Condition(handling.ActualCondition)</small></td><td>@Location(handling.FoundLocationId)</td><td>@Location(handling.OriginalLocationId)</td><td>@(handling.TargetLocationId.HasValue ? Location(handling.TargetLocationId) : "Chưa chọn")</td><td>@Staff(handling.MovedByUserId ?? handling.RecordedByUserId)<small class="d-block muted">@StocktakeDisplay.Time(handling.MovedAt)</small></td><td>@StocktakeDisplay.HandlingStatus(handling)</td></tr>
         }
         </tbody></table></div></section>
     }

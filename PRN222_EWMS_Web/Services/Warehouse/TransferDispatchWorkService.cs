@@ -6,7 +6,8 @@ using PRN222_EWMS_Web.Services.Warehouse;
 
 namespace PRN222_EWMS_Web.Services.WarehouseStaff;
 
-public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService expiry, ISourceReservationService commitments)
+public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService expiry, ISourceReservationService commitments,
+    DocumentCodeGenerator codes)
 {
     private async Task<int[]> WorkWarehousesAsync(long orderId, int userId)
     {
@@ -71,7 +72,7 @@ public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService
             dispatch = new TransferDispatch
             {
                 TransferOrderId = orderId,
-                DispatchCode = $"TD-{Guid.NewGuid():N}",
+                DispatchCode = await codes.NextAsync(DocumentType.TransferDispatch),
                 DispatchDate = DateOnly.FromDateTime(DateTime.UtcNow),
                 CreatedByUserId = userId,
                 Status = "DRAFT"

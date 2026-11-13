@@ -69,10 +69,8 @@
         else
         {
             <div class="mb-3">
-                <label asp-for="Pocode" class="form-label fw-semibold">Mã đơn mua</label>
-                <input asp-for="Pocode" class="form-control" id="PoCodeInput" placeholder="Để trống để tạo mã tự động" maxlength="40" autocomplete="off" />
-                <span asp-validation-for="Pocode" class="text-danger small d-block mt-1" id="PoCodeValidationMsg"></span>
-                <div class="form-text text-muted" id="PoCodeHint">Có thể nhập mã riêng, tối đa 40 ký tự.</div>
+                <label class="form-label fw-semibold" for="PoCodeAutomatic">Mã đơn mua</label>
+                <input type="text" class="form-control" id="PoCodeAutomatic" value="Tự động cấp khi lưu" readonly />
             </div>
         }
 
@@ -484,20 +482,6 @@
             if (event.target.classList.contains('product-select')) triggerCapacityCheck();
         });
 
-        // Xử lý mã đơn mua (PO Code)
-        const poCodeInput = document.getElementById('PoCodeInput');
-        const poCodeMsg = document.getElementById('PoCodeValidationMsg');
-
-        // Khi điền mã đơn mua: không kiểm tra báo đỏ, tự động xóa lỗi cũ khi người dùng gõ
-        if (poCodeInput) {
-            poCodeInput.addEventListener('input', function () {
-                poCodeInput.classList.remove('is-invalid');
-                if (poCodeMsg) {
-                    poCodeMsg.innerHTML = '';
-                }
-            });
-        }
-
         // Khởi tạo tính toán ban đầu
         recalcTotal();
         linesTbody.querySelectorAll('tr').forEach(r => triggerCapacityCheck(r));
@@ -505,21 +489,7 @@
         // Kiểm tra trước khi submit form (Lưu bản nháp hoặc Lưu & Xác nhận đơn)
         const form = document.getElementById('createPoForm') || document.getElementById('editPoForm');
         if (form) {
-            let submitAction = 'draft';
-            let isProgrammaticSubmit = false;
-
-            // Ghi nhận nút submit nào được nhấn (Lưu bản nháp / Lưu & Xác nhận đơn)
-            form.querySelectorAll('button[type="submit"]').forEach(btn => {
-                btn.addEventListener('click', function () {
-                    submitAction = this.value || 'draft';
-                });
-            });
-
-            form.addEventListener('submit', async function (e) {
-                if (isProgrammaticSubmit) {
-                    return true;
-                }
-
+            form.addEventListener('submit', function (e) {
                 const rows = linesTbody.querySelectorAll('tr');
                 if (rows.length === 0) {
                     e.preventDefault();
@@ -556,43 +526,6 @@
                     return false;
                 }
 
-                const poVal = poCodeInput ? poCodeInput.value.trim() : '';
-                // Nếu người dùng nhập mã đơn mua, chỉ kiểm tra trùng khi submit form
-                if (poVal) {
-                    e.preventDefault();
-
-                    try {
-                        const res = await fetch(`/PurchaseOrder/CheckPoCode?poCode=${encodeURIComponent(poVal)}`);
-                        if (res.ok) {
-                            const data = await res.json();
-                            if (data.isDuplicate) {
-                                // Chỉ hiển thị thông báo đỏ ở thẻ span phía dưới, không báo đỏ viền ngoài ô nhập
-                                if (poCodeInput) {
-                                    poCodeInput.classList.remove('is-invalid');
-                                    poCodeInput.focus();
-                                }
-                                if (poCodeMsg) {
-                                    poCodeMsg.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i>${data.message}`;
-                                }
-                                return false;
-                            }
-                        }
-                    } catch (err) {
-                        console.error('Lỗi khi kiểm tra mã đơn mua:', err);
-                    }
-
-                    // Không trùng lặp: tiếp tục gửi form với đúng action đã chọn
-                    isProgrammaticSubmit = true;
-                    let hiddenAction = form.querySelector('input[name="action"][type="hidden"]');
-                    if (!hiddenAction) {
-                        hiddenAction = document.createElement('input');
-                        hiddenAction.type = 'hidden';
-                        hiddenAction.name = 'action';
-                        form.appendChild(hiddenAction);
-                    }
-                    hiddenAction.value = submitAction;
-                    form.submit();
-                }
             });
         }
     });

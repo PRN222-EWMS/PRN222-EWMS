@@ -35,7 +35,7 @@ public class StocktakeExecutionService(IStocktakeRepository repo) : IStocktakeEx
         if (task.IsShortageSearch && observation?.SerialItemId != item?.SerialItemId)
             throw new StocktakeWorkflowException("Serial này không nằm trong danh sách cần tìm.", 403);
         if (recountRequestId is null && (await repo.HandlingAsync(id, ct)).Any(h => SameSerial(h.ScannedSerial, serial) && h.Status == "MOVED"))
-            throw new StocktakeWorkflowException("Serial đã được xác nhận chuyển trong đợt này. Không đếm lại ở ô nhận hàng; xem lịch sử xử lý.", 409);
+            throw new StocktakeWorkflowException("Serial đã được xác nhận vị trí trong đợt này. Không ghi nhận trùng; xem lịch sử xử lý.", 409);
         if (observation?.ScannedAt is not null && observation.ScannedByUserId != actorId)
             throw new StocktakeWorkflowException("Serial đã được nhân viên khác ghi nhận trong vòng đếm này. Manager cần rà soát trước khi thay đổi.", 409);
         var expected = observation?.ExpectedQuantity == 1 ? observation.ExpectedLocationId : item?.CurrentLocationId;
@@ -274,7 +274,7 @@ public class StocktakeExecutionService(IStocktakeRepository repo) : IStocktakeEx
                 && o.RoundNumber == round.RoundNumber && o.ScannedSerial == serial, token);
             var handling = (await repo.HandlingAsync(plan.StocktakeId, token)).SingleOrDefault(h => SameSerial(h.ScannedSerial, serial));
             if (handling?.Status == "MOVED" && (request is null || input.LocationId != handling.TargetLocationId || input.Condition != handling.ActualCondition))
-                throw new StocktakeWorkflowException("Serial đã chuyển và xử lý trong đợt này; không ghi nhận trùng ở vị trí nhận.", 409);
+                throw new StocktakeWorkflowException("Serial đã được xử lý vị trí trong đợt này; không ghi nhận trùng.", 409);
             var item = await repo.Query<SerialItem>().AsNoTracking().SingleOrDefaultAsync(s => s.SerialNumber == serial, token);
             if (!StocktakeReceivingEvidence.IsInWarehouse(item, plan.WarehouseId))
             {
@@ -365,7 +365,7 @@ public class StocktakeExecutionService(IStocktakeRepository repo) : IStocktakeEx
             var (plan, assignments, request, locations, planLocations) = await ContextAsync(actorId, input.Id, input.RecountRequestId, token);
             if ((await repo.HandlingAsync(plan.StocktakeId, token)).Any(h =>
                 h.RecordedByUserId == actorId && h.Status == "WAITING"))
-                throw new StocktakeWorkflowException("Còn hàng chờ chuyển đến vị trí hợp lệ. Xác nhận chuyển trước khi gửi kết quả.");
+                throw new StocktakeWorkflowException("Còn hàng chưa xác nhận vị trí hợp lệ. Xác nhận giữ nguyên hoặc chuyển trước khi gửi kết quả.");
             if (request?.Status == "SUBMITTED" || request is null && assignments.All(a => a.Status == "DONE")) return true;
             CheckVersion(plan, input.Version);
             var round = await RunningRoundAsync(plan, assignments, request, token);
