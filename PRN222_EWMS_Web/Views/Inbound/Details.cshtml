@@ -37,7 +37,7 @@
                         HelpText = "Quét hoặc đọc ảnh chỉ điền Serial. Kiểm tra kết quả rồi bấm thêm để lưu.",
                         Hint = "Nguồn: Nhập tay · Enter để thêm nhanh." })" />
                 </fieldset>
-                <fieldset><legend>4. Tình trạng hàng</legend><label asp-for="NewSerial.Condition">Tình trạng</label><select asp-for="NewSerial.Condition"><option value="GOOD">GOOD — Hàng tốt</option><option value="DAMAGED">DAMAGED — Hàng hỏng</option></select><label asp-for="NewSerial.ConditionNote">Ghi chú tình trạng</label><textarea asp-for="NewSerial.ConditionNote" maxlength="1000" rows="2"></textarea><small>Hàng hỏng cần ghi chú và sẽ được cách ly.</small></fieldset>
+                <fieldset><legend>4. Tình trạng hàng</legend><label asp-for="NewSerial.Condition">Tình trạng</label><select asp-for="NewSerial.Condition"><option value="GOOD">GOOD — Hàng tốt</option><option value="DAMAGED">DAMAGED — Hàng hỏng</option></select><label asp-for="NewSerial.ConditionNote">Ghi chú tình trạng</label><textarea asp-for="NewSerial.ConditionNote" maxlength="1000" rows="2"></textarea><small>Hàng hỏng cần ghi rõ tình trạng.</small></fieldset>
                 <button class="inbound-primary" type="submit">Xác nhận thêm Serial</button>
             </form></aside>
         }

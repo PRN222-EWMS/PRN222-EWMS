@@ -40,14 +40,14 @@
             <div><dt>Nơi phát hiện</dt><dd>@Location(Model.Handling.FoundLocationId)</dd></div>
             <div><dt>Vị trí trong sổ kho</dt><dd>@Location(Model.Handling.OriginalLocationId)</dd></div>
             <div><dt>Tình trạng thực tế</dt><dd>@(Model.Handling.ActualCondition == "DAMAGED" ? "Hỏng" : "Tốt")</dd></div>
-            <div><dt>Trạng thái xử lý</dt><dd>@(Model.Handling.Status == "MOVED" ? "Đã chuyển" : Model.Handling.Status == "CANCELLED" ? "Đã sửa ghi nhận" : "Chờ chuyển")</dd></div>
+            <div><dt>Trạng thái xử lý</dt><dd>@StocktakeDisplay.HandlingStatus(Model.Handling)</dd></div>
         </dl>
         @if (!string.IsNullOrWhiteSpace(Model.Message)) { <div class="alert alert-info mb-0" role="status">@Model.Message</div> }
-        @if (Model.Handling.Status == "MOVED") { <p class="mb-0"><strong>Đã chuyển đến:</strong> @Location(Model.Handling.TargetLocationId) · @StocktakeDisplay.Time(Model.Handling.MovedAt)</p> }
+        @if (Model.Handling.Status == "MOVED") { <p class="mb-0"><strong>Vị trí đã xác nhận:</strong> @Location(Model.Handling.TargetLocationId) · @StocktakeDisplay.Time(Model.Handling.MovedAt)</p> }
     </section>
     @if (Model.CanMove && Model.Suggestions.Count > 0)
     {
-        <section class="workspace-card"><h2>@(Model.Handling.ActualCondition == "DAMAGED" ? "Chuyển đến vị trí hàng hỏng" : "Chuyển về vị trí hợp lệ")</h2>
+        <section class="workspace-card"><h2>Xác nhận vị trí sau kiểm kê</h2>
             <form asp-action="Move" method="post" class="workspace-form mt-0" id="stocktake-move-form">@Html.AntiForgeryToken()
                 <input type="hidden" name="Id" value="@Model.Plan.StocktakeId" /><input type="hidden" name="Version" value="@Model.Version" />
                 <input type="hidden" name="HandlingId" value="@Model.Handling.HandlingId" /><input type="hidden" name="HandlingVersion" value="@Model.HandlingVersion" />
@@ -56,18 +56,19 @@
                     @foreach (var target in Model.Suggestions)
                     {
                         <label class="stocktake-target d-flex align-items-start gap-3 border rounded p-3 mb-2" for="target-@target.Id">
-                            <input type="radio" id="target-@target.Id" name="TargetLocationId" value="@target.Id" checked="@(selectedTarget == target.Id.ToString())" required class="stocktake-target-radio flex-shrink-0" />
+                            <input type="radio" id="target-@target.Id" name="TargetLocationId" value="@target.Id" checked="@(selectedTarget == target.Id.ToString())" required class="stocktake-target-radio flex-shrink-0" data-keep-position="@((target.Id == Model.Handling.FoundLocationId).ToString().ToLowerInvariant())" />
                             <span><strong>@target.Path</strong>
                                 <span class="stocktake-target-selected ms-2 text-primary">Đã chọn</span>
-                                @if (target.Id == Model.Handling.OriginalLocationId) { <span class="role-badge ms-2">Vị trí ban đầu</span> }
+                                @if (target.Id == Model.Handling.FoundLocationId) { <span class="role-badge ms-2">Giữ nguyên tại nơi phát hiện</span> }
+                                else if (target.Id == Model.Handling.OriginalLocationId) { <span class="role-badge ms-2">Vị trí trong sổ kho</span> }
                                 else if (target.Id == suggested?.Id) { <span class="role-badge ms-2">Đề xuất</span> }
                                 <small class="d-block muted">Còn @target.RemainingCapacity.ToString("0.###") @target.CapacityUnit@if (target.RemainingWeightKg.HasValue) { <span> · @target.RemainingWeightKg.Value.ToString("0.###") kg tải trọng</span> }</small>
                             </span>
                         </label>
                     }
                 </fieldset>
-                <label class="checkbox-row"><input type="checkbox" name="Confirmed" value="true" required /> Tôi đã chuyển đúng serial đến vị trí đã chọn.</label>
-                <div class="d-flex gap-2 flex-wrap"><button type="submit" class="workspace-button">Xác nhận đã chuyển</button><a asp-action="Count" asp-route-id="@Model.Plan.StocktakeId" asp-route-recountRequestId="@Model.RecountRequestId" class="workspace-link">Để xử lý sau</a></div>
+                <label class="checkbox-row"><input type="checkbox" name="Confirmed" value="true" required /> Tôi xác nhận đúng serial, tình trạng và hàng thực tế đang ở vị trí đã chọn.</label>
+                <div class="d-flex gap-2 flex-wrap"><button type="submit" class="workspace-button" data-confirm-position>@(selectedTarget == Model.Handling.FoundLocationId?.ToString() ? "Xác nhận giữ nguyên" : "Xác nhận đã chuyển")</button><a asp-action="Count" asp-route-id="@Model.Plan.StocktakeId" asp-route-recountRequestId="@Model.RecountRequestId" class="workspace-link">Để xử lý sau</a></div>
             </form>
         </section>
     }
@@ -78,8 +79,15 @@
 (() => {
  const form = document.getElementById('stocktake-move-form'); if (!form) return;
  let busy = false;
+ const keeping = () => form.querySelector('[name="TargetLocationId"]:checked')?.dataset.keepPosition === 'true';
+ form.addEventListener('change', event => {
+  if (event.target.name !== 'TargetLocationId') return;
+  form.querySelector('[data-confirm-position]').textContent = keeping() ? 'Xác nhận giữ nguyên' : 'Xác nhận đã chuyển';
+  form.querySelector('[name="Confirmed"]').checked = false;
+ });
  form.addEventListener('submit', event => {
-  if (busy || !form.reportValidity() || !confirm('Xác nhận đúng serial đã được chuyển đến vị trí đã chọn?')) { event.preventDefault(); return; }
+  const message = keeping() ? 'Xác nhận giữ nguyên đúng serial và tình trạng tại nơi phát hiện?' : 'Xác nhận đúng serial đã được chuyển đến vị trí đã chọn?';
+  if (busy || !form.reportValidity() || !confirm(message)) { event.preventDefault(); return; }
   busy = true;
  });
  window.addEventListener('pageshow', () => { busy = false; });

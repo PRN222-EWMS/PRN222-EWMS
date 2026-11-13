@@ -63,6 +63,27 @@ public static class StocktakeScopeRules
 {
     public static readonly string[] LockedStatuses = ["COUNTING", "RECOUNTING", "REVIEWING", "PENDING_APPROVAL"];
 
+    public static string? MovementBlockReason(int warehouseId, IReadOnlyCollection<Models.Stocktake> plans,
+        IReadOnlyCollection<StocktakeScope> scopes, IReadOnlyCollection<StorageLocation> locations,
+        IReadOnlyCollection<int?> affectedLocations)
+    {
+        var own = locations.Where(l => l.WarehouseId == warehouseId).ToList();
+        var ids = own.Select(l => l.LocationId).ToHashSet();
+        if (affectedLocations.Any(id => id.HasValue && !ids.Contains(id.Value)))
+            return "Vị trí hiện tại của hàng không hợp lệ trong kho. Cần kiểm tra lại trước khi thao tác.";
+        foreach (var plan in plans.Where(p => p.WarehouseId == warehouseId && LockedStatuses.Contains(p.Status)))
+        {
+            var roots = scopes.Where(s => s.StocktakeId == plan.StocktakeId).ToList();
+            if (plan.ScopeType is not ("WHOLE_WAREHOUSE" or "LOCATIONS")
+                || plan.ScopeType == "LOCATIONS" && (roots.Count == 0 || roots.Any(r => !ids.Contains(r.LocationId))))
+                return $"Phạm vi đợt kiểm kê {plan.StocktakeCode} không hợp lệ. Manager cần kiểm tra trước khi tiếp tục.";
+            var scope = PlanLocations(plan, roots, own);
+            if (affectedLocations.Any(id => InPlan(plan, scope, id)))
+                return $"Đợt kiểm kê {plan.StocktakeCode} đang khóa phạm vi của hàng. Chỉ tiếp tục sau khi đợt hoàn tất.";
+        }
+        return null;
+    }
+
     public static HashSet<int> Descendants(int rootId, IReadOnlyCollection<StorageLocation> locations)
     {
         var result = new HashSet<int>();

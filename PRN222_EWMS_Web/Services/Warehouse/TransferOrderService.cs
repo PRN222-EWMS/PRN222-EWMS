@@ -7,7 +7,8 @@ using PRN222_EWMS_Web.ViewModels.Transfer;
 namespace PRN222_EWMS_Web.Services.Warehouse;
 
 public class TransferOrderService(EwmsDbContext db, TransferStockService stock, TransferCapacityService capacity,
-    TransferExpiryService expiry, TimeProvider clock, ILogger<TransferOrderService> logger) : ITransferOrderService
+    TransferExpiryService expiry, TimeProvider clock, ILogger<TransferOrderService> logger,
+    ISourceReservationService sources, DocumentCodeGenerator codes) : ITransferOrderService
 {
     public Task<List<ProductLookupDto>> GetAvailableProductsAsync(int warehouseId, string itemCondition = "GOOD", long? transferOrderId = null) =>
         stock.GetProductsAsync(warehouseId, itemCondition, transferOrderId);
@@ -39,7 +40,10 @@ public class TransferOrderService(EwmsDbContext db, TransferStockService stock, 
             TransferOrderId = id, TransferCode = o.TransferCode, Status = o.Status, RowVersion = o.RowVersion,
             RowVersionBase64 = Convert.ToBase64String(o.RowVersion), FromWarehouseId = o.FromWarehouseId, ToWarehouseId = o.ToWarehouseId,
             ItemCondition = o.ItemCondition, DispatchDate = o.DispatchDate, ExpectedDate = o.ExpectedDate, Note = o.Note,
-            IsRelease = o.Status == "RELEASED", CanEdit = editable, CanCancel = editable,
+            IsRelease = o.Status == "RELEASED", CanEdit = editable,
+            CanCancel = o.Status is "DRAFT" or "RELEASED"
+                && !await db.TransferDispatches.AnyAsync(d => d.TransferOrderId == id && d.Status == "DONE")
+                && !await db.TransferReceipts.AnyAsync(r => r.TransferOrderId == id && r.Status == "DONE"),
             LockReason = children ? "Lệnh đã có phiếu gửi/nhận nên đã khóa toàn bộ chỉnh sửa. Muốn thêm hàng, hãy tạo lệnh khác."
                 : editable ? null : o.CloseReason ?? $"Lệnh ở trạng thái {o.Status}, không thể chỉnh sửa.",
             Lines = o.TransferOrderLines.Where(l => !editable || l.RequestedQuantity > l.CancelledQuantity)
@@ -122,13 +126,10 @@ public class TransferOrderService(EwmsDbContext db, TransferStockService stock, 
     }
 
     // All checks and reservations share a serializable transaction. Lock order matches staff dispatch actions.
-    private async Task LockWarehousesAsync(int from, int to)
+    private async Task LockWarehousesAsync(params int[] warehouseIds)
     {
-        foreach (var id in new[] { from, to }.Distinct().Order())
-        {
-            await db.Warehouses.FromSqlInterpolated($"SELECT * FROM dbo.Warehouse WITH (UPDLOCK,HOLDLOCK) WHERE WarehouseID={id}").AsNoTracking().ToListAsync();
-            await db.SupplySources.FromSqlInterpolated($"SELECT * FROM dbo.SupplySource WITH (UPDLOCK,HOLDLOCK) WHERE WarehouseID={id} AND SupplyState='PHYSICAL'").AsNoTracking().ToListAsync();
-        }
+        foreach (var id in warehouseIds.Where(id => id > 0).Distinct().Order())
+            await sources.LockWarehouseAsync(id);
     }
 
     private async Task ReserveAsync(TransferOrder order, IEnumerable<TransferOrderLine> lines)
@@ -175,7 +176,7 @@ public class TransferOrderService(EwmsDbContext db, TransferStockService stock, 
             var order = new TransferOrder
             {
                 // Unique even when two managers create at the same time; no MAX(code) race.
-                TransferCode = $"TR-{TransferPolicy.Today(clock):yyyyMMdd}-{Guid.NewGuid():N}"[..37],
+                TransferCode = await codes.NextAsync(DocumentType.TransferOrder),
                 FromWarehouseId = model.FromWarehouseId, ToWarehouseId = model.ToWarehouseId, ItemCondition = model.ItemCondition,
                 DispatchDate = model.DispatchDate, ExpectedDate = model.ExpectedDate, Note = model.Note?.Trim(),
                 CreatedByUserId = userId, CreatedAt = clock.GetUtcNow().UtcDateTime, Status = model.IsRelease ? "RELEASED" : "DRAFT",
@@ -203,11 +204,17 @@ public class TransferOrderService(EwmsDbContext db, TransferStockService stock, 
     public async Task<(bool Success, string? Error)> UpdateTransferOrderAsync(EditTransferOrderViewModel model, int userId)
     {
         if (await expiry.CancelIfExpiredAsync(model.TransferOrderId)) return (false, "Lệnh đã quá ngày dự kiến đến và được tự động hủy. Hãy tạo lệnh khác.");
+        var previous = await db.TransferOrders.AsNoTracking().Where(o => o.TransferOrderId == model.TransferOrderId)
+            .Select(o => new { o.FromWarehouseId, o.ToWarehouseId }).SingleOrDefaultAsync();
+        if (previous == null) return (false, "Lệnh chuyển kho không tồn tại.");
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
         {
+            await LockWarehousesAsync(previous.FromWarehouseId, previous.ToWarehouseId, model.FromWarehouseId, model.ToWarehouseId);
             var order = await TransferDataAccess.LockOrderAsync(db, model.TransferOrderId);
             if (order == null) return (false, "Lệnh chuyển kho không tồn tại.");
+            if (order.FromWarehouseId != previous.FromWarehouseId || order.ToWarehouseId != previous.ToWarehouseId)
+                return (false, "Kho của lệnh vừa thay đổi. Hãy tải lại trang.");
             if (await expiry.CancelLockedAsync(order)) { await tx.CommitAsync(); return (false, TransferPolicy.ExpiryReason); }
             if (order.Status is not ("DRAFT" or "RELEASED") || await TransferDataAccess.HasDocumentsAsync(db, order.TransferOrderId))
                 return (false, "Lệnh đã có phiếu gửi/nhận hoặc đã kết thúc; toàn bộ chỉnh sửa bị khóa.");
@@ -219,7 +226,6 @@ public class TransferOrderService(EwmsDbContext db, TransferStockService stock, 
                 || await db.Reservations.AnyAsync(r => r.TransferOrderId == order.TransferOrderId && r.ConsumedQuantity > 0))
                 return (false, "Lệnh đã có dữ liệu phân bổ/tiêu thụ hàng; không thể sửa thủ công.");
             bool release = order.Status == "RELEASED" || model.IsRelease;
-            await LockWarehousesAsync(model.FromWarehouseId, model.ToWarehouseId);
             model.Assessment = await AssessAsync(model, order.TransferOrderId, release);
             if (model.Assessment.Errors.Count > 0) return (false, string.Join(" ", model.Assessment.Errors));
             bool sourceChanged = order.FromWarehouseId != model.FromWarehouseId || order.ItemCondition != model.ItemCondition;
@@ -277,53 +283,62 @@ public class TransferOrderService(EwmsDbContext db, TransferStockService stock, 
 
     public async Task<(bool Success, string? Error)> CancelTransferOrderAsync(long id, int userId)
     {
-        var order = await db.TransferOrders
-            .Include(t => t.TransferOrderLines)
-            .Include(t => t.Reservations)
-            .FirstOrDefaultAsync(t => t.TransferOrderId == id);
-
-        if (order == null)
-            return (false, "Không tìm thấy lệnh chuyển kho.");
-
-        if (order.Status == "COMPLETED" || order.Status == "CANCELLED" || order.Status == "CLOSED")
-            return (false, $"Lệnh chuyển kho đã ở trạng thái '{order.Status}', không thể hủy.");
-
-        if (order.Status != "DRAFT" && order.Status != "RELEASED")
-            return (false, "Chỉ có thể hủy lệnh chuyển kho ở trạng thái Bản nháp (DRAFT) hoặc Đã phát hành (RELEASED).");
-
-        bool hasDispatch = await db.TransferDispatches.AnyAsync(d => d.TransferOrderId == id);
-        bool hasReceipt = await db.TransferReceipts.AnyAsync(r => r.TransferOrderId == id);
-        if (hasDispatch || hasReceipt)
-            return (false, "Lệnh chuyển kho đã phát sinh phiếu xuất chuyển hoặc nhận hàng, không thể hủy.");
-
-        await using var tx = await db.Database.BeginTransactionAsync();
+        var context = await db.TransferOrders.AsNoTracking().Where(o => o.TransferOrderId == id)
+            .Select(o => new { o.FromWarehouseId, o.ToWarehouseId }).SingleOrDefaultAsync();
+        if (context is null) return (false, "Không tìm thấy lệnh chuyển kho.");
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
         {
-            order.Status = "CANCELLED";
-            order.ClosedAt = DateTime.UtcNow;
-            order.CloseReason = "Đã hủy bởi Quản lý kho";
-
-            foreach (var line in order.TransferOrderLines)
+            await LockWarehousesAsync(context.FromWarehouseId, context.ToWarehouseId);
+            if (!await db.Users.AsNoTracking().AnyAsync(u => u.UserId == userId && u.Status == "ACTIVE" && u.Role.RoleName == "MANAGER"))
+                return (false, "Tài khoản không còn quyền Manager.");
+            var order = await TransferDataAccess.LockOrderAsync(db, id);
+            if (order is null || order.FromWarehouseId != context.FromWarehouseId || order.ToWarehouseId != context.ToWarehouseId)
+                return (false, "Lệnh vừa thay đổi. Hãy tải lại trang.");
+            if (order.Status == "CANCELLED") return (true, null);
+            if (order.Status is not ("DRAFT" or "RELEASED"))
+                return (false, "Lệnh đã thực hiện hoặc kết thúc; không thể hủy toàn bộ.");
+            var dispatches = await db.TransferDispatches.Where(d => d.TransferOrderId == id).ToListAsync();
+            var receipts = await db.TransferReceipts.Where(r => r.TransferOrderId == id).ToListAsync();
+            if (dispatches.Any(d => d.Status is not ("DRAFT" or "PICKING" or "READY" or "CANCELLED"))
+                || receipts.Any(r => r.Status is not ("DRAFT" or "CANCELLED"))
+                || await db.Reservations.AnyAsync(r => r.TransferOrderId == id && r.ConsumedQuantity > 0)
+                || await db.DemandAllocations.AnyAsync(a => a.TransferOrderId == id))
+                return (false, "Lệnh đã có dữ liệu gửi/nhận hoàn tất hoặc tiêu thụ tồn. Không thể hủy toàn bộ.");
+            var dispatchIds = dispatches.Where(d => d.Status != "CANCELLED").Select(d => d.DispatchId).ToArray();
+            var receiptIds = receipts.Where(r => r.Status == "DRAFT").Select(r => r.TransferReceiptId).ToArray();
+            var dispatchItems = await db.TransferDispatchItems.Where(i => dispatchIds.Contains(i.DispatchId) && i.IsActive).ToListAsync();
+            var receiptItems = await db.TransferReceiptItems.Where(i => receiptIds.Contains(i.TransferReceiptId) && i.IsActive).ToListAsync();
+            var claims = await db.PickingClaims.Where(c => c.DispatchId != null && dispatchIds.Contains(c.DispatchId.Value)).ToListAsync();
+            await TransferDataAccess.SetActorAsync(db, userId, "Manager hủy lệnh và các phiếu chuyển nháp");
+            foreach (var item in dispatchItems) item.IsActive = false;
+            foreach (var item in receiptItems) item.IsActive = false;
+            db.PickingClaims.RemoveRange(claims);
+            await db.SaveChangesAsync(); // Save children before their headers become immutable.
+            foreach (var dispatch in dispatches.Where(d => d.Status != "CANCELLED"))
             {
+                dispatch.Status = "CANCELLED";
+                dispatch.IsActivePicking = false;
+            }
+            foreach (var receipt in receipts.Where(r => r.Status == "DRAFT")) receipt.Status = "CANCELLED";
+            var now = clock.GetUtcNow().UtcDateTime;
+            await TransferDataAccess.ReleaseHoldsAsync(db, id, now);
+            foreach (var line in await db.TransferOrderLines.Where(l => l.TransferOrderId == id).ToListAsync())
                 line.CancelledQuantity = line.RequestedQuantity;
-            }
-
-            var activeReservations = order.Reservations.Where(r => r.Status == "ACTIVE").ToList();
-            if (activeReservations.Count > 0)
-            {
-                db.Reservations.RemoveRange(activeReservations);
-            }
-
+            order.Status = "CANCELLED";
+            order.ClosedAt = now;
+            order.CloseReason = "Manager hủy lệnh cùng các phiếu chuyển nháp.";
             await db.SaveChangesAsync();
             await tx.CommitAsync();
-
             return (true, null);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is DbUpdateException or SqlException)
         {
             await tx.RollbackAsync();
-            return (false, $"Lỗi khi hủy lệnh chuyển kho: {ex.Message}");
+            logger.LogWarning(ex, "Could not cancel transfer {TransferOrderId}.", id);
+            return (false, "Dữ liệu vừa thay đổi hoặc không thể hủy. Toàn bộ lệnh và phiếu được giữ nguyên; hãy tải lại trang.");
         }
+        finally { await TransferDataAccess.TryClearActorAsync(db, logger); db.ChangeTracker.Clear(); }
     }
 
     public async Task<TransferListViewModel> GetListAsync(

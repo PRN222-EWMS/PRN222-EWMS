@@ -121,7 +121,6 @@ public class PoDetailsViewModel
     // Quyền thao tác tại trang chi tiết
     public bool CanEdit { get; set; }
     public bool CanConfirm { get; set; }
-    public bool CanCloseRemainder { get; set; }
     public bool CanCancelDraft { get; set; }
     public bool CanCancel { get; set; }
 }
@@ -241,13 +240,4 @@ public class ProductLookupDto
     public string Model { get; set; } = null!;
     public string Unit { get; set; } = null!;
     public int SupplierId { get; set; }
-}
-
-public class CloseRemainderRequestDto
-{
-    public long PurchaseOrderId { get; set; }
-
-    [Required(ErrorMessage = "Vui lòng nhập lý do đóng đơn.")]
-    [MaxLength(500, ErrorMessage = "Lý do đóng không được vượt quá 500 ký tự.")]
-    public string Reason { get; set; } = null!;
 }

@@ -69,10 +69,8 @@
         else
         {
             <div class="mb-3">
-                <label asp-for="Pocode" class="form-label fw-semibold">Mã đơn mua</label>
-                <input asp-for="Pocode" class="form-control" id="PoCodeInput" placeholder="Để trống để tạo mã tự động" maxlength="40" autocomplete="off" />
-                <span asp-validation-for="Pocode" class="text-danger small d-block mt-1" id="PoCodeValidationMsg"></span>
-                <div class="form-text text-muted" id="PoCodeHint">Có thể nhập mã riêng, tối đa 40 ký tự.</div>
+                <label class="form-label fw-semibold" for="PoCodeAutomatic">Mã đơn mua</label>
+                <input type="text" class="form-control" id="PoCodeAutomatic" value="Tự động cấp khi lưu" readonly />
             </div>
         }
 
@@ -104,12 +102,13 @@
     </button>
 </div>
 
+<p id="po-capacity-summary" class="text-muted small" role="status" aria-live="polite" hidden></p>
 <div class="table-wrap">
     <table class="workspace-table po-lines-table" id="linesTable">
         <thead>
             <tr>
                 <th style="width: 40px;">#</th>
-                <th style="min-width: 320px;">Sản phẩm (Mã / Tên / Model)</th>
+                <th style="min-width: 320px;">Sản phẩm</th>
                 <th style="width: 120px;">ĐVT</th>
                 <th style="width: 180px;">Số lượng đặt</th>
                 <th style="width: 60px; text-align: center;">Xóa</th>
@@ -131,7 +130,7 @@
                                         data-unit="@p.Unit"
                                         data-code="@p.ProductCode"
                                         data-model="@p.Model">
-                                    [@p.ProductCode] @p.ProductName (@p.Model)
+                                    @p.ProductName
                                 </option>
                             }
                         </select>
@@ -240,7 +239,7 @@
 
                     const opt = document.createElement('option');
                     opt.value = id;
-                    opt.textContent = `[${code}] ${name}${model ? ` (${model})` : ''}`;
+                    opt.textContent = name;
                     opt.dataset.unit = unit;
                     opt.dataset.code = code;
                     opt.dataset.model = model;
@@ -252,6 +251,7 @@
                 updateUnitForSelect(select);
             });
             recalcTotal();
+            triggerCapacityCheck();
         }
 
         function updateUnitForSelect(select) {
@@ -316,7 +316,7 @@
                 const name = p.productName ?? p.ProductName ?? '';
                 const model = p.model ?? p.Model ?? '';
                 const unit = p.unit ?? p.Unit ?? '';
-                optionsHtml += `<option value="${id}" data-unit="${unit}" data-code="${code}" data-model="${model}">[${code}] ${name}${model ? ` (${model})` : ''}</option>`;
+                optionsHtml += `<option value="${id}" data-unit="${unit}" data-code="${code}" data-model="${model}">${name}</option>`;
             });
 
             newRow.innerHTML = `
@@ -352,6 +352,7 @@
                 const row = btn.closest('tr');
                 row.remove();
                 recalcTotal();
+                triggerCapacityCheck();
             }
         });
 
@@ -383,104 +384,103 @@
             }
         });
 
-        // Tự động kiểm tra sức chứa thời gian thực (Real-time Capacity Feedback)
+        // One request evaluates every line against the same warehouse snapshot.
         const warehouseSelect = document.querySelector('select[name="WarehouseId"]');
-        if (warehouseSelect) {
-            warehouseSelect.addEventListener('change', function () {
-                linesTbody.querySelectorAll('tr').forEach(r => triggerCapacityCheck(r));
-            });
-        }
+        const arrivalInput = document.querySelector('input[name="ExpectedArrivalDate"]');
+        const capacityForm = linesTbody.closest('form');
+        const capacitySummary = document.getElementById('po-capacity-summary');
+        let capacityTimer = null, capacityRequest = null, capacityVersion = 0;
 
-        const poId = @(Model.PurchaseOrderId > 0 ? Model.PurchaseOrderId.ToString() : "null");
-        const debounceTimers = new Map();
-
-        function triggerCapacityCheck(row) {
-            const prodSelect = row.querySelector('.product-select');
-            const qtyInput = row.querySelector('.qty-input');
-            const hintDiv = row.querySelector('.capacity-hint');
-            if (!prodSelect || !qtyInput || !hintDiv) return;
-
-            const productId = parseInt(prodSelect.value);
-            const qty = parseInt(qtyInput.value) || 0;
-            const warehouseId = warehouseSelect ? parseInt(warehouseSelect.value) : 0;
-
-            if (qty <= 0) {
-                hintDiv.innerHTML = '<span class="text-danger fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>Số lượng phải > 0</span>';
-                qtyInput.classList.add('is-invalid');
-                row.dataset.capacityError = 'true';
-                row.dataset.errorMessage = 'Số lượng đặt hàng của mỗi sản phẩm phải là số nguyên dương lớn hơn 0.';
-                return;
+        function capacityMessage(row, text, error = false, pending = false) {
+            const hint = row.querySelector('.capacity-hint');
+            const quantity = row.querySelector('.qty-input');
+            if (hint) {
+                const span = document.createElement('span');
+                span.className = error ? 'text-danger' : pending ? 'text-muted' : 'text-success';
+                span.textContent = text;
+                hint.replaceChildren(span);
             }
-
-            if (!warehouseId || !productId) {
-                hintDiv.innerHTML = '';
-                qtyInput.classList.remove('is-invalid');
+            quantity?.classList.toggle('is-invalid', error);
+            if (error || pending) {
+                row.dataset.capacityError = 'true';
+                row.dataset.errorMessage = text;
+            } else {
                 delete row.dataset.capacityError;
                 delete row.dataset.errorMessage;
+            }
+        }
+
+        function triggerCapacityCheck() {
+            clearTimeout(capacityTimer);
+            capacityRequest?.abort();
+            const version = ++capacityVersion;
+            const rows = [...linesTbody.querySelectorAll('tr')];
+            if (capacitySummary) { capacitySummary.hidden = true; capacitySummary.textContent = ''; }
+            if (!warehouseSelect?.value || rows.length === 0) {
+                rows.forEach(row => capacityMessage(row, ''));
                 return;
             }
-
-            if (debounceTimers.has(row)) {
-                clearTimeout(debounceTimers.get(row));
-            }
-
-            hintDiv.innerHTML = '<span class="text-muted"><i class="bi bi-hourglass-split me-1"></i>Đang kiểm tra sức chứa...</span>';
-
-            const timer = setTimeout(async () => {
-                try {
-                    let url = `/PurchaseOrder/CheckCapacity?warehouseId=${warehouseId}&productId=${productId}&quantity=${qty}`;
-                    if (poId) url += `&excludePoId=${poId}`;
-
-                    const res = await fetch(url);
-                    if (!res.ok) {
-                        hintDiv.innerHTML = '';
-                        return;
-                    }
-                    const data = await res.json();
-                    if (!data.hasValidZone) {
-                        hintDiv.innerHTML = '<span class="text-danger fw-semibold"><i class="bi bi-x-circle me-1"></i>Ngành hàng không hợp lệ tại kho này (MSG-015)</span>';
-                        qtyInput.classList.add('is-invalid');
-                        row.dataset.capacityError = 'true';
-                        row.dataset.errorMessage = 'Ngành hàng không hợp lệ tại kho tiếp nhận này (MSG-015).';
-                    } else if (qty > data.maxOrderQuantity) {
-                        hintDiv.innerHTML = `<span class="text-danger fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>Vượt sức chứa! Tối đa: <strong>${data.maxOrderQuantity}</strong> (Kệ: ${data.rackTierCapacity}, Sàn: ${data.floorSlotCapacity})</span>`;
-                        qtyInput.classList.add('is-invalid');
-                        row.dataset.capacityError = 'true';
-                        row.dataset.errorMessage = `Số lượng đặt (${qty}) vượt quá sức chứa tối đa (${data.maxOrderQuantity}) của kho tiếp nhận.`;
-                    } else {
-                        hintDiv.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>Khả dụng: <strong>${data.maxOrderQuantity}</strong> chiếc (Kệ: ${data.rackTierCapacity}, Sàn: ${data.floorSlotCapacity})</span>`;
-                        qtyInput.classList.remove('is-invalid');
-                        delete row.dataset.capacityError;
-                        delete row.dataset.errorMessage;
-                    }
-                } catch {
-                    hintDiv.innerHTML = '';
-                }
-            }, 300);
-
-            debounceTimers.set(row, timer);
-        }
-
-        linesTbody.addEventListener('change', function (e) {
-            if (e.target.classList.contains('product-select')) {
-                const row = e.target.closest('tr');
-                if (row) triggerCapacityCheck(row);
-            }
-        });
-
-        // Xử lý mã đơn mua (PO Code)
-        const poCodeInput = document.getElementById('PoCodeInput');
-        const poCodeMsg = document.getElementById('PoCodeValidationMsg');
-
-        // Khi điền mã đơn mua: không kiểm tra báo đỏ, tự động xóa lỗi cũ khi người dùng gõ
-        if (poCodeInput) {
-            poCodeInput.addEventListener('input', function () {
-                poCodeInput.classList.remove('is-invalid');
-                if (poCodeMsg) {
-                    poCodeMsg.innerHTML = '';
-                }
+            let complete = true;
+            rows.forEach(row => {
+                const id = parseInt(row.querySelector('.product-select')?.value);
+                const quantity = Number(row.querySelector('.qty-input')?.value);
+                if (!id) { complete = false; capacityMessage(row, ''); }
+                else if (!Number.isInteger(quantity) || quantity < 1 || quantity > 1000000) {
+                    complete = false; capacityMessage(row, 'Số lượng phải là số nguyên từ 1 đến 1.000.000.', true);
+                } else capacityMessage(row, 'Đang kiểm tra sức chứa cho toàn bộ các dòng…', false, true);
             });
+            if (!complete || !arrivalInput?.value) {
+                rows.filter(row => row.dataset.capacityError === 'true' && !row.querySelector('.qty-input')?.classList.contains('is-invalid'))
+                    .forEach(row => capacityMessage(row, 'Chọn đủ sản phẩm và ngày nhận để kiểm tra sức chứa.', false, true));
+                return;
+            }
+            capacityTimer = setTimeout(async () => {
+                capacityRequest = new AbortController();
+                try {
+                    const response = await fetch('/PurchaseOrder/CheckCapacity', {
+                        method: 'POST', body: new FormData(capacityForm), credentials: 'same-origin',
+                        signal: capacityRequest.signal, headers: { Accept: 'application/json' }
+                    });
+                    if (response.redirected)
+                        throw new Error('Phiên đăng nhập thay đổi. Hãy tải lại trang.');
+                    if (!response.headers.get('content-type')?.includes('application/json'))
+                        throw new Error('Không tải được kết quả sức chứa. Hãy thử lại hoặc tải lại trang.');
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.message || 'Không kiểm tra được sức chứa.');
+                    if (version !== capacityVersion) return;
+                    const limits = new Map((data.lines || []).map(line => [String(line.productId), line]));
+                    const problem = (data.errors || []).join(' ');
+                    rows.forEach(row => {
+                        const line = limits.get(row.querySelector('.product-select').value);
+                        if (!line) capacityMessage(row, problem || 'Không tính được hạn mức. Hãy chọn lại sản phẩm.', true);
+                        else {
+                            const amount = Number(line.maxOrderQuantity).toLocaleString('vi-VN');
+                            const detail = 'Dòng này tối đa ' + amount + ' chiếc với các dòng còn lại đang chọn. '
+                                + 'Sàn: ' + Number(line.floorSlotCapacity).toLocaleString('vi-VN')
+                                + ', kệ: ' + Number(line.rackTierCapacity).toLocaleString('vi-VN') + '.';
+                            capacityMessage(row, line.isValid ? detail : detail + ' ' + (line.errorMessage || problem), !line.isValid);
+                        }
+                    });
+                    if (capacitySummary) {
+                        capacitySummary.textContent = 'Đã dự phòng hàng chưa nhận: mua hàng '
+                            + Number(data.incomingPurchaseQuantity || 0).toLocaleString('vi-VN')
+                            + ', chuyển kho ' + Number(data.incomingTransferQuantity || 0).toLocaleString('vi-VN')
+                            + ', khách trả ' + Number(data.incomingReturnQuantity || 0).toLocaleString('vi-VN')
+                            + ' chiếc. ' + (data.warnings || []).join(' ');
+                        capacitySummary.hidden = false;
+                    }
+                } catch (error) {
+                    if (error.name !== 'AbortError' && version === capacityVersion)
+                        rows.filter(row => row.isConnected).forEach(row => capacityMessage(row, error.message || 'Không kiểm tra được sức chứa. Thử lại hoặc tải lại trang.', true));
+                }
+            }, 350);
         }
+
+        warehouseSelect?.addEventListener('change', triggerCapacityCheck);
+        arrivalInput?.addEventListener('change', triggerCapacityCheck);
+        linesTbody.addEventListener('change', event => {
+            if (event.target.classList.contains('product-select')) triggerCapacityCheck();
+        });
 
         // Khởi tạo tính toán ban đầu
         recalcTotal();
@@ -489,21 +489,7 @@
         // Kiểm tra trước khi submit form (Lưu bản nháp hoặc Lưu & Xác nhận đơn)
         const form = document.getElementById('createPoForm') || document.getElementById('editPoForm');
         if (form) {
-            let submitAction = 'draft';
-            let isProgrammaticSubmit = false;
-
-            // Ghi nhận nút submit nào được nhấn (Lưu bản nháp / Lưu & Xác nhận đơn)
-            form.querySelectorAll('button[type="submit"]').forEach(btn => {
-                btn.addEventListener('click', function () {
-                    submitAction = this.value || 'draft';
-                });
-            });
-
-            form.addEventListener('submit', async function (e) {
-                if (isProgrammaticSubmit) {
-                    return true;
-                }
-
+            form.addEventListener('submit', function (e) {
                 const rows = linesTbody.querySelectorAll('tr');
                 if (rows.length === 0) {
                     e.preventDefault();
@@ -540,43 +526,6 @@
                     return false;
                 }
 
-                const poVal = poCodeInput ? poCodeInput.value.trim() : '';
-                // Nếu người dùng nhập mã đơn mua, chỉ kiểm tra trùng khi submit form
-                if (poVal) {
-                    e.preventDefault();
-
-                    try {
-                        const res = await fetch(`/PurchaseOrder/CheckPoCode?poCode=${encodeURIComponent(poVal)}`);
-                        if (res.ok) {
-                            const data = await res.json();
-                            if (data.isDuplicate) {
-                                // Chỉ hiển thị thông báo đỏ ở thẻ span phía dưới, không báo đỏ viền ngoài ô nhập
-                                if (poCodeInput) {
-                                    poCodeInput.classList.remove('is-invalid');
-                                    poCodeInput.focus();
-                                }
-                                if (poCodeMsg) {
-                                    poCodeMsg.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i>${data.message}`;
-                                }
-                                return false;
-                            }
-                        }
-                    } catch (err) {
-                        console.error('Lỗi khi kiểm tra mã đơn mua:', err);
-                    }
-
-                    // Không trùng lặp: tiếp tục gửi form với đúng action đã chọn
-                    isProgrammaticSubmit = true;
-                    let hiddenAction = form.querySelector('input[name="action"][type="hidden"]');
-                    if (!hiddenAction) {
-                        hiddenAction = document.createElement('input');
-                        hiddenAction.type = 'hidden';
-                        hiddenAction.name = 'action';
-                        form.appendChild(hiddenAction);
-                    }
-                    hiddenAction.value = submitAction;
-                    form.submit();
-                }
             });
         }
     });

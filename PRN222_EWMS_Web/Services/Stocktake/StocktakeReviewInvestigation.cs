@@ -93,7 +93,7 @@ public partial class StocktakeReviewService
             var child = new StocktakePlan
             {
                 WarehouseId = warehouseId, CreatedByUserId = actorId,
-                StocktakeCode = $"ST-INV-{now:yyyyMMdd}-{Guid.NewGuid():N}"[..40],
+                StocktakeCode = await codes.NextAsync(DocumentType.StocktakeInvestigation, token),
                 ScopeType = "WHOLE_WAREHOUSE", IncludeAwaitingPutaway = true,
                 Status = "PLANNED", CreatedAt = now, PlannedAt = now, Note = reason
             };

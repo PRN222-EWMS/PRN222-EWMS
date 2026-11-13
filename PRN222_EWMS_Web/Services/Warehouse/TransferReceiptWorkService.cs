@@ -6,8 +6,23 @@ using PRN222_EWMS_Web.Services.Warehouse;
 
 namespace PRN222_EWMS_Web.Services.WarehouseStaff;
 
-public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock, ISourceReservationService commitments)
+public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock, ISourceReservationService commitments,
+    DocumentCodeGenerator codes)
 {
+    private async Task<int[]> WorkWarehousesAsync(long orderId, int userId)
+    {
+        var context = await db.TransferOrders.AsNoTracking().Where(o => o.TransferOrderId == orderId
+            && db.Users.Any(u => u.UserId == userId && u.Status == "ACTIVE" && u.Role.RoleName == "WAREHOUSE_STAFF"
+                && u.WarehouseId == o.ToWarehouseId))
+            .Select(o => new { o.FromWarehouseId, o.ToWarehouseId }).SingleOrDefaultAsync();
+        return context is null ? [] : [context.FromWarehouseId, context.ToWarehouseId];
+    }
+
+    private async Task LockWarehousesAsync(int[] ids)
+    {
+        foreach (var id in ids.Distinct().Order()) await commitments.LockWarehouseAsync(id);
+    }
+
     private Task<TransferOrder?> LockDestinationOrderAsync(long orderId, int userId) =>
         db.TransferOrders
             .FromSqlInterpolated($"SELECT * FROM dbo.TransferOrder WITH (UPDLOCK, HOLDLOCK) WHERE TransferOrderID = {orderId}")
@@ -17,10 +32,13 @@ public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock, IS
 
     public async Task<(bool Success, string Message)> ClaimAsync(long orderId, int userId)
     {
+        var warehouses = await WorkWarehousesAsync(orderId, userId);
+        if (warehouses.Length == 0) return (false, "Lệnh không thuộc kho đích của bạn.");
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        await LockWarehousesAsync(warehouses);
         var order = await LockDestinationOrderAsync(orderId, userId);
 
-        if (order is null)
+        if (order is null || order.FromWarehouseId != warehouses[0] || order.ToWarehouseId != warehouses[1])
             return (false, "Bạn chỉ có thể nhận hàng tại kho đích của mình.");
         if (order.Status is not ("RELEASED" or "IN_PROGRESS"))
             return (false, "Trạng thái hiện tại của lệnh chưa cho phép nhận hàng.");
@@ -47,7 +65,7 @@ public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock, IS
             receipt = new TransferReceipt
             {
                 TransferOrderId = orderId,
-                ReceiptCode = $"TRR-{Guid.NewGuid():N}",
+                ReceiptCode = await codes.NextAsync(DocumentType.TransferReceipt),
                 ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow),
                 CreatedByUserId = userId,
                 Status = "DRAFT"
@@ -74,9 +92,13 @@ public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock, IS
         if (note is { Length: > 1000 })
             return (false, "Ghi chú tình trạng tối đa 1.000 ký tự.");
 
+        var warehouses = await WorkWarehousesAsync(orderId, userId);
+        if (warehouses.Length == 0) return (false, "Lệnh không thuộc kho đích của bạn.");
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        await LockWarehousesAsync(warehouses);
         var order = await LockDestinationOrderAsync(orderId, userId);
-        if (order is null || order.Status is not ("RELEASED" or "IN_PROGRESS"))
+        if (order is null || order.FromWarehouseId != warehouses[0] || order.ToWarehouseId != warehouses[1]
+            || order.Status is not ("RELEASED" or "IN_PROGRESS"))
             return (false, "Lệnh chưa sẵn sàng nhận hàng tại kho của bạn.");
         var canScan = await db.TransferReceipts.AnyAsync(r => r.TransferReceiptId == receiptId
             && r.TransferOrderId == orderId && r.Status == "DRAFT" && r.PerformedByUserId == userId);
@@ -124,7 +146,7 @@ public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock, IS
         foreach (var warehouseId in new[] { context.FromWarehouseId, context.ToWarehouseId }.Distinct().Order())
             await commitments.LockWarehouseAsync(warehouseId);
         var order = await LockDestinationOrderAsync(orderId, userId);
-        if (order is null)
+        if (order is null || order.FromWarehouseId != context.FromWarehouseId || order.ToWarehouseId != context.ToWarehouseId)
             return (false, "Lệnh không thuộc kho đích của bạn.");
 
         var receipt = await db.TransferReceipts.SingleOrDefaultAsync(r => r.TransferReceiptId == receiptId
@@ -155,24 +177,12 @@ public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock, IS
                 return (false, $"Serial {serial.SerialNumber} thiếu tình trạng thực nhận hợp lệ.");
         }
 
-        var destination = await db.Warehouses.AsNoTracking()
-            .Where(w => w.WarehouseId == order.ToWarehouseId)
-            .Select(w => new { w.WarehouseType, w.RentalStartDate, w.RentalEndDate }).SingleAsync();
+        var receivingBlock = await commitments.GetReceivingBlockReasonAsync(order.ToWarehouseId);
+        if (receivingBlock is not null) return (false, receivingBlock);
         var now = clock.GetUtcNow().UtcDateTime;
-        var receivedOn = DateOnly.FromDateTime(now.AddHours(7));
-        if (destination.WarehouseType == "RENTED")
-        {
-            if (destination.RentalStartDate is not DateOnly start || destination.RentalEndDate is not DateOnly end || start > end)
-                return (false, "Kho đích chưa có kỳ thuê hợp lệ; chưa thể hoàn tất nhận hàng.");
-            if (receivedOn < start)
-                return (false, $"Kho đích bắt đầu thuê ngày {start:dd/MM/yyyy}; chưa thể nhận hàng ngày {receivedOn:dd/MM/yyyy}.");
-            if (receivedOn > end)
-                return (false, $"Kho đích đã hết hạn thuê ngày {end:dd/MM/yyyy}; không thể nhận hàng ngày {receivedOn:dd/MM/yyyy}.");
-        }
         foreach (var group in items.GroupBy(i => new { i.DispatchItem.ProductId, Condition = i.ReceivedCondition! }))
         {
-            var damaged = group.Key.Condition == "DAMAGED";
-            var available = damaged ? 0 : group.Count();
+            var available = group.Count();
             var source = new SupplySource
             {
                 ProductId = group.Key.ProductId,
@@ -183,7 +193,7 @@ public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock, IS
                 TransferReceiptId = receiptId,
                 EligibleQuantity = available,
                 RemainingQuantity = available,
-                AvailableFrom = DateOnly.FromDateTime(now),
+                AvailableFrom = DateOnly.FromDateTime(now.AddHours(7)),
                 CreatedAt = now
             };
             db.SupplySources.Add(source);
@@ -197,7 +207,7 @@ public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock, IS
                     SerialItemId = serial.SerialItemId, TransferReceiptId = receiptId, PerformedByUserId = userId,
                     EventType = "TRANSFER_RECEIPT", OccurredAt = now, FromState = serial.StockState,
                     ToState = "IN_WAREHOUSE", FromCondition = serial.ItemCondition, ToCondition = group.Key.Condition,
-                    FromQuarantined = serial.IsQuarantined, ToQuarantined = damaged, ToWarehouseId = order.ToWarehouseId
+                    FromQuarantined = serial.IsQuarantined, ToQuarantined = false, ToWarehouseId = order.ToWarehouseId
                 });
                 serial.StockState = "IN_WAREHOUSE";
                 serial.CurrentWarehouseId = order.ToWarehouseId;
@@ -205,10 +215,8 @@ public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock, IS
                 serial.CurrentSupplySourceId = source.SupplySourceId;
                 serial.CurrentSupplyState = "PHYSICAL";
                 serial.ItemCondition = group.Key.Condition;
-                serial.IsQuarantined = damaged;
-                serial.QuarantineReason = damaged ? item.ConditionNote : null;
-                if (damaged && string.IsNullOrWhiteSpace(serial.QuarantineReason))
-                    serial.QuarantineReason = "Hư hỏng khi nhận điều chuyển";
+                serial.IsQuarantined = false;
+                serial.QuarantineReason = null;
             }
         }
 
@@ -217,15 +225,25 @@ public class TransferReceiptWorkService(EwmsDbContext db, TimeProvider clock, IS
         receipt.CompletedAt = now;
         await SaveAsActorAsync(userId);
         await SaveAsActorAsync(userId, () => commitments.AfterTransferReceiptAsync(receiptId));
+        var hasRemaining = await db.TransferOrderLines.AnyAsync(l => l.TransferOrderId == orderId
+            && l.RequestedQuantity - l.CancelledQuantity > db.TransferReceiptItems.Count(i => i.IsActive
+                && i.DispatchItem.TransferLineId == l.TransferLineId && i.TransferReceipt.Status == "DONE"));
+        order.Status = hasRemaining ? "IN_PROGRESS" : "COMPLETED";
+        order.ClosedAt = hasRemaining ? null : now;
+        await SaveAsActorAsync(userId);
         await transaction.CommitAsync();
         return (true, $"Đã nhận {items.Count} serial trên phiếu {receipt.ReceiptCode}.");
     }
 
     public async Task<(bool Success, string Message)> RemoveSerialAsync(long orderId, long receiptId, long itemId, int userId)
     {
+        var warehouses = await WorkWarehousesAsync(orderId, userId);
+        if (warehouses.Length == 0) return (false, "Lệnh không thuộc kho đích của bạn.");
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        await LockWarehousesAsync(warehouses);
         var order = await LockDestinationOrderAsync(orderId, userId);
-        if (order is null || order.Status is not ("RELEASED" or "IN_PROGRESS"))
+        if (order is null || order.FromWarehouseId != warehouses[0] || order.ToWarehouseId != warehouses[1]
+            || order.Status is not ("RELEASED" or "IN_PROGRESS"))
             return (false, "Lệnh không cho phép chỉnh sửa tại kho của bạn.");
 
         var item = await db.TransferReceiptItems.SingleOrDefaultAsync(i => i.TransferReceiptItemId == itemId

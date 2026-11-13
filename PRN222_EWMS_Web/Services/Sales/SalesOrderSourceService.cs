@@ -13,7 +13,7 @@ public class SalesOrderSourceException(string field, string message) : InvalidOp
 
 /// <summary>Draft editing and publication are atomic; published order content is immutable.</summary>
 public class SalesOrderSourceService(EwmsDbContext db, ISourceReservationService sources, TimeProvider clock,
-    ILogger<SalesOrderSourceService> logger)
+    ILogger<SalesOrderSourceService> logger, DocumentCodeGenerator codes)
 {
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
     private DateOnly Today => DateOnly.FromDateTime(Now.AddHours(7));
@@ -83,14 +83,7 @@ public class SalesOrderSourceService(EwmsDbContext db, ISourceReservationService
             }
             else
             {
-                await db.Database.ExecuteSqlInterpolatedAsync($@"
-                    DECLARE @result int;
-                    EXEC @result=sys.sp_getapplock @Resource={"EWMS:SalesCode:" + Today.Year},@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=15000;
-                    IF @result<0 THROW 51262,N'Không lấy được mã SO. Vui lòng thử lại.',1;", ct);
-                var prefix = $"SO-{Today.Year}-";
-                var codes = await db.SalesOrders.AsNoTracking().Where(o => o.Socode.StartsWith(prefix)).Select(o => o.Socode).ToListAsync(ct);
-                var max = codes.Select(code => long.TryParse(code[prefix.Length..], out var value) ? value : 0L).DefaultIfEmpty().Max();
-                order = new SalesOrder { Socode = prefix + checked(max + 1).ToString("D3"), CreatedByUserId = actorId, CreatedAt = Now,
+                order = new SalesOrder { Socode = await codes.NextAsync(DocumentType.SalesOrder, ct), CreatedByUserId = actorId, CreatedAt = Now,
                     WarehouseId = warehouse.WarehouseId, Status = "DRAFT" };
                 db.SalesOrders.Add(order);
             }

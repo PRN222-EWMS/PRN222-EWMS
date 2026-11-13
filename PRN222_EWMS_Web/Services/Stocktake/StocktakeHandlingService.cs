@@ -3,6 +3,7 @@ using PRN222_EWMS_Web.Models;
 using PRN222_EWMS_Web.Repositories.Stocktaking;
 using PRN222_EWMS_Web.Services.WarehouseStaff;
 using PRN222_EWMS_Web.Services.Warehouse;
+using PRN222_EWMS_Web.Services.Purchasing;
 using PRN222_EWMS_Web.ViewModels.Putaway;
 using PRN222_EWMS_Web.ViewModels.Stocktaking;
 using Plan = PRN222_EWMS_Web.Models.Stocktake;
@@ -10,7 +11,8 @@ using WarehouseEntity = PRN222_EWMS_Web.Models.Warehouse;
 
 namespace PRN222_EWMS_Web.Services.Stocktaking;
 
-public class StocktakeHandlingService(IStocktakeRepository repo, ISourceReservationService commitments) : IStocktakeHandlingService
+public class StocktakeHandlingService(IStocktakeRepository repo, ISourceReservationService commitments,
+    IWarehouseCapacityEngine capacity) : IStocktakeHandlingService
 {
     private async Task<(Plan Plan, StocktakeHandling Handling, SerialItem Item)> ContextAsync(int actorId, long id, long handlingId, CancellationToken ct)
     {
@@ -35,20 +37,18 @@ public class StocktakeHandlingService(IStocktakeRepository repo, ISourceReservat
         var model = new StocktakeHandlingViewModel { Plan = plan, Handling = handling, Locations = locations,
             ProductName = item.Product.ProductName, Version = Convert.ToBase64String(plan.RowVersion),
             HandlingVersion = Convert.ToBase64String(handling.RowVersion), RecountRequestId = recountRequestId };
-        model.CanMove = handling.Status == "WAITING" && StocktakeScopeRules.LockedStatuses.Contains(plan.Status)
-            && (item.ItemCondition != "DAMAGED" || handling.ActualCondition != "GOOD");
-        if (!model.CanMove) { model.Message = handling.Status == "MOVED" ? "Đã xác nhận chuyển hàng." : "Đợt không còn cho phép chuyển hàng."; return model; }
+        model.CanMove = handling.Status == "WAITING" && StocktakeScopeRules.LockedStatuses.Contains(plan.Status);
+        if (!model.CanMove) { model.Message = handling.Status == "MOVED" ? "Đã xác nhận vị trí và tình trạng hàng." : "Đợt không còn cho phép xử lý vị trí."; return model; }
         if (await repo.Query<InventoryAdjustmentLine>().AnyAsync(l => l.StocktakeId == id && l.ScannedSerial == handling.ScannedSerial
             && l.IsActive && (l.Adjustment.Status == "DRAFT" || l.Adjustment.Status == "SUBMITTED" || l.Adjustment.Status == "APPROVED" || l.Adjustment.Status == "APPLIED"), ct))
         { model.CanMove = false; model.Message = "Serial đang nằm trong đề nghị điều chỉnh cũ. Manager cần xử lý đề nghị đó trước."; return model; }
-        model.Suggestions = await SuggestionsAsync(plan, handling, item, locations, ct);
-        if (model.Suggestions.Count == 0) model.Message = "Không có ô phù hợp hoặc đủ chỗ. Giữ trạng thái chờ xử lý và báo Manager bố trí vị trí hợp lệ.";
+        (model.Suggestions, model.Message) = await SuggestionsAsync(plan, handling, item, locations, ct);
         return model;
     }
 
     public async Task MoveAsync(int actorId, StocktakeMoveInput input, CancellationToken ct)
     {
-        if (!input.Confirmed) throw new StocktakeWorkflowException("Cần xác nhận đã chuyển hàng thực tế đến vị trí đã chọn.");
+        if (!input.Confirmed) throw new StocktakeWorkflowException("Cần xác nhận hàng thực tế đang ở đúng vị trí đã chọn.");
         var warehouseId = await repo.Query<Plan>().AsNoTracking().Where(s => s.StocktakeId == input.Id)
             .Select(s => (int?)s.WarehouseId).SingleOrDefaultAsync(ct) ?? throw new StocktakeWorkflowException("Không tìm thấy đợt.", 404);
         await repo.TransactionAsync(actorId, warehouseId, async token =>
@@ -62,6 +62,9 @@ public class StocktakeHandlingService(IStocktakeRepository repo, ISourceReservat
             if (input.TargetLocationId is not int target || !page.Suggestions.Any(s => s.Id == target))
                 throw new StocktakeWorkflowException("Vị trí đích không còn phù hợp hoặc không đủ chỗ. Hãy tải lại đề xuất.", 409);
             var evidence = await repo.Query<StocktakeObservation>().SingleAsync(o => o.ObservationId == handling.ObservationId, token);
+            if (evidence.SerialItemId != item.SerialItemId || evidence.ActualQuantity != 1
+                || evidence.ActualLocationId != handling.FoundLocationId || evidence.ActualCondition != handling.ActualCondition)
+                throw new StocktakeWorkflowException("Ghi nhận kiểm kê đã thay đổi. Hãy tải lại trước khi xác nhận vị trí.", 409);
             if (item.StockState != "IN_WAREHOUSE" || item.CurrentWarehouseId != warehouseId || item.ProductId != handling.ProductId
                 || item.CurrentLocationId != handling.OriginalLocationId || item.SerialNumber != handling.ScannedSerial)
                 throw new StocktakeWorkflowException("Hàng đã thay đổi so với khi ghi nhận. Cần rà soát lại trước khi chuyển.", 409);
@@ -70,12 +73,13 @@ public class StocktakeHandlingService(IStocktakeRepository repo, ISourceReservat
             if (await repo.Query<SerialMovement>().AnyAsync(m => m.SerialItemId == item.SerialItemId && m.OccurredAt > evidence.CapturedAt, token))
                 throw new StocktakeWorkflowException("Serial đã có biến động sau mốc kiểm kê. Manager cần rà soát lại.", 409);
             var now = DateTime.UtcNow;
+            var keepPosition = target == handling.FoundLocationId;
             var movement = new SerialMovement { SerialItemId = item.SerialItemId, PerformedByUserId = actorId,
                 EventType = "RELOCATION", OccurredAt = now, FromState = "IN_WAREHOUSE", ToState = "IN_WAREHOUSE",
                 FromWarehouseId = warehouseId, ToWarehouseId = warehouseId, FromLocationId = handling.FoundLocationId,
                 ToLocationId = target, FromCondition = item.ItemCondition, ToCondition = handling.ActualCondition,
-                FromQuarantined = item.IsQuarantined, ToQuarantined = item.IsQuarantined,
-                Note = $"Kiểm kê {plan.StocktakeCode}; phát hiện tại vị trí {handling.FoundLocationId?.ToString() ?? "chờ xếp"}; xác nhận chuyển; không thay đổi số lượng." };
+                FromQuarantined = item.IsQuarantined, ToQuarantined = false,
+                Note = $"Kiểm kê {plan.StocktakeCode}; phát hiện tại vị trí {handling.FoundLocationId?.ToString() ?? "chờ xếp"}; {(keepPosition ? "xác nhận giữ nguyên" : "xác nhận chuyển")}; không thay đổi số lượng." };
             if (item.ItemCondition != handling.ActualCondition)
             {
                 var oldSource = item.CurrentSupplySource;
@@ -91,6 +95,7 @@ public class StocktakeHandlingService(IStocktakeRepository repo, ISourceReservat
                 await ReconcileAsync(source.SupplySourceId, now, token);
             }
             else item.CurrentLocationId = target;
+            item.IsQuarantined = false; item.QuarantineReason = null;
             repo.Add(movement); await repo.SaveAsync(token);
             handling.TargetLocationId = target; handling.Status = "MOVED"; handling.MovedByUserId = actorId;
             handling.MovedAt = now; handling.MovementId = movement.MovementId;
@@ -105,25 +110,34 @@ public class StocktakeHandlingService(IStocktakeRepository repo, ISourceReservat
         }, ct);
     }
 
-    private async Task<List<PutawayLocationViewModel>> SuggestionsAsync(Plan plan, StocktakeHandling handling, SerialItem item, List<StorageLocation> locations, CancellationToken ct)
+    private async Task<(List<PutawayLocationViewModel> Locations, string? Message)> SuggestionsAsync(Plan plan, StocktakeHandling handling,
+        SerialItem item, List<StorageLocation> locations, CancellationToken ct)
     {
         var warehouse = await repo.Query<WarehouseEntity>().AsNoTracking().SingleAsync(w => w.WarehouseId == plan.WarehouseId, ct);
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
         if (warehouse.Status != "ACTIVE" || warehouse.WarehouseType == "RENTED" &&
-            (warehouse.RentalStartDate is not DateOnly start || warehouse.RentalEndDate is not DateOnly end || today < start || today > end)) return [];
-        if (item.Product.Status != "ACTIVE" || item.StockState != "IN_WAREHOUSE" || item.CurrentWarehouseId != plan.WarehouseId) return [];
+            (warehouse.RentalStartDate is not DateOnly start || warehouse.RentalEndDate is not DateOnly end || today < start || today > end))
+            return ([], "Kho phải đang hoạt động và còn hạn thuê.");
+        if (item.Product.Status != "ACTIVE" || item.StockState != "IN_WAREHOUSE" || item.CurrentWarehouseId != plan.WarehouseId)
+            return ([], "Serial không còn thuộc kho hoặc sản phẩm đã ngừng hoạt động.");
         var otherPlans = await repo.Query<Plan>().AsNoTracking().Where(s => s.WarehouseId == plan.WarehouseId && s.StocktakeId != plan.StocktakeId
             && StocktakeScopeRules.LockedStatuses.Contains(s.Status)).ToListAsync(ct);
         var ids = otherPlans.Select(p => p.StocktakeId).ToArray();
         var scopes = await repo.Query<StocktakeScope>().AsNoTracking().Where(s => ids.Contains(s.StocktakeId)).ToListAsync(ct);
         var blocked = new HashSet<int>();
+        var ignoredStocktakes = new List<long> { plan.StocktakeId };
         var investigation = await repo.InvestigationForAsync(plan.StocktakeId, ct);
         foreach (var other in otherPlans)
         {
             if (investigation?.ShortageObservationIds.Count > 0 && investigation.StocktakeId == other.StocktakeId)
+            {
+                ignoredStocktakes.Add(other.StocktakeId);
                 continue;
+            }
             var locked = StocktakeScopeRules.PlanLocations(other, scopes.Where(s => s.StocktakeId == other.StocktakeId).ToList(), locations);
-            if (StocktakeScopeRules.InPlan(other, locked, item.CurrentLocationId)) return [];
+            if (StocktakeScopeRules.InPlan(other, locked, item.CurrentLocationId)
+                || StocktakeScopeRules.InPlan(other, locked, handling.FoundLocationId))
+                return ([], "Vị trí của hàng đang thuộc đợt kiểm kê khác chưa hoàn tất.");
             blocked.UnionWith(locked);
         }
         var layout = new PutawayLayout(warehouse, locations,
@@ -136,9 +150,13 @@ public class StocktakeHandlingService(IStocktakeRepository repo, ISourceReservat
             ItemCondition = handling.ActualCondition, CurrentWarehouseId = plan.WarehouseId };
         var valid = locations.Where(l => l.LocationType is "TIER" or "FLOOR_SLOT")
             .Select(l => PutawayRules.Evaluate(probe, layout, l, occupants)).Where(e => e.Location is not null).Select(e => e.Location!).ToList();
-        // Return to the registered original whenever it remains legal; fallback only when it is not.
-        var original = valid.FirstOrDefault(l => l.Id == handling.OriginalLocationId);
-        return original is not null ? [original] : valid.OrderBy(l => l.IsReserve).ThenBy(l => l.Path).ThenBy(l => l.Id).ToList();
+        var planned = await capacity.AssessStocktakePlacementsAsync(plan.WarehouseId, item.SerialItemId, handling.ActualCondition,
+            valid.Select(l => l.Id).ToArray(), ignoredStocktakes, ct);
+        var choices = valid.Where(l => !planned.Errors.ContainsKey(l.Id))
+            .OrderBy(l => l.Id == handling.FoundLocationId ? 0 : l.Id == handling.OriginalLocationId ? 1 : 2)
+            .ThenBy(l => l.IsReserve).ThenBy(l => l.Path).ThenBy(l => l.Id).ToList();
+        return (choices, choices.Count > 0 ? null : planned.Errors.Values.FirstOrDefault()
+            ?? "Không có ô phù hợp hoặc đủ chỗ. Báo Manager bố trí vị trí hợp lệ.");
     }
 
     private async Task<SupplySource> ConditionSourceAsync(SupplySource old, string condition, DateTime now, CancellationToken ct)
@@ -158,7 +176,7 @@ public class StocktakeHandlingService(IStocktakeRepository repo, ISourceReservat
         var source = await repo.Query<SupplySource>().SingleAsync(s => s.SupplySourceId == sourceId, ct);
         var serials = await repo.Query<SerialItem>().AsNoTracking().Where(s => s.CurrentSupplySourceId == sourceId && s.StockState == "IN_WAREHOUSE").ToListAsync(ct);
         source.RemainingQuantity = serials.Count;
-        source.EligibleQuantity = serials.Count(s => s.ItemCondition == "GOOD" && !s.IsQuarantined);
+        source.EligibleQuantity = serials.Count;
         var reservations = await repo.Query<Reservation>().Where(r => r.SupplySourceId == sourceId && r.Status == "ACTIVE")
             .OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.ReservationId).ToListAsync(ct);
         var excess = Math.Max(0, reservations.Sum(r => r.ReservedQuantity-r.ConsumedQuantity-r.ReleasedQuantity)-source.EligibleQuantity);

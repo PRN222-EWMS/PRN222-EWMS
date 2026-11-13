@@ -4,7 +4,7 @@
     var culture = CultureInfo.GetCultureInfo("vi-VN");
     string N(decimal? value) => value?.ToString("0.###", culture) ?? "—";
 }
-<div data-putaway-serial data-id="@Model.Id" data-serial="@Model.Serial" data-source="@Model.Source" data-receipt-id="@Model.ReceiptId" data-version="@Model.RowVersion" data-product="@Model.ProductCode — @Model.ProductName" data-condition="@Model.Condition" data-quarantined="@(Model.Quarantined ? "true" : "false")">
+<div data-putaway-serial data-id="@Model.Id" data-serial="@Model.Serial" data-source="@Model.Source" data-receipt-id="@Model.ReceiptId" data-version="@Model.RowVersion" data-product="@Model.ProductCode — @Model.ProductName" data-condition="@Model.Condition">
     <section class="workspace-card putaway-profile">
         <p class="eyebrow">SERIAL ĐÃ CHỌN · @Model.SourceLabel.ToUpperInvariant()</p>
         <h2>@Model.Serial</h2><h3>@Model.ProductCode — @Model.ProductName</h3>
@@ -34,7 +34,7 @@
                 <div><dt>Lệnh chuyển kho</dt><dd>@Model.TransferCode</dd></div>
             }
         </dl>
-        @if (Model.Quarantined) { <p class="putaway-note">Hàng đang cách ly. Xếp kho giữ nguyên tình trạng và cờ cách ly.</p> }
+        @foreach (var warning in Model.CapacityWarnings) { <p class="putaway-note" role="status">@warning</p> }
         @if (Model.CurrentLocationPath is not null) { <p class="putaway-note">Đã xếp tại <strong>@Model.CurrentLocationPath</strong>.</p> }
         @if (Model.UnavailableReason is not null) { <p class="putaway-error" role="alert">@Model.UnavailableReason</p> }
         <button type="button" class="putaway-secondary" data-refresh-locations>Tải lại trạng thái và gợi ý</button>

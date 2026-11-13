@@ -7,7 +7,8 @@ using PRN222_EWMS_Web.ViewModels.Manager;
 
 namespace PRN222_EWMS_Web.Services.Manager;
 
-public class ManagerStocktakeService(IManagerStocktakeRepository repository, IStocktakeRepository stocktakeHistory) : IManagerStocktakeService
+public class ManagerStocktakeService(IManagerStocktakeRepository repository, IStocktakeRepository stocktakeHistory,
+    DocumentCodeGenerator codes) : IManagerStocktakeService
 {
     public Task<ManagerStocktakeListViewModel> GetListAsync(ManagerStocktakeFilter filter, CancellationToken ct)
     {
@@ -176,7 +177,7 @@ public class ManagerStocktakeService(IManagerStocktakeRepository repository, ISt
                     plan = new Stocktake
                     {
                         WarehouseId = form.WarehouseId, CreatedByUserId = actorId, CreatedAt = DateTime.UtcNow,
-                        StocktakeCode = $"ST-{DateTime.UtcNow.AddHours(7):yyyyMMdd}-{Guid.NewGuid().ToString("N")[..20].ToUpperInvariant()}"
+                        StocktakeCode = await codes.NextAsync(DocumentType.Stocktake, ct)
                     };
                 }
                 plan.ScopeType = form.ScopeType;

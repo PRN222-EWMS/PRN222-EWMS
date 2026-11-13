@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PRN222_EWMS_Web.Repositories.Stocktaking;
 using PRN222_EWMS_Web.Models;
 using PRN222_EWMS_Web.ViewModels.WarehouseTransfer;
 
@@ -91,14 +92,15 @@ public class WarehouseTransferRepository(EwmsDbContext db)
             .Where(line => line.TransferOrderId == orderId)
             .OrderBy(line => line.TransferLineId)
             .Select(line => new TransferProgressRow(
-                line.Product.ProductCode, line.Product.ProductName,
-                line.RequestedQuantity, line.CancelledQuantity,
-                db.TransferDispatchItems.Count(item => item.TransferLineId == line.TransferLineId
-                    && item.IsActive && item.Dispatch.Status == "DONE"),
-                db.TransferReceiptItems.Count(item => item.DispatchItem.TransferLineId == line.TransferLineId
-                    && item.IsActive && item.TransferReceipt.Status == "DONE"),
-                db.VwTransferInTransits.Count(item => item.TransferLineId == line.TransferLineId)))
-            .ToListAsync();
+                line.Product.ProductCode, line.Product.ProductName, line.RequestedQuantity, line.CancelledQuantity,
+                db.TransferDispatchItems.Count(item => item.TransferLineId == line.TransferLineId && item.IsActive && item.Dispatch.Status == "DONE"),
+                db.TransferReceiptItems.Count(item => item.DispatchItem.TransferLineId == line.TransferLineId && item.IsActive && item.TransferReceipt.Status == "DONE"),
+                db.VwTransferInTransits.Count(item => item.TransferLineId == line.TransferLineId))
+            {
+                ProductId = line.ProductId,
+                Picking = db.TransferDispatchItems.Count(item => item.TransferLineId == line.TransferLineId && item.IsActive
+                    && (item.Dispatch.Status == "DRAFT" || item.Dispatch.IsActivePicking))
+            }).ToListAsync();
 
         if (detail.IsSource)
         {
@@ -114,16 +116,9 @@ public class WarehouseTransferRepository(EwmsDbContext db)
                 detail.CanClaimDispatch = owners.Count == 0 || (owners.Count == 1 && owners[0] is null);
             }
 
-            var locationPaths = from location in db.StorageLocations
-                    where location.WarehouseId == warehouseId
-                    let parent = location.ParentLocation
-                    let rowOrZone = parent!.ParentLocation
-                    let zone = rowOrZone!.ParentLocation
-                    let path = 
-                        (zone == null ? "" : zone.LocationName + " → ") +
-                        (rowOrZone == null ? "" : rowOrZone.LocationName + " → ") +
-                        (parent == null ? "" : parent.LocationName + " → ") + location.LocationName
-                    select new { location.LocationId, Path = path };
+            var locationMap = (await db.StorageLocations.AsNoTracking().Where(location => location.WarehouseId == warehouseId).ToListAsync())
+                .ToDictionary(location => location.LocationId);
+            detail.PickLocations = locationMap.ToDictionary(entry => entry.Key, entry => LocationPath(locationMap, entry.Key));
 
             detail.Documents = await db.TransferDispatches
                 .Where(dispatch => dispatch.TransferOrderId == orderId)
@@ -137,6 +132,7 @@ public class WarehouseTransferRepository(EwmsDbContext db)
                         .Select(item => new WarehouseTransferSerial(item.TransferLine.Product.ProductCode,
                             item.SerialItem.SerialNumber, item.DispatchedCondition)
                         {
+                            ProductName = item.TransferLine.Product.ProductName,
                             ItemId = item.DispatchItemId,
                             LocationId = dispatch.Status == "DONE"
                                 ? db.SerialMovements.Where(m => m.DispatchId == dispatch.DispatchId
@@ -152,43 +148,54 @@ public class WarehouseTransferRepository(EwmsDbContext db)
                 })
                 .ToListAsync();
 
-            var pickedLocations = detail.Documents.SelectMany(d => d.Serials)
-                .Where(s => s.LocationId.HasValue).Select(s => s.LocationId!.Value).Distinct().ToArray();
-            if (pickedLocations.Length > 0)
-                detail.PickLocations = await locationPaths.Where(l => pickedLocations.Contains(l.LocationId))
-                    .ToDictionaryAsync(l => l.LocationId, l => l.Path);
-
             if (detail.Documents.Any(doc => doc.CanScan))
             {
-                var active = db.TransferDispatchItems.Where(i => i.IsActive);
-                var open = active.Where(i => i.Dispatch.Status == "DRAFT" || i.Dispatch.IsActivePicking);
+                var active = db.TransferDispatchItems.Where(item => item.IsActive);
+                var open = active.Where(item => item.Dispatch.Status == "DRAFT" || item.Dispatch.IsActivePicking);
                 var remainingLines = db.TransferOrderLines.Where(line => line.TransferOrderId == orderId
-                    && active.Count(i => i.TransferLineId == line.TransferLineId
-                        && (i.Dispatch.Status == "DONE" || i.Dispatch.Status == "DRAFT" || i.Dispatch.IsActivePicking))
+                    && active.Count(item => item.TransferLineId == line.TransferLineId
+                        && (item.Dispatch.Status == "DONE" || item.Dispatch.Status == "DRAFT" || item.Dispatch.IsActivePicking))
                         < line.RequestedQuantity - line.CancelledQuantity);
-                detail.DispatchSerialOptions = await (
+                var options = await (
                     from line in remainingLines
                     join serial in db.SerialItems on line.ProductId equals serial.ProductId
-                    where serial.CurrentWarehouseId == warehouseId
-                        && serial.StockState == "IN_WAREHOUSE" && !serial.IsQuarantined
+                    where serial.CurrentWarehouseId == warehouseId && serial.StockState == "IN_WAREHOUSE"
                         && serial.ItemCondition == detail.ItemCondition && serial.CurrentSupplyState == "PHYSICAL"
-                        && serial.CurrentSupplySourceId != null
-                        && !db.PickingClaims.Any(c => c.SerialItemId == serial.SerialItemId)
-                    let reserved = db.Reservations.Where(r => r.TransferLineId == line.TransferLineId
-                        && r.SupplySourceId == serial.CurrentSupplySourceId && r.Status == "ACTIVE"
-                        && r.SupplyState == "PHYSICAL")
-                        .Sum(r => (int?)(r.ReservedQuantity - r.ConsumedQuantity - r.ReleasedQuantity)) ?? 0
-                    where reserved > open.Count(i => i.TransferLineId == line.TransferLineId
-                        && i.SourceAtDispatchId == serial.CurrentSupplySourceId)
-                    join spot in locationPaths on serial.CurrentLocationId equals spot.LocationId into spots
-                    from spot in spots.DefaultIfEmpty()
-                    let path = spot.Path ?? "Chưa xác định vị trí"
-                    orderby line.Product.ProductCode, path, serial.SerialNumber
-                    select new DispatchSerialOption(line.Product.ProductCode, line.Product.ProductName,
-                        path, serial.SerialNumber, serial.ManufacturingMonth, serial.ManufacturingYear,
-                        serial.ItemCondition)).ToListAsync();
-                detail.IsDispatchQuantityCovered = detail.DispatchSerialOptions.Count == 0
-                    && !await remainingLines.AnyAsync();
+                        && serial.CurrentSupplySourceId != null && !db.PickingClaims.Any(claim => claim.SerialItemId == serial.SerialItemId)
+                    let reserved = db.Reservations.Where(reservation => reservation.TransferLineId == line.TransferLineId
+                        && reservation.SupplySourceId == serial.CurrentSupplySourceId && reservation.Status == "ACTIVE" && reservation.SupplyState == "PHYSICAL")
+                        .Sum(reservation => (int?)(reservation.ReservedQuantity - reservation.ConsumedQuantity - reservation.ReleasedQuantity)) ?? 0
+                    let sourceRemaining = reserved - open.Count(item => item.TransferLineId == line.TransferLineId && item.SourceAtDispatchId == serial.CurrentSupplySourceId)
+                    where sourceRemaining > 0
+                    orderby line.Product.ProductCode, serial.ManufacturingYear, serial.ManufacturingMonth, serial.SerialNumber
+                    select new DispatchSerialOption(line.Product.ProductCode, line.Product.ProductName, "", serial.SerialNumber,
+                        serial.ManufacturingMonth, serial.ManufacturingYear, serial.ItemCondition)
+                    {
+                        ProductId = serial.ProductId, SupplySourceId = serial.CurrentSupplySourceId!.Value,
+                        LocationId = serial.CurrentLocationId, SourceRemaining = sourceRemaining,
+                        LineRemaining = line.RequestedQuantity - line.CancelledQuantity - active.Count(item => item.TransferLineId == line.TransferLineId
+                            && (item.Dispatch.Status == "DONE" || item.Dispatch.Status == "DRAFT" || item.Dispatch.IsActivePicking)),
+                        SourceCode = serial.CurrentSupplySource!.Inbound != null ? "Đã nhận · " + serial.CurrentSupplySource!.Inbound!.ReceiptCode
+                            : serial.CurrentSupplySource!.ReturnReceipt != null ? "Nhận trả · " + serial.CurrentSupplySource!.ReturnReceipt!.ReceiptCode
+                            : serial.CurrentSupplySource!.TransferReceipt != null ? "Nhận chuyển · " + serial.CurrentSupplySource!.TransferReceipt!.ReceiptCode
+                            : "Nguồn #" + serial.CurrentSupplySourceId
+                    }).ToListAsync();
+                var plans = await db.Stocktakes.AsNoTracking().Where(plan => plan.WarehouseId == warehouseId
+                    && StocktakeScopeRules.LockedStatuses.Contains(plan.Status)).ToListAsync();
+                var planIds = plans.Select(plan => plan.StocktakeId).ToArray();
+                var scopes = await db.StocktakeScopes.AsNoTracking().Where(scope => planIds.Contains(scope.StocktakeId)).ToListAsync();
+                detail.DispatchSerialOptions = options.Where(option => StocktakeScopeRules.MovementBlockReason(
+                        warehouseId.Value, plans, scopes, locationMap.Values.ToList(), [option.LocationId]) is null)
+                    .Select(option => option with { Location = option.LocationId.HasValue
+                        ? detail.PickLocations.GetValueOrDefault(option.LocationId.Value, "Vị trí không còn trong cấu trúc kho")
+                        : "Hàng chờ xếp kho" }).ToList();
+                detail.Lines = detail.Lines.Select(line => line with
+                {
+                    ReadyToPick = (int)Math.Min(Math.Max(0, line.RemainingToDispatch - line.Picking),
+                        detail.DispatchSerialOptions.Where(option => option.ProductId == line.ProductId)
+                            .GroupBy(option => option.SupplySourceId).Sum(group => Math.Min(group.Count(), group.First().SourceRemaining)))
+                }).ToList();
+                detail.IsDispatchQuantityCovered = !await remainingLines.AnyAsync();
             }
         }
         else
@@ -198,6 +205,16 @@ public class WarehouseTransferRepository(EwmsDbContext db)
                 .OrderBy(item => item.SerialNumber)
                 .Select(item => item.SerialNumber)
                 .ToListAsync();
+
+            detail.ReceiptSerialOptions = await (
+                from incoming in db.VwTransferInTransits
+                join serial in db.SerialItems on incoming.SerialItemId equals serial.SerialItemId
+                join product in db.Products on incoming.ProductId equals product.ProductId
+                where incoming.TransferOrderId == orderId && incoming.ToWarehouseId == warehouseId
+                orderby product.ProductCode, serial.SerialNumber
+                select new ReceiptSerialOption(serial.SerialNumber, product.ProductCode, product.ProductName,
+                    incoming.DispatchedCondition, serial.ManufacturingMonth, serial.ManufacturingYear)
+                    { ProductId = product.ProductId }).ToListAsync();
 
             if ((detail.Status is "RELEASED" or "IN_PROGRESS") && detail.IncomingSerials.Count > 0)
             {
@@ -221,6 +238,7 @@ public class WarehouseTransferRepository(EwmsDbContext db)
                         .Select(item => new WarehouseTransferSerial(item.DispatchItem.TransferLine.Product.ProductCode,
                             item.DispatchItem.SerialItem.SerialNumber, item.ReceivedCondition)
                         {
+                            ProductName = item.DispatchItem.TransferLine.Product.ProductName,
                             ConditionNote = item.ConditionNote
                             , ItemId = item.TransferReceiptItemId
                         })
@@ -234,5 +252,17 @@ public class WarehouseTransferRepository(EwmsDbContext db)
         }
 
         return detail;
+    }
+    private static string LocationPath(IReadOnlyDictionary<int, PRN222_EWMS_Web.Models.StorageLocation> locations, int id)
+    {
+        var names = new List<string>();
+        var seen = new HashSet<int>();
+        int? current = id;
+        while (current is int locationId && seen.Add(locationId) && locations.TryGetValue(locationId, out var location))
+        {
+            names.Insert(0, location.LocationName);
+            current = location.ParentLocationId;
+        }
+        return current.HasValue || names.Count == 0 ? "Vị trí không còn trong cấu trúc kho" : string.Join(" → ", names);
     }
 }

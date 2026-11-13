@@ -7,7 +7,7 @@ using StocktakePlan = PRN222_EWMS_Web.Models.Stocktake;
 namespace PRN222_EWMS_Web.Services.Stocktaking;
 
 /// <summary>Manager review changes evidence/workflow only; official stock is changed by CEO approval/apply.</summary>
-public partial class StocktakeReviewService(IStocktakeRepository repo) : IStocktakeReviewService
+public partial class StocktakeReviewService(IStocktakeRepository repo, DocumentCodeGenerator codes) : IStocktakeReviewService
 {
     public async Task<StocktakeReviewViewModel?> GetDetailsAsync(int actorId, long id, CancellationToken ct)
     {
@@ -252,7 +252,7 @@ public partial class StocktakeReviewService(IStocktakeRepository repo) : IStockt
             var adjustment = new InventoryAdjustment
             {
                 StocktakeId = input.Id, SubmittedByUserId = actorId,
-                AdjustmentCode = $"IA-{now:yyyyMMdd}-{Guid.NewGuid():N}"[..40],
+                AdjustmentCode = await codes.NextAsync(DocumentType.InventoryAdjustment, token),
                 Status = "DRAFT", Reason = reason, CreatedAt = now
             };
             repo.Add(adjustment);

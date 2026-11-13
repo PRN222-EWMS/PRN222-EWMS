@@ -13,7 +13,7 @@ public class TransferStockService(EwmsDbContext db)
         var sources = await db.SupplySources.AsNoTracking().Where(s => s.WarehouseId == warehouseId
             && s.ItemCondition == condition && s.SupplyState == "PHYSICAL").OrderBy(s => s.SupplySourceId).ToListAsync();
         var serials = await db.SerialItems.AsNoTracking().Where(s => s.CurrentWarehouseId == warehouseId
-            && s.ItemCondition == condition && s.StockState == "IN_WAREHOUSE" && !s.IsQuarantined
+            && s.ItemCondition == condition && s.StockState == "IN_WAREHOUSE"
             && s.CurrentSupplyState == "PHYSICAL" && s.CurrentSupplySourceId != null)
             .Select(s => new { s.SerialItemId, SourceId = s.CurrentSupplySourceId!.Value, s.ProductId }).ToListAsync();
         var holds = await db.Reservations.AsNoTracking().Where(r => r.WarehouseId == warehouseId
@@ -35,7 +35,7 @@ public class TransferStockService(EwmsDbContext db)
             // Picking belongs inside the same demand's reservation, never subtract it twice.
             long covered = sourceClaims.GroupBy(c => (c.SalesOrderId, c.TransferOrderId)).Sum(g => Math.Min((long)g.Count(),
                 sourceHolds.Where(h => h.SalesOrderId == g.Key.SalesOrderId && h.TransferOrderId == g.Key.TransferOrderId).Sum(h => (long)h.Qty)));
-            var free = TransferPolicy.FreeQuantity(source.EligibleQuantity,
+            var free = TransferPolicy.FreeQuantity(source.RemainingQuantity,
                 serials.LongCount(s => s.SourceId == source.SupplySourceId && s.ProductId == source.ProductId),
                 sourceHolds.Sum(h => (long)h.Qty), sourceClaims.Count, covered);
             result.Add(new(source.SupplySourceId, source.ProductId, free));

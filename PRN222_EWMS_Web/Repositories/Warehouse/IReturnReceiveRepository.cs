@@ -9,7 +9,7 @@ public interface IReturnReceiveRepository
  Task<Dictionary<long,int>> ReceivedCountsAsync(IEnumerable<long> orderIds);
  Task<CustomerReturnOrder?> OrderAsync(long id,int warehouseId);
  Task<ReturnReceipt?> ReceiptAsync(long id,int warehouseId);
- Task<OutboundItem?> SoldSerialAsync(long salesOrderId,string serial);
+ Task<OutboundItem?> SoldSerialAsync(long salesOrderId,long outboundId,string serial);
  Task<InboundItem?> OriginalInboundItemAsync(long serialItemId);
  Task<bool> AlreadyReturnedAsync(long outboundItemId,long? excludeId=null);
  Task<int> ReceivedLineCountAsync(long returnLineId,long? excludeId=null);
@@ -17,5 +17,6 @@ public interface IReturnReceiveRepository
  Task SaveAsync();
  void AddReceipt(ReturnReceipt receipt);
  void AddItem(ReturnReceiptItem item);
+ void TouchReceipt(ReturnReceipt receipt);
  Task PostAsync(ReturnReceipt receipt,int actor);
 }

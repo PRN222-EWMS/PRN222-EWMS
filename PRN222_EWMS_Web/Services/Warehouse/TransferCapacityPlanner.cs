@@ -15,6 +15,11 @@ public sealed class CapacitySlot
     public decimal? MaxWeight { get; init; }
     public List<(int CategoryId, int? BrandId)> Rules { get; init; } = [];
     public List<CapacityLoad> Loads { get; init; } = [];
+    public CapacitySlot Copy() => new()
+    {
+        Id = Id, Reserve = Reserve, Floor = Floor, Condition = Condition, Length = Length,
+        Width = Width, Height = Height, MaxWeight = MaxWeight, Rules = [.. Rules], Loads = [.. Loads]
+    };
     public bool Accepts(CapacityLoad load) => Condition == load.Condition &&
         (Reserve || Rules.Any(r => r.CategoryId == load.Product.CategoryId && (r.BrandId == null || r.BrandId == load.Product.BrandId)));
 }
@@ -23,7 +28,8 @@ public sealed class CapacitySlot
 // Floor packing follows the existing putaway rule: fixed orientation, no stacking.
 public static class TransferCapacityPlanner
 {
-    public static List<string> Allocate(List<CapacitySlot> slots, IEnumerable<CapacityLoad> demands)
+    public static List<string> Allocate(List<CapacitySlot> slots, IEnumerable<CapacityLoad> demands,
+        IDictionary<(int Product, string Condition), long>? shortages = null)
     {
         var errors = new List<string>();
         foreach (var load in demands.Where(l => l.Quantity > 0)
@@ -34,6 +40,11 @@ public static class TransferCapacityPlanner
             if (load.Product.Length <= 0 || load.Product.Width <= 0 || load.Product.Height <= 0 || load.Product.Weight <= 0)
             {
                 errors.Add($"{load.Product.Code}: thiếu kích thước hoặc khối lượng hợp lệ.");
+                if (shortages is not null)
+                {
+                    var key = (load.Product.Id, load.Condition);
+                    shortages[key] = (shortages.TryGetValue(key, out var existing) ? existing : 0) + load.Quantity;
+                }
                 continue;
             }
             foreach (var slot in slots.Where(s => s.Accepts(load)).OrderBy(s => s.Reserve).ThenBy(s => s.Id))
@@ -48,21 +59,66 @@ public static class TransferCapacityPlanner
                 remaining -= low;
                 if (remaining == 0) break;
             }
-            if (remaining > 0) errors.Add($"{load.Product.Code}: còn thiếu chỗ cho {remaining:N0}/{load.Quantity:N0} sản phẩm ({load.Condition}).");
+            if (remaining > 0)
+            {
+                errors.Add($"{load.Product.Code}: còn thiếu chỗ cho {remaining:N0}/{load.Quantity:N0} sản phẩm ({load.Condition}).");
+                if (shortages is not null)
+                {
+                    var key = (load.Product.Id, load.Condition);
+                    shortages[key] = (shortages.TryGetValue(key, out var existing) ? existing : 0) + remaining;
+                }
+            }
         }
         return errors;
     }
 
     public static bool Fits(CapacitySlot slot, CapacityLoad incoming)
     {
-        var all = slot.Loads.Append(incoming).Where(l => l.Quantity > 0).ToList();
+        var all = slot.Loads.Append(incoming).Where(l => l.Quantity > 0)
+            .GroupBy(l => new { l.Product, l.Condition })
+            .Select(g => new CapacityLoad(g.Key.Product, g.Key.Condition, g.Sum(l => l.Quantity))).ToList();
         if (all.Any(l => l.Condition != slot.Condition || l.Product.Length <= 0 || l.Product.Width <= 0 || l.Product.Height <= 0
             || l.Product.Weight <= 0 || l.Product.Length > slot.Length || l.Product.Width > slot.Width
             || (slot.Height.HasValue && l.Product.Height > slot.Height.Value))) return false;
         if (slot.MaxWeight.HasValue && all.Sum(l => l.Quantity * l.Product.Weight) > slot.MaxWeight.Value) return false;
-        if (!slot.Floor) return slot.Height > 0 && all.Sum(l => l.Quantity * l.Product.Length * l.Product.Width * l.Product.Height)
-            <= slot.Length * slot.Width * slot.Height.Value;
-        return CanPackFloor(slot.Length, slot.Width, all);
+        if (slot.Floor) return CanPackFloor(slot.Length, slot.Width, all);
+        return slot.Height > 0
+            && all.Sum(l => l.Quantity * l.Product.Length * l.Product.Width * l.Product.Height) <= slot.Length * slot.Width * slot.Height.Value
+            && CanPackRack(slot.Length, slot.Width, slot.Height.Value, all);
+    }
+
+    private static bool CanPackRack(decimal length, decimal width, decimal height, List<CapacityLoad> loads)
+    {
+        // Fixed orientation. A layer is as high as its tallest carton; no carton crosses layers.
+        // Count repeated full layers in bulk and retain their last layer for smaller cartons.
+        var layers = new List<(decimal Height, List<CapacityLoad> Loads)>();
+        decimal usedHeight = 0;
+        foreach (var load in loads.OrderByDescending(l => l.Product.Height)
+            .ThenByDescending(l => l.Product.Width).ThenByDescending(l => l.Product.Length).ThenBy(l => l.Product.Id))
+        {
+            long left = load.Quantity;
+            foreach (var layer in layers.Where(l => l.Height >= load.Product.Height))
+            {
+                long low = 0, high = left;
+                while (low < high)
+                {
+                    long mid = low + (high - low + 1) / 2;
+                    if (CanPackFloor(length, width, layer.Loads.Append(load with { Quantity = mid }))) low = mid;
+                    else high = mid - 1;
+                }
+                if (low > 0) layer.Loads.Add(load with { Quantity = low });
+                left -= low;
+                if (left == 0) break;
+            }
+            if (left == 0) continue;
+            long perLayer = (long)(decimal.Floor(length / load.Product.Length) * decimal.Floor(width / load.Product.Width));
+            if (perLayer <= 0) return false;
+            long count = (left - 1) / perLayer + 1;
+            usedHeight += count * load.Product.Height;
+            if (usedHeight > height) return false;
+            layers.Add((load.Product.Height, [load with { Quantity = left - (count - 1) * perLayer }]));
+        }
+        return true;
     }
 
     private static bool CanPackFloor(decimal length, decimal width, IEnumerable<CapacityLoad> loads)

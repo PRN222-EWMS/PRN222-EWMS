@@ -273,9 +273,6 @@ public class PurchaseOrderService(
             CanConfirm = (role == "PURCHASING_STAFF" && po.CreatedByUserId == currentUserId)
                          && po.Status == "DRAFT",
 
-            CanCloseRemainder = (role == "PURCHASING_STAFF" || role == "MANAGER")
-                                && (po.Status == "CONFIRMED" || po.Status == "PARTIALLY_RECEIVED")
-                                && po.PurchaseOrderLines.Any(l => (l.OrderedQuantity - l.ClosedQuantity) > 0),
 
             CanCancelDraft = (role == "PURCHASING_STAFF" && po.CreatedByUserId == currentUserId)
                              && po.Status == "DRAFT" && !hasInbound,
@@ -341,26 +338,7 @@ public class PurchaseOrderService(
 
         // Capacity is validated once inside the warehouse transaction below.
 
-        // Kiểm tra mã đơn mua (POCode) nếu người dùng nhập
-        string poCode;
-        if (!string.IsNullOrWhiteSpace(model.Pocode))
-        {
-            poCode = model.Pocode.Trim();
-            if (poCode.Length > 40)
-                return (false, "Mã đơn mua không được vượt quá 40 ký tự.", 0);
-
-            // Kiểm tra trùng mã đơn mua: Nếu trùng phải thông báo lỗi, tuyệt đối không tự tạo mới mã đơn!
-            var isDuplicate = await repo.Orders.AnyAsync(p => p.Pocode == poCode);
-            if (isDuplicate)
-                return (false, $"Mã đơn mua '{poCode}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.", 0);
-        }
-        else
-        {
-            poCode = await repo.GenerateNextPoCodeAsync();
-            var isDuplicateGenerated = await repo.Orders.AnyAsync(p => p.Pocode == poCode);
-            if (isDuplicateGenerated)
-                return (false, $"Mã đơn mua tự sinh '{poCode}' đã tồn tại. Vui lòng thử lại.", 0);
-        }
+        string poCode = "";
 
         // Bắt đầu Transaction
         using var transaction = await repo.BeginTransactionAsync();
@@ -370,6 +348,7 @@ public class PurchaseOrderService(
             await sources.LockWarehouseAsync(model.WarehouseId);
             var validationError = await ValidateFormAsync(model, null);
             if (validationError != null) return (false, validationError, 0);
+            poCode = await repo.GenerateNextPoCodeAsync();
             var now = DateTime.UtcNow;
 
             var po = new PurchaseOrder
@@ -431,7 +410,7 @@ public class PurchaseOrderService(
             logger.LogError(ex, "Cannot create purchase order");
             if (ex.InnerException?.Message.Contains("UX_PurchaseOrder_01") == true || ex.Message.Contains("UX_PurchaseOrder_01"))
             {
-                return (false, $"Mã đơn mua '{poCode}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.", 0);
+                return (false, "Mã PO vừa được sử dụng. Vui lòng thử lưu lại để hệ thống cấp mã mới.", 0);
             }
             return (false, "Không thể lưu PO. Vui lòng tải lại số liệu và thử lại.", 0);
         }
@@ -589,8 +568,12 @@ public class PurchaseOrderService(
         var ids = form.Lines.Select(l => l.ProductId).ToArray();
         if (await db.SupplierProducts.CountAsync(sp => sp.SupplierId == form.SupplierId && ids.Contains(sp.ProductId) && sp.Product.Status == "ACTIVE") != ids.Length)
             return "Có sản phẩm đã ngừng hoạt động hoặc không thuộc danh mục của nhà cung cấp.";
-        var capacity = await capacityEngine.ValidatePurchaseOrderLinesCapacityAsync(form.WarehouseId, form.Lines.Select(l => (l.ProductId,l.OrderedQuantity)), id);
-        return capacity.IsValid ? null : capacity.ErrorMessage ?? "Kho không đủ sức chứa.";
+        var capacity = await capacityEngine.EvaluateAsync(new()
+        {
+            WarehouseId = form.WarehouseId, ExpectedArrivalDate = form.ExpectedArrivalDate, ExcludePoId = id,
+            Demands = form.Lines.Select(l => new CapacityDemand(l.ProductId, l.OrderedQuantity)).ToList()
+        });
+        return capacity.IsValid ? null : string.Join(" ", capacity.Errors);
     }
 
     private async Task ReconcileAsActorAsync(int actorId, int warehouseId, string reason)
@@ -600,81 +583,6 @@ public class PurchaseOrderService(
         finally { await db.Database.ExecuteSqlRawAsync("EXEC sys.sp_set_session_context @key=N'ActorUserID',@value=NULL;"); }
     }
 
-    // =========================================================================
-    // 6. ĐÓNG SỐ LƯỢNG CÒN LẠI (CLOSE REMAINDER)
-    // =========================================================================
-    public async Task<(bool Success, string Message)> CloseRemainderAsync(long id, string reason, int actorId, string role)
-    {
-        if (reason?.Trim().Length > 1000) return (false, "Lý do tối đa 1.000 ký tự.");
-        if (role is not ("PURCHASING_STAFF" or "MANAGER") || !await IsActorAsync(actorId, role)) return (false, "Bạn không có quyền xử lý PO.");
-        await using var transaction = await repo.BeginTransactionAsync();
-        try
-        {
-            var warehouseId = await db.PurchaseOrders.AsNoTracking().Where(o => o.PurchaseOrderId == id).Select(o => (int?)o.WarehouseId).SingleOrDefaultAsync();
-            if (warehouseId == null) return (false, "Không tìm thấy PO.");
-            await sources.LockWarehouseAsync(warehouseId.Value);
-            var po = await LockOrderAsync(id);
-            if (po != null && po.WarehouseId != warehouseId) return (false, "PO đã thay đổi; vui lòng tải lại.");
-
-            if (string.IsNullOrWhiteSpace(reason)) return (false, "Nhập lý do đóng phần còn lại.");
-            if (await db.Inbounds.AnyAsync(i => i.PurchaseOrderId == id && i.Status != "DONE" && i.Status != "CANCELLED"))
-                return (false, "Cần hoàn tất hoặc hủy các phiếu nhập đang xử lý trước khi đóng PO.");
-            if (po == null) return (false, "Không tìm thấy đơn mua hàng.");
-            if (po.Status != "CONFIRMED" && po.Status != "PARTIALLY_RECEIVED")
-                return (false, "Chỉ được đóng phần còn lại của đơn CONFIRMED hoặc PARTIALLY_RECEIVED.");
-
-            var now = DateTime.UtcNow;
-            po.ClosedAt = now;
-            po.CloseReason = reason.Trim();
-            po.Status = "CLOSED";
-
-            // Đóng lượng còn lại trên các dòng và giảm SupplySource Incoming tương ứng
-            foreach (var line in po.PurchaseOrderLines)
-            {
-                var prog = await repo.Progress.FirstOrDefaultAsync(p => p.PolineId == line.PolineId);
-                long remaining = prog?.RemainingQuantity ?? (line.OrderedQuantity - line.ClosedQuantity);
-
-                if (remaining > 0)
-                {
-                    line.ClosedQuantity += (int)remaining;
-
-                    var source = await db.SupplySources.FirstOrDefaultAsync(s => s.PolineId == line.PolineId);
-                    if (source != null)
-                    {
-                        source.RemainingQuantity = 0;
-                        source.EligibleQuantity = 0;
-
-                        // Theo MSG-027 và Phân tích SO Mục 9 & Mục 13 (SO21):
-                        // Khi đóng phần chưa nhận của PO, lượng incoming bị xóa bỏ hoàn toàn.
-                        // Các Sales Order đang có Active Reservation dựa vào nguồn này bị mất nguồn cung -> Bật HasShortage!
-                        var affectedReservations = await db.Reservations
-                            .Include(r => r.SalesOrder)
-                            .Where(r => r.SupplySourceId == source.SupplySourceId && r.Status == "ACTIVE")
-                            .ToListAsync();
-
-                        foreach (var res in affectedReservations)
-                        {
-                            if (res.SalesOrder != null)
-                            {
-                                res.SalesOrder.HasShortage = true;
-                            }
-                        }
-                    }
-                }
-            }
-
-            await repo.SaveChangesWithActorAsync(actorId);
-            await ReconcileAsActorAsync(actorId, po.WarehouseId, "PO đã hủy/đóng phần chưa nhận; nguồn incoming không còn khả dụng.");
-            await transaction.CommitAsync();
-            return (true, "Đã đóng số lượng còn lại của đơn mua hàng.");
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync(); db.ChangeTracker.Clear();
-            logger.LogError(ex, "Cannot close/cancel purchase order {Id}", id);
-            return (false, "Không thể đóng PO. Dữ liệu có thể vừa thay đổi; vui lòng tải lại.");
-        }
-    }
 
     // =========================================================================
     // 6.1. HỦY ĐƠN MUA HÀNG (CANCEL PO)

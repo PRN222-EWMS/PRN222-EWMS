@@ -202,28 +202,6 @@ public class PurchaseOrderController(
         return RedirectToAction(nameof(Details), new { id });
     }
 
-    // =========================================================================
-    // 6. ĐÓNG SỐ LƯỢNG CÒN LẠI (CLOSE REMAINDER)
-    // =========================================================================
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CloseRemainder(CloseRemainderRequestDto request)
-    {
-        if (string.IsNullOrWhiteSpace(request.Reason))
-        {
-            TempData["ErrorMessage"] = "Vui lòng nhập lý do đóng số lượng còn lại.";
-            return RedirectToAction(nameof(Details), new { id = request.PurchaseOrderId });
-        }
-
-        var (success, message) = await poService.CloseRemainderAsync(request.PurchaseOrderId, request.Reason, CurrentUserId, CurrentUserRole);
-
-        if (success)
-            TempData["SuccessMessage"] = message;
-        else
-            TempData["ErrorMessage"] = message;
-
-        return RedirectToAction(nameof(Details), new { id = request.PurchaseOrderId });
-    }
 
     // =========================================================================
     // 6.1. HỦY ĐƠN MUA HÀNG (CANCEL PO)
@@ -263,6 +241,24 @@ public class PurchaseOrderController(
     // =========================================================================
     // 8. API AJAX KIỂM TRA SỨC CHỨA KHO (CAPACITY CHECK)
     // =========================================================================
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = "MANAGER,PURCHASING_STAFF")]
+    public async Task<IActionResult> CheckCapacity([FromForm] PoFormViewModel form, CancellationToken ct)
+    {
+        if (!ModelState.IsValid || form.WarehouseId <= 0 || form.Lines is null || form.Lines.Count is < 1 or > 100
+            || form.Lines.Any(l => l.ProductId <= 0 || l.OrderedQuantity is < 1 or > 1000000)
+            || form.Lines.Select(l => l.ProductId).Distinct().Count() != form.Lines.Count)
+            return BadRequest(new { message = "Hãy chọn kho, ngày nhận và các sản phẩm khác nhau với số lượng hợp lệ." });
+        if (form.PurchaseOrderId is long id && id > 0 && await poService.GetEditFormAsync(id, CurrentUserId, CurrentUserRole) == null)
+            return Forbid();
+        return Json(await capacityEngine.EvaluateAsync(new()
+        {
+            WarehouseId = form.WarehouseId, ExpectedArrivalDate = form.ExpectedArrivalDate,
+            ExcludePoId = form.PurchaseOrderId > 0 ? form.PurchaseOrderId : null,
+            Demands = form.Lines.Select(l => new CapacityDemand(l.ProductId, l.OrderedQuantity)).ToList(), CalculateLimits = true
+        }, ct));
+    }
+
     [HttpGet]
     public async Task<IActionResult> CheckCapacity(int warehouseId, int productId, int quantity = 1, long? excludePoId = null)
     {

@@ -12,6 +12,9 @@ public class OutboundSupplyService(EwmsDbContext db, ISourceReservationService c
     public Task LockWarehouseAsync(int warehouseId, CancellationToken ct = default) =>
         commitments.LockWarehouseAsync(warehouseId, ct);
 
+    public Task<string?> GetReceivingBlockReasonAsync(int warehouseId, CancellationToken ct = default) =>
+        commitments.GetReceivingBlockReasonAsync(warehouseId, ct);
+
     public async Task ReconcileWarehouseAsync(int warehouseId, CancellationToken ct = default)
     {
         await commitments.ReconcileWarehouseAsync(warehouseId, "Đối soát nguồn phục vụ xuất hàng.", ct);
@@ -178,7 +181,7 @@ public class OutboundSupplyService(EwmsDbContext db, ISourceReservationService c
         var lines = await lineQuery.Include(l => l.Product).Include(l => l.SalesOrder).ToListAsync(ct);
         var serials = await db.SerialItems.AsNoTracking().Where(s => s.CurrentWarehouseId == warehouseId
                 && s.CurrentSupplySourceId != null && s.CurrentSupplyState == "PHYSICAL" && s.StockState == "IN_WAREHOUSE"
-                && s.ItemCondition == "GOOD" && !s.IsQuarantined)
+                && s.ItemCondition == "GOOD")
             .Include(s => s.Product).Include(s => s.OriginalInbound).ThenInclude(i => i!.PurchaseOrder).AsSplitQuery().ToListAsync(ct);
         var claims = await db.PickingClaims.AsNoTracking().Where(c => c.SerialItem.CurrentWarehouseId == warehouseId)
             .Select(c => new SourceClaim(c.SerialItemId, c.SerialItem.CurrentSupplySourceId ?? 0, c.SerialItem.ProductId,
@@ -265,7 +268,7 @@ public class OutboundSupplyService(EwmsDbContext db, ISourceReservationService c
     private static long Remaining(SupplyState state, SalesOrderLine line) => Math.Max(0, (long)line.RequestedQuantity - line.CancelledQuantity - state.Issued.GetValueOrDefault(line.SolineId));
     private static bool IsPhysical(SupplySource source) => SourceReservationService.IsPhysical(source);
     private static long PhysicalCapacity(SupplyState state, SupplySource source) => Math.Max(0,
-        Math.Min(Math.Min(source.RemainingQuantity, source.EligibleQuantity), state.Serials.LongCount(s => s.CurrentSupplySourceId == source.SupplySourceId && s.ProductId == source.ProductId)));
+        Math.Min(source.RemainingQuantity, state.Serials.LongCount(s => s.CurrentSupplySourceId == source.SupplySourceId && s.ProductId == source.ProductId)));
     private static long IncomingCapacity(SupplySource source) => SourceReservationService.IsIncoming(source)
         ? Math.Max(0, Math.Min(source.RemainingQuantity, source.EligibleQuantity)) : 0;
     private static string SourceCode(SupplySource source) => SourceReservationService.Label(source);

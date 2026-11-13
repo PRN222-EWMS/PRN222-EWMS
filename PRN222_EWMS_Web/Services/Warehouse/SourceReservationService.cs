@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Models;
+using PRN222_EWMS_Web.Repositories.Stocktaking;
 using PRN222_EWMS_Web.ViewModels.Sales;
 
 namespace PRN222_EWMS_Web.Services.Warehouse;
@@ -29,6 +30,37 @@ public class SourceReservationService(EwmsDbContext db, TimeProvider clock) : IS
             .AsNoTracking().Select(r => r.ReservationId).ToListAsync(ct);
     }
 
+    // The caller holds the warehouse lock in its posting transaction.
+    public async Task<string?> GetReceivingBlockReasonAsync(int warehouseId, CancellationToken ct = default)
+    {
+        RequireTransaction();
+        var warehouse = await db.Warehouses.AsNoTracking().SingleOrDefaultAsync(w => w.WarehouseId == warehouseId, ct);
+        return ReceivingWarehouseError(warehouse, Today)
+            ?? await GetStocktakeBlockReasonAsync(warehouseId, [null], ct);
+    }
+
+    public static string? ReceivingWarehouseError(Models.Warehouse? warehouse, DateOnly today)
+    {
+        if (warehouse?.Status != "ACTIVE") return "Kho nhận không tồn tại hoặc đã ngừng hoạt động.";
+        if (warehouse.WarehouseType == "RENTED" && (warehouse.RentalStartDate is not DateOnly start
+            || warehouse.RentalEndDate is not DateOnly end || today < start || today > end))
+            return "Kho nhận chưa bắt đầu thuê, đã hết hạn hoặc thiếu kỳ thuê hợp lệ. Cần gia hạn trước khi nhận hàng.";
+        return null;
+    }
+
+    public async Task<string?> GetStocktakeBlockReasonAsync(int warehouseId, IReadOnlyCollection<int?> locationIds, CancellationToken ct = default)
+    {
+        RequireTransaction();
+        if (locationIds.Count == 0) return null;
+        var plans = await db.Stocktakes.AsNoTracking().Where(s => s.WarehouseId == warehouseId
+            && StocktakeScopeRules.LockedStatuses.Contains(s.Status)).ToListAsync(ct);
+        if (plans.Count == 0) return null;
+        var planIds = plans.Select(s => s.StocktakeId).ToArray();
+        var scopes = await db.StocktakeScopes.AsNoTracking().Where(s => planIds.Contains(s.StocktakeId)).ToListAsync(ct);
+        var locations = await db.StorageLocations.AsNoTracking().Where(l => l.WarehouseId == warehouseId).ToListAsync(ct);
+        return StocktakeScopeRules.MovementBlockReason(warehouseId, plans, scopes, locations, locationIds);
+    }
+
     private IQueryable<SupplySource> Graph(bool tracked = false)
     {
         var query = tracked ? db.SupplySources.AsQueryable() : db.SupplySources.AsNoTracking();
@@ -39,7 +71,9 @@ public class SourceReservationService(EwmsDbContext db, TimeProvider clock) : IS
             .ThenInclude(o => o.FromWarehouse).AsSplitQuery();
     }
 
-    public static bool IsPhysical(SupplySource s) => s.SupplyState == "PHYSICAL" && s.ItemCondition == "GOOD" && (s.SourceType switch
+    public static bool IsPhysical(SupplySource s) => s.ItemCondition == "GOOD" && IsPostedPhysical(s);
+
+    public static bool IsPostedPhysical(SupplySource s) => s.SupplyState == "PHYSICAL" && (s.SourceType switch
     {
         "INBOUND" => s.Inbound?.Status == "DONE",
         "RETURN" => s.ReturnReceipt?.Status == "DONE",
@@ -73,7 +107,7 @@ public class SourceReservationService(EwmsDbContext db, TimeProvider clock) : IS
         var sources = await Graph().Where(s => s.WarehouseId == warehouseId && s.ItemCondition == "GOOD" && s.Product.Status == "ACTIVE").ToListAsync(ct);
         var holds = await db.Reservations.AsNoTracking().Where(r => r.WarehouseId == warehouseId && r.Status == "ACTIVE").ToListAsync(ct);
         var serialCounts = await db.SerialItems.AsNoTracking().Where(s => s.CurrentWarehouseId == warehouseId && s.StockState == "IN_WAREHOUSE"
-                && s.CurrentSupplyState == "PHYSICAL" && s.ItemCondition == "GOOD" && !s.IsQuarantined && s.CurrentSupplySourceId != null)
+                && s.CurrentSupplyState == "PHYSICAL" && s.ItemCondition == "GOOD" && s.CurrentSupplySourceId != null)
             .GroupBy(s => s.CurrentSupplySourceId!.Value).Select(g => new { Id = g.Key, Count = g.LongCount() }).ToDictionaryAsync(x => x.Id, x => x.Count, ct);
         var claims = await db.PickingClaims.AsNoTracking().Where(c => c.SerialItem.CurrentWarehouseId == warehouseId && c.SerialItem.CurrentSupplySourceId != null)
             .Select(c => new Claim(c.SerialItem.CurrentSupplySourceId!.Value,
@@ -87,7 +121,7 @@ public class SourceReservationService(EwmsDbContext db, TimeProvider clock) : IS
             bool physical = IsPhysical(s), incoming = IsIncoming(s);
             if (!physical && !incoming) continue;
             long capacity = Math.Max(0, Math.Min((long)s.RemainingQuantity, s.EligibleQuantity));
-            if (physical) capacity = Math.Min(capacity, serialCounts.GetValueOrDefault(s.SupplySourceId));
+            if (physical) capacity = Math.Min(s.RemainingQuantity, serialCounts.GetValueOrDefault(s.SupplySourceId));
             if (s.TransferLineId is long transferLine) capacity = Math.Min(capacity, transit.GetValueOrDefault(transferLine));
             var sourceHolds = holds.Where(r => r.SupplySourceId == s.SupplySourceId).ToList();
             var sourceClaims = claims.Where(c => c.SourceId == s.SupplySourceId).ToList();
@@ -286,9 +320,18 @@ public class SourceReservationService(EwmsDbContext db, TimeProvider clock) : IS
         var holds = await db.Reservations.Where(r => r.WarehouseId == warehouseId && r.Status == "ACTIVE")
             .Include(r => r.SalesOrder).Include(r => r.TransferOrder).ToListAsync(ct);
         var affected = new HashSet<long>();
+        var physicalCounts = await db.SerialItems.AsNoTracking().Where(s => s.CurrentWarehouseId == warehouseId
+                && s.StockState == "IN_WAREHOUSE" && s.CurrentSupplyState == "PHYSICAL" && s.CurrentSupplySourceId != null)
+            .GroupBy(s => new { SourceId = s.CurrentSupplySourceId!.Value, s.ProductId, s.ItemCondition })
+            .Select(g => new { g.Key.SourceId, g.Key.ProductId, g.Key.ItemCondition, Count = g.Count() }).ToListAsync(ct);
         foreach (var source in sources)
         {
-            if (source.ItemCondition != "GOOD") continue;
+            if (IsPostedPhysical(source))
+            {
+                var count = physicalCounts.SingleOrDefault(c => c.SourceId == source.SupplySourceId
+                    && c.ProductId == source.ProductId && c.ItemCondition == source.ItemCondition)?.Count ?? 0;
+                source.RemainingQuantity = source.EligibleQuantity = count;
+            }
             var sourceHolds = holds.Where(r => r.SupplySourceId == source.SupplySourceId && Balance(r) > 0).ToList();
             foreach (var r in sourceHolds.Where(r => r.SalesOrderId.HasValue && (r.SalesOrder == null || !OpenStatuses.Contains(r.SalesOrder.Status)
                 || r.SupplyState != source.SupplyState || (source.SupplyState == "INCOMING" && (!IsIncoming(source)
@@ -298,7 +341,7 @@ public class SourceReservationService(EwmsDbContext db, TimeProvider clock) : IS
                 affected.Add(r.SalesOrderId!.Value);
                 if (r.SalesOrder != null && OpenStatuses.Contains(r.SalesOrder.Status)) r.SalesOrder.HasShortage = true;
             }
-            long capacity = source.ItemCondition == "GOOD" && (IsPhysical(source) || IsIncoming(source))
+            long capacity = IsPostedPhysical(source) || IsIncoming(source)
                 ? Math.Max(0, Math.Min((long)source.RemainingQuantity, source.EligibleQuantity)) : 0;
             var excess = Math.Max(0, sourceHolds.Sum(Balance) - capacity);
             if (excess > 0 && await db.PickingClaims.AnyAsync(c => c.SerialItem.CurrentSupplySourceId == source.SupplySourceId, ct))

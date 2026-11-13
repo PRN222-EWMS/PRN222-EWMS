@@ -22,6 +22,7 @@ public interface IOutboundService
     Task<(bool Success, string? Error, long OutboundId)> StartPickingSessionAsync(long salesOrderId, int userId, string? requestToken = null);
     Task<PickingWorkbenchViewModel?> GetPickingWorkbenchAsync(long outboundId, int userId);
     Task<(bool Success, string? Error)> ScanSerialAsync(long outboundId, string serialNumber, int userId, string version);
+    Task<(bool Success, string? Error)> ScanSerialsAsync(long outboundId, IReadOnlyCollection<string> serialNumbers, int userId, string version);
     Task<(bool Success, string? Error)> RemoveSerialAsync(long outboundId, long serialItemId, int userId, string version);
     Task<(bool Success, string? Error)> CompleteAsync(long outboundId, int userId, string version);
     Task<(bool Success, string? Error)> CancelPickingAsync(long outboundId, int userId, string version);

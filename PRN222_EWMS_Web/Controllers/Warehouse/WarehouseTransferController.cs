@@ -47,7 +47,7 @@ public class WarehouseTransferController(
     }
 
     [HttpGet]
-    public async Task<IActionResult> Details(long id)
+    public async Task<IActionResult> Details(long id, bool fragment = false)
     {
         var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!int.TryParse(claim, out var userId))
@@ -57,6 +57,13 @@ public class WarehouseTransferController(
         if (detail is null)
             return NotFound();
 
+        if (fragment)
+        {
+            if (!detail.Documents.Any(document => document.CanScan || document.CanScanReceipt))
+                return Conflict(new { redirectUrl = Url.Action(nameof(Details), new { id }) });
+            ViewData["PickingFragment"] = true;
+            return PartialView("Details", detail);
+        }
         return View(detail);
     }
 
@@ -66,8 +73,7 @@ public class WarehouseTransferController(
         if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
             return Forbid();
         var result = await dispatchWork.RemoveSerialAsync(id, documentId, itemId, userId);
-        TempData[result.Success ? "Success" : "Error"] = result.Message;
-        return RedirectToAction(nameof(Details), null, new { id }, "my-transfer-work");
+        return WorkResult(id, result);
     }
 
     [HttpPost, ValidateAntiForgeryToken]
@@ -76,8 +82,7 @@ public class WarehouseTransferController(
         if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
             return Forbid();
         var result = await receiptWork.RemoveSerialAsync(id, documentId, itemId, userId);
-        TempData[result.Success ? "Success" : "Error"] = result.Message;
-        return RedirectToAction(nameof(Details), null, new { id }, "my-transfer-work");
+        return WorkResult(id, result);
     }
 
     [HttpPost, ValidateAntiForgeryToken]
@@ -99,8 +104,7 @@ public class WarehouseTransferController(
             return Forbid();
 
         var result = await receiptWork.ScanAsync(id, receiptId, serialNumber, receivedCondition, conditionNote, userId);
-        TempData[result.Success ? "Success" : "Error"] = result.Message;
-        return RedirectToAction(nameof(Details), new { id });
+        return WorkResult(id, result);
     }
 
     [HttpPost, ValidateAntiForgeryToken]
@@ -132,8 +136,24 @@ public class WarehouseTransferController(
             return Forbid();
 
         var result = await dispatchWork.ScanAsync(id, dispatchId, serialNumber, userId);
+        return WorkResult(id, result);
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> ScanDispatchBatch(long id, long dispatchId, string[]? serialNumbers)
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            return Forbid();
+        var result = await dispatchWork.ScanBatchAsync(id, dispatchId, serialNumbers ?? [], userId);
+        return WorkResult(id, result);
+    }
+
+    private IActionResult WorkResult(long id, (bool Success, string Message) result)
+    {
+        if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            return Json(new { success = result.Success, message = result.Message });
         TempData[result.Success ? "Success" : "Error"] = result.Message;
-        return RedirectToAction(nameof(Details), new { id });
+        return RedirectToAction(nameof(Details), null, new { id }, "my-transfer-work");
     }
 
     [HttpPost, ValidateAntiForgeryToken]
