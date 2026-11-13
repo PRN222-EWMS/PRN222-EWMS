@@ -1,11 +1,12 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using PRN222_EWMS_Web.Models;
+using PRN222_EWMS_Web.Services;
 using WarehouseEntity = PRN222_EWMS_Web.Models.Warehouse;
 using PRN222_EWMS_Web.ViewModels.Sales;
 
 namespace PRN222_EWMS_Web.Repositories.Sales;
 
-public class SalesRepository(EwmsDbContext db) : ISalesRepository
+public class SalesRepository(EwmsDbContext db, DocumentCodeGenerator codes) : ISalesRepository
 {
     public IQueryable<SalesOrder> Orders => db.SalesOrders.AsNoTracking();
     public IQueryable<Customer> Customers => db.Customers.AsNoTracking();
@@ -44,20 +45,7 @@ public class SalesRepository(EwmsDbContext db) : ISalesRepository
         return db.Outbounds.AsNoTracking().AnyAsync(o => o.SalesOrderId == salesOrderId);
     }
 
-    public async Task<string> GenerateNextSoCodeAsync()
-    {
-        var year = DateTime.UtcNow.AddHours(7).Year;
-        var prefix = $"SO-{year}-";
-
-        var codes = await db.SalesOrders
-            .Where(p => p.Socode.StartsWith(prefix))
-            .Select(p => p.Socode)
-            .ToListAsync();
-
-        var nextSeq = 1;
-        nextSeq += codes.Select(code => int.TryParse(code[prefix.Length..], out var seq) ? seq : 0).DefaultIfEmpty().Max();
-        return $"{prefix}{nextSeq:D3}";
-    }
+    public Task<string> GenerateNextSoCodeAsync() => codes.PreviewAsync(DocumentType.SalesOrder);
 
     public async Task AddOrderAsync(SalesOrder order)
     {

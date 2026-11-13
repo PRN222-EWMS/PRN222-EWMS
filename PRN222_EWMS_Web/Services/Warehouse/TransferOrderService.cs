@@ -8,7 +8,7 @@ namespace PRN222_EWMS_Web.Services.Warehouse;
 
 public class TransferOrderService(EwmsDbContext db, TransferStockService stock, TransferCapacityService capacity,
     TransferExpiryService expiry, TimeProvider clock, ILogger<TransferOrderService> logger,
-    ISourceReservationService sources) : ITransferOrderService
+    ISourceReservationService sources, DocumentCodeGenerator codes) : ITransferOrderService
 {
     public Task<List<ProductLookupDto>> GetAvailableProductsAsync(int warehouseId, string itemCondition = "GOOD", long? transferOrderId = null) =>
         stock.GetProductsAsync(warehouseId, itemCondition, transferOrderId);
@@ -176,7 +176,7 @@ public class TransferOrderService(EwmsDbContext db, TransferStockService stock, 
             var order = new TransferOrder
             {
                 // Unique even when two managers create at the same time; no MAX(code) race.
-                TransferCode = $"TR-{TransferPolicy.Today(clock):yyyyMMdd}-{Guid.NewGuid():N}"[..37],
+                TransferCode = await codes.NextAsync(DocumentType.TransferOrder),
                 FromWarehouseId = model.FromWarehouseId, ToWarehouseId = model.ToWarehouseId, ItemCondition = model.ItemCondition,
                 DispatchDate = model.DispatchDate, ExpectedDate = model.ExpectedDate, Note = model.Note?.Trim(),
                 CreatedByUserId = userId, CreatedAt = clock.GetUtcNow().UtcDateTime, Status = model.IsRelease ? "RELEASED" : "DRAFT",

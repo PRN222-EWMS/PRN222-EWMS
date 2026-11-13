@@ -41,7 +41,8 @@ public class WarehouseCapacityEngine(EwmsDbContext db, ISourceReservationService
 
     public Task LockWarehouseAsync(int warehouseId, CancellationToken ct = default) => sources.LockWarehouseAsync(warehouseId, ct);
 
-    private async Task<Snapshot> ReadAsync(WarehouseCapacityRequest request, CancellationToken ct)
+    private async Task<Snapshot> ReadAsync(WarehouseCapacityRequest request, CancellationToken ct,
+        IReadOnlyCollection<long>? ignoredStocktakeIds = null)
     {
         var s = new Snapshot();
         var warehouse = await db.Warehouses.AsNoTracking().SingleOrDefaultAsync(w => w.WarehouseId == request.WarehouseId, ct);
@@ -120,7 +121,9 @@ public class WarehouseCapacityEngine(EwmsDbContext db, ISourceReservationService
                 - db.ReturnReceiptItems.LongCount(i => i.ReturnLineId == l.ReturnLineId && i.IsActive && i.ReturnReceipt.Status == "DONE") }).ToListAsync(ct);
         s.Returns.AddRange(returns.Where(l => l.Qty > 0).Select(l => new CapacityLoad(s.Profile(l.ProductId), "UNKNOWN", l.Qty)));
         // Document remainders own future space. SupplySource/Reservation/SourcePlan are not additional arrivals.
-        var locked = await db.Stocktakes.AsNoTracking().Where(t => t.WarehouseId == request.WarehouseId && LockedStatuses.Contains(t.Status))
+        var ignored = ignoredStocktakeIds?.ToArray() ?? [];
+        var locked = await db.Stocktakes.AsNoTracking().Where(t => t.WarehouseId == request.WarehouseId
+                && LockedStatuses.Contains(t.Status) && !ignored.Contains(t.StocktakeId))
             .Select(t => new { t.StocktakeId, t.ScopeType, t.IncludeAwaitingPutaway }).ToListAsync(ct);
         var ids = locked.Select(t => t.StocktakeId).ToArray();
         var scopes = await db.StocktakeScopes.AsNoTracking().Where(t => ids.Contains(t.StocktakeId))
@@ -129,6 +132,8 @@ public class WarehouseCapacityEngine(EwmsDbContext db, ISourceReservationService
         s.AwaitingLocked = locked.Any(t => t.ScopeType == "WHOLE_WAREHOUSE" || t.IncludeAwaitingPutaway
             || t.ScopeType is not ("WHOLE_WAREHOUSE" or "LOCATIONS")
             || (t.ScopeType == "LOCATIONS" && scopes.All(x => x.StocktakeId != t.StocktakeId)));
+        if (locked.Any(t => t.ScopeType != "LOCATIONS" || scopes.All(x => x.StocktakeId != t.StocktakeId)))
+            s.LockedLocations.UnionWith(locations.Select(l => l.LocationId));
         if (locked.Count > 0)
             s.Warnings.Add("Kho có phạm vi đang kiểm kê. Sức chứa kế hoạch không đồng nghĩa có thể xếp ngay vào vị trí đang khóa.");
         if (s.Returns.Count > 0 || request.Demands.Any(l => l.Condition == "UNKNOWN"))
@@ -275,10 +280,46 @@ public class WarehouseCapacityEngine(EwmsDbContext db, ISourceReservationService
             foreach (var id in locationIds) errors[id] = reason;
             return assessment;
         }
-        var load = new CapacityLoad(s.Profile(serial.ProductId), serial.Condition, 1);
-        var queue = s.Queue(s.Serials.Where(i => i.Id != serialId));
+        return AssessPlacementCandidates(s, serial, serial.Condition, locationIds, ct);
+    }
+
+    public async Task<PlacementCapacityAssessment> AssessStocktakePlacementsAsync(int warehouseId, long serialId, string condition,
+        IReadOnlyCollection<int> locationIds, IReadOnlyCollection<long> stocktakeIds, CancellationToken ct = default)
+    {
+        var assessment = new PlacementCapacityAssessment();
+        if (locationIds.Count == 0) return assessment;
+        var s = await ReadAsync(new() { WarehouseId = warehouseId }, ct, stocktakeIds);
+        var serial = s.Serials.SingleOrDefault(i => i.Id == serialId);
+        if (s.Errors.Count > 0 || serial == null || condition is not ("GOOD" or "DAMAGED")
+            || stocktakeIds.Count == 0 || PlacementLocked(s, serial.LocationId))
+        {
+            var reason = s.Errors.FirstOrDefault() ?? "Serial hoặc tình trạng không hợp lệ, hoặc đang thuộc phạm vi kiểm kê khác.";
+            foreach (var id in locationIds) assessment.Errors[id] = reason;
+            return assessment;
+        }
+        return AssessPlacementCandidates(s, serial, condition, locationIds, ct);
+    }
+
+    private static bool PlacementLocked(Snapshot s, int? locationId)
+    {
+        if (locationId == null) return s.AwaitingLocked;
+        var seen = new HashSet<int>();
+        while (locationId is int id && seen.Add(id) && s.Locations.TryGetValue(id, out var node))
+        {
+            if (s.LockedLocations.Contains(id)) return true;
+            locationId = node.ParentLocationId;
+        }
+        return false;
+    }
+
+    private static PlacementCapacityAssessment AssessPlacementCandidates(Snapshot s, PositionedStock serial, string condition,
+        IReadOnlyCollection<int> locationIds, CancellationToken ct)
+    {
+        var assessment = new PlacementCapacityAssessment();
+        var load = new CapacityLoad(s.Profile(serial.ProductId), condition, 1);
+        var queue = s.Queue(s.Serials.Where(i => i.Id != serial.Id));
         var scenarios = Scenarios(s, []);
-        var baselines = scenarios.ToDictionary(condition => condition, condition => Simulate(s, [], condition));
+        var baselines = scenarios.ToDictionary(scenario => scenario, scenario => Simulate(s, [], scenario));
         var existingProblems = baselines.Values.SelectMany(run => run.Errors).Distinct().Take(3).ToList();
         if (existingProblems.Count > 0)
             assessment.Warnings.Add("Một số hàng chờ/sắp nhận đang thiếu chỗ. Các vị trí được phép chọn không làm tăng phần thiếu: "
@@ -287,26 +328,28 @@ public class WarehouseCapacityEngine(EwmsDbContext db, ISourceReservationService
         {
             ct.ThrowIfCancellationRequested();
             var slots = s.Slots.Select(l => l.Copy()).ToList();
-            var target = slots.SingleOrDefault(l => l.Id == id);
-            int? current = id;
-            bool locked = false;
-            var seen = new HashSet<int>();
-            while (current is int location && seen.Add(location) && s.Locations.TryGetValue(location, out var node))
+            // Remove this serial once from its registered place before simulating the new place/condition.
+            // Staying in the same place therefore does not count the serial twice.
+            var original = slots.SingleOrDefault(l => l.Id == serial.LocationId);
+            var previous = original?.Loads.FindIndex(l => l.Product.Id == serial.ProductId && l.Condition == serial.Condition);
+            if (original != null && previous is >= 0)
             {
-                locked |= s.LockedLocations.Contains(location);
-                current = node.ParentLocationId;
+                var old = original.Loads[previous.Value];
+                if (old.Quantity == 1) original.Loads.RemoveAt(previous.Value);
+                else original.Loads[previous.Value] = old with { Quantity = old.Quantity - 1 };
             }
-            if (target == null || locked || !target.Accepts(load) || !TransferCapacityPlanner.Fits(target, load))
+            var target = slots.SingleOrDefault(l => l.Id == id);
+            if (target == null || PlacementLocked(s, id) || !target.Accepts(load) || !TransferCapacityPlanner.Fits(target, load))
             {
-                errors[id] = "Vị trí không còn phù hợp, không đủ chỗ hoặc đang bị khóa.";
+                assessment.Errors[id] = "Vị trí không còn phù hợp, không đủ chỗ hoặc đang bị khóa.";
                 continue;
             }
             target.Loads.Add(load);
-            var problems = scenarios.Select(condition => (Baseline: baselines[condition],
-                    Candidate: Simulate(s, [], condition, true, slots, queue)))
+            var problems = scenarios.Select(scenario => (Baseline: baselines[scenario],
+                    Candidate: Simulate(s, [], scenario, true, slots, queue)))
                 .Where(run => !DoesNotWorsen(run.Baseline, run.Candidate))
                 .SelectMany(run => run.Candidate.Errors).Distinct().Take(3).ToList();
-            if (problems.Count > 0) errors[id] = "Vị trí này cần dành chỗ cho hàng chờ/sắp nhận: " + string.Join(" ", problems);
+            if (problems.Count > 0) assessment.Errors[id] = "Vị trí này cần dành chỗ cho hàng chờ/sắp nhận: " + string.Join(" ", problems);
         }
         return assessment;
     }

@@ -1,4 +1,4 @@
-﻿@using PRN222_EWMS_Web.ViewModels.Stocktaking
+@using PRN222_EWMS_Web.ViewModels.Stocktaking
 @model PRN222_EWMS_Web.ViewModels.Ceo.CeoStocktakeAdjustmentDetailsViewModel
 @{
     ViewData["Title"] = "Chi tiết kiểm kê và đề nghị giảm tồn";
@@ -174,7 +174,7 @@
 </details>
 
 <details class="workspace-card mb-4">
-    <summary class="h5">Xử lý tình trạng và vị trí — @Model.Handling.Count(h => h.Status == "MOVED") đã chuyển, @Model.Handling.Count(h => h.Status == "WAITING") chờ xử lý</summary>
+    <summary class="h5">Xử lý tình trạng và vị trí — @Model.Handling.Count(h => h.Status == "MOVED") đã xử lý, @Model.Handling.Count(h => h.Status == "WAITING") chờ xử lý</summary>
     <div class="table-wrap mt-3"><table class="workspace-table">
         <thead><tr><th>Serial / sản phẩm</th><th>Sổ ban đầu</th><th>Phát hiện thực tế</th><th>Kết quả xử lý</th><th>Nhân viên / thời điểm</th></tr></thead><tbody>
         @foreach (var h in Model.Handling.OrderBy(h => h.CreatedAt))
@@ -184,7 +184,7 @@
                 <td>@h.ScannedSerial<small class="d-block muted">@Model.ProductNames.GetValueOrDefault(h.ProductId, "Chưa có thông tin")</small></td>
                 <td>@Condition(evidence?.ExpectedCondition)<small class="d-block muted">@Location(h.OriginalLocationId)</small></td>
                 <td>@Condition(h.ActualCondition)<small class="d-block muted">@Location(h.FoundLocationId)</small><small class="d-block text-break">@h.Note</small></td>
-                <td>@(h.Status == "MOVED" ? "Đã xác nhận chuyển" : h.Status == "CANCELLED" ? "Đã hủy ghi nhận" : "Chờ xác nhận chuyển")
+                <td>@StocktakeDisplay.HandlingStatus(h)
                     @if (h.Status == "MOVED") { <small class="d-block muted">@Condition(h.ActualCondition) · @Location(h.TargetLocationId)</small> }
                 </td>
                 <td>Ghi nhận: @Model.UserNames.GetValueOrDefault(h.RecordedByUserId, "—")<small class="d-block muted">@StocktakeDisplay.Time(h.CreatedAt)</small>

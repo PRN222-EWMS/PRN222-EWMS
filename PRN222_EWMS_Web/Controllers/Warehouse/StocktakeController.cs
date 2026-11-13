@@ -34,7 +34,7 @@ public class StocktakeController(IStocktakeExecutionService service, IStocktakeH
 
     [HttpPost, ValidateAntiForgeryToken]
     public Task<IActionResult> Move(StocktakeMoveInput input, CancellationToken ct) =>
-        MutateAsync(input, () => handling.MoveAsync(ActorId, input, ct), "Đã xác nhận chuyển hàng và cập nhật vị trí/tình trạng. Số lượng tồn không thay đổi.", "Count", ct);
+        MutateAsync(input, () => handling.MoveAsync(ActorId, input, ct), "Đã xác nhận vị trí và tình trạng hàng. Số lượng tồn không thay đổi.", "Count", ct);
 
     [HttpGet]
     public async Task<IActionResult> LookupSerial(long id, long? recountRequestId, string serial, CancellationToken ct)

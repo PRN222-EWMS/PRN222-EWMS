@@ -1,4 +1,4 @@
-﻿@using PRN222_EWMS_Web.ViewModels.Stocktaking
+@using PRN222_EWMS_Web.ViewModels.Stocktaking
 @model StocktakeExecutionViewModel
 @{
     ViewData["Title"] = "Ghi nhận kiểm kê " + Model.Plan.StocktakeCode;
@@ -95,11 +95,11 @@
     @foreach (var row in Model.Observations.OrderByDescending(o => o.ScannedAt).ThenBy(o => o.ScannedSerial))
     {
         var handling = Model.Handling.FirstOrDefault(h => h.ScannedSerial == row.ScannedSerial);
-        <tr><td><strong>@row.ScannedSerial</strong><small class="d-block muted">@Product(row.ProductId)</small></td><td>@(Model.IsShortageSearch ? Path(row.ExpectedLocationId) : row.RoundNumber.ToString())</td><td>@(row.ActualQuantity == 0 ? "Chưa ghi nhận" : row.ActualCondition == "DAMAGED" ? "Hỏng" : "Tốt")</td><td>@(row.ActualQuantity == 0 ? "—" : Path(row.ActualLocationId))</td><td>@(Model.IsShortageSearch && Model.Plan.StartedAt is null ? "Chờ bắt đầu tìm" : StocktakeDisplay.Difference(row.DifferenceType))@if (handling is not null) { <span class="d-block mt-1">@(handling.Status == "MOVED" ? "Đã chuyển" : handling.Status == "CANCELLED" ? "Đã sửa ghi nhận" : "Chờ chuyển")</span>@if (handling.Status == "WAITING" && handling.RecordedByUserId == Model.ActorId) { <a asp-action="Handle" asp-route-id="@Model.Plan.StocktakeId" asp-route-handlingId="@handling.HandlingId" asp-route-recountRequestId="@Model.RecountRequestId" class="workspace-button sales-button-small mt-2">Xử lý vị trí</a> } }<small class="d-block muted text-break">@row.Note</small></td></tr>
+        <tr><td><strong>@row.ScannedSerial</strong><small class="d-block muted">@Product(row.ProductId)</small></td><td>@(Model.IsShortageSearch ? Path(row.ExpectedLocationId) : row.RoundNumber.ToString())</td><td>@(row.ActualQuantity == 0 ? "Chưa ghi nhận" : row.ActualCondition == "DAMAGED" ? "Hỏng" : "Tốt")</td><td>@(row.ActualQuantity == 0 ? "—" : Path(row.ActualLocationId))</td><td>@(Model.IsShortageSearch && Model.Plan.StartedAt is null ? "Chờ bắt đầu tìm" : StocktakeDisplay.Difference(row.DifferenceType))@if (handling is not null) { <span class="d-block mt-1">@StocktakeDisplay.HandlingStatus(handling)</span>@if (handling.Status == "WAITING" && handling.RecordedByUserId == Model.ActorId) { <a asp-action="Handle" asp-route-id="@Model.Plan.StocktakeId" asp-route-handlingId="@handling.HandlingId" asp-route-recountRequestId="@Model.RecountRequestId" class="workspace-button sales-button-small mt-2">Xử lý vị trí</a> } }<small class="d-block muted text-break">@row.Note</small></td></tr>
     }
     @if (Model.Observations.Count == 0) { <tr><td colspan="5" class="text-center muted py-4">Chưa có serial được ghi nhận.</td></tr> }
     </tbody></table></div></section>
-    @if (Model.Handling.Any(h => h.Status == "WAITING" && h.RecordedByUserId == Model.ActorId)) { <div class="alert alert-warning" role="status">Còn hàng chờ chuyển đến vị trí hợp lệ. Xử lý xong trước khi gửi kết quả.</div> }
+    @if (Model.Handling.Any(h => h.Status == "WAITING" && h.RecordedByUserId == Model.ActorId)) { <div class="alert alert-warning" role="status">Còn hàng chưa xác nhận vị trí hợp lệ. Xử lý xong trước khi gửi kết quả.</div> }
     @if (Model.CanSubmit)
     {
         <section class="workspace-card"><h2>Gửi kết quả cho Manager</h2><p>Sau khi gửi, bạn không thể sửa kết quả đếm.</p><form asp-action="Submit" method="post" onsubmit="return confirm(this.dataset.confirmMessage);" data-confirm-message="@(Model.IsShortageSearch ? "Bạn đã tìm các serial được giao trong toàn kho, kể cả khu hàng chờ xếp?" : "Bạn đã kiểm tra xong toàn bộ phạm vi được giao và muốn gửi kết quả?")">@Html.AntiForgeryToken()<input type="hidden" name="Id" value="@Model.Plan.StocktakeId" /><input type="hidden" name="Version" value="@Model.Version" /><input type="hidden" name="RecountRequestId" value="@Model.RecountRequestId" /><button class="workspace-button" type="submit">Xác nhận gửi kết quả</button></form></section>
@@ -205,7 +205,7 @@
   const expected = data.expectedLocationId == null ? '' : String(data.expectedLocationId);
   if (data.found && locationReady && (expected !== location.value || data.expectedLocation === 'Chưa có vị trí tại kho này')) {
    warning = true;
-   message += ' Khác vị trí: hệ thống ghi nhận tại ' + data.expectedLocation + '. Ghi nhận nơi tìm thấy tại ' + location.selectedOptions[0].textContent.trim() + '. Sau khi lưu, mở Xử lý vị trí để chuyển hàng về ô đúng hoặc ô thay thế hợp lệ.';
+   message += ' Khác vị trí: hệ thống ghi nhận tại ' + data.expectedLocation + '. Ghi nhận nơi tìm thấy tại ' + location.selectedOptions[0].textContent.trim() + '. Sau khi lưu, mở Xử lý vị trí để giữ tại nơi phát hiện nếu hợp lệ hoặc chọn vị trí khác.';
   }
   result.className = 'mt-3 alert ' + (warning ? 'alert-warning' : 'alert-success'); result.textContent = message;
  }

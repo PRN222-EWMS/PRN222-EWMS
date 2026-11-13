@@ -84,6 +84,13 @@ public class StocktakeWorkflowException(string message, int statusCode = 400) : 
 
 public static class StocktakeDisplay
 {
+    public static string HandlingStatus(StocktakeHandling handling) => handling.Status switch
+    {
+        "MOVED" => handling.TargetLocationId == handling.FoundLocationId ? "Đã giữ nguyên vị trí" : "Đã chuyển vị trí",
+        "CANCELLED" => "Đã sửa ghi nhận",
+        _ => "Chờ xác nhận vị trí"
+    };
+
     public static string Status(string value) => value switch
     {
         "DRAFT" => "Nháp", "PLANNED" => "Đã lập kế hoạch", "COUNTING" => "Đang kiểm kê",

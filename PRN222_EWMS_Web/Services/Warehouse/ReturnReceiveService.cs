@@ -3,7 +3,7 @@ using PRN222_EWMS_Web.Services.Warehouse;
 using PRN222_EWMS_Web.Repositories.WarehouseStaff;
 using PRN222_EWMS_Web.ViewModels.Returns;
 namespace PRN222_EWMS_Web.Services.WarehouseStaff;
-public class ReturnReceiveService(IReturnReceiveRepository repo, ISourceReservationService commitments):IReturnReceiveService
+public class ReturnReceiveService(IReturnReceiveRepository repo, ISourceReservationService commitments, DocumentCodeGenerator codes):IReturnReceiveService
 {
  private async Task<int> Warehouse(int user)=>await repo.WarehouseAsync(user)??throw new UnauthorizedAccessException("Bạn chưa được phân công kho.");
  private static void Version(ReturnReceipt r,string v){if(Convert.ToBase64String(r.RowVersion)!=v)throw new InvalidOperationException("Phiếu đã thay đổi. Tải lại trang.");}
@@ -74,7 +74,7 @@ public class ReturnReceiveService(IReturnReceiveRepository repo, ISourceReservat
             var receipt = new ReturnReceipt
             {
                 ReturnOrderId = returnOrderId, OutboundId = outboundId, SalesOrderId = order.SalesOrderId,
-                CreatedByUserId = userId, ReceiptCode = "RR-" + Guid.NewGuid().ToString("N"),
+                CreatedByUserId = userId, ReceiptCode = await codes.NextAsync(DocumentType.ReturnReceipt),
                 ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)), Status = "DRAFT", CreatedAt = DateTime.UtcNow
             };
             repo.AddReceipt(receipt);

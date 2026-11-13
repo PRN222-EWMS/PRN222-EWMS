@@ -9,12 +9,13 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using PRN222_EWMS_Web.Models;
+using PRN222_EWMS_Web.Services;
 using PRN222_EWMS_Web.ViewModels.CustomerReturnOrder;
 using WarehouseEntity = PRN222_EWMS_Web.Models.Warehouse;
 
 namespace PRN222_EWMS_Web.Repositories.Sales;
 
-public class CustomerReturnOrderRepository(EwmsDbContext db) : ICustomerReturnOrderRepository
+public class CustomerReturnOrderRepository(EwmsDbContext db, DocumentCodeGenerator codes) : ICustomerReturnOrderRepository
 {
     public async Task<List<EligibleSalesOrderOptionDto>> GetEligibleSalesOrdersAsync(CancellationToken cancellationToken = default)
     {
@@ -151,60 +152,8 @@ public class CustomerReturnOrderRepository(EwmsDbContext db) : ICustomerReturnOr
         return query.FirstOrDefaultAsync(cancellationToken);
     }
 
-    public async Task<string> GenerateReturnCodeAsync(CancellationToken cancellationToken = default)
-    {
-        // 1. Require an active database transaction for concurrency-safe sequential code generation
-        var currentTx = db.Database.CurrentTransaction?.GetDbTransaction()
-            ?? throw new InvalidOperationException("Yêu cầu một giao dịch đang hoạt động để sinh mã đơn trả hàng an toàn.");
-
-        var year = DateTime.UtcNow.Year;
-        var prefix = $"RO-{year}-";
-        var conn = db.Database.GetDbConnection();
-
-        // 2. Acquire transaction-owned Exclusive sp_getapplock on the exact same connection and transaction
-        await using (var lockCmd = conn.CreateCommand())
-        {
-            lockCmd.Transaction = currentTx;
-            lockCmd.CommandText = @"
-                DECLARE @result INT;
-                EXEC @result = sp_getapplock 
-                    @Resource = @resource, 
-                    @LockMode = 'Exclusive', 
-                    @LockOwner = 'Transaction', 
-                    @LockTimeout = 15000;
-                SELECT @result;";
-
-            var param = lockCmd.CreateParameter();
-            param.ParameterName = "@resource";
-            param.Value = $"CustomerReturnOrder_ReturnCode_{year}";
-            lockCmd.Parameters.Add(param);
-
-            var scalar = await lockCmd.ExecuteScalarAsync(cancellationToken);
-            int lockResult = Convert.ToInt32(scalar);
-
-            // 3. Negative return codes indicate timeout (-1), cancel (-2), deadlock victim (-3), or error (-999)
-            if (lockResult < 0)
-            {
-                throw new InvalidOperationException($"Không thể lấy khóa ứng dụng để sinh mã đơn trả hàng cho năm {year} (Mã lỗi: {lockResult}). Vui lòng thử lại.");
-            }
-        }
-
-        // 4. Query all return codes for the prefix under the lock to compute true numeric maximum in memory (avoids string sorting bugs)
-        var codes = await db.CustomerReturnOrders.AsNoTracking()
-            .Where(p => p.ReturnCode.StartsWith(prefix)).Select(p => p.ReturnCode).ToListAsync(cancellationToken);
-
-        int nextSeq = 1;
-        if (codes.Count > 0)
-        {
-            var maxSeq = codes
-                .Select(c => int.TryParse(c.Replace(prefix, ""), out int s) ? s : 0)
-                .DefaultIfEmpty(0)
-                .Max();
-            nextSeq = maxSeq + 1;
-        }
-
-        return $"{prefix}{nextSeq:D3}";
-    }
+    public Task<string> GenerateReturnCodeAsync(CancellationToken cancellationToken = default) =>
+        codes.NextAsync(DocumentType.CustomerReturnOrder, cancellationToken);
 
     public async Task<T> InTransactionAsync<T>(int actorId, Func<Task<T>> work)
     {

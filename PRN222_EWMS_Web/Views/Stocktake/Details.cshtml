@@ -1,4 +1,4 @@
-﻿@using PRN222_EWMS_Web.ViewModels.Stocktaking
+@using PRN222_EWMS_Web.ViewModels.Stocktaking
 @model StocktakeExecutionViewModel
 @{
     ViewData["Title"] = "Chi tiết " + Model.Plan.StocktakeCode;
@@ -45,9 +45,9 @@
         </div>
     </section>
     @if (Model.Handling.Count > 0) {
-        <section class="workspace-card"><h2>Xử lý vị trí</h2><div class="table-wrap"><table class="workspace-table"><thead><tr><th>Serial</th><th>Nơi phát hiện</th><th>Chuyển đến</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
+        <section class="workspace-card"><h2>Xử lý vị trí</h2><div class="table-wrap"><table class="workspace-table"><thead><tr><th>Serial</th><th>Nơi phát hiện</th><th>Vị trí sau xử lý</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
         @foreach (var handling in Model.Handling.OrderBy(h => h.Status == "MOVED").ThenBy(h => h.ScannedSerial)) {
-            <tr><td>@handling.ScannedSerial<small class="d-block muted">@Product(handling.ProductId) · @(handling.ActualCondition == "DAMAGED" ? "Hỏng" : "Tốt")</small></td><td>@Location(handling.FoundLocationId)</td><td>@(handling.TargetLocationId.HasValue ? Location(handling.TargetLocationId) : "Chưa chọn")</td><td>@(handling.Status == "MOVED" ? "Đã chuyển" : handling.Status == "CANCELLED" ? "Đã sửa ghi nhận" : "Chờ chuyển")<small class="d-block muted">@StocktakeDisplay.Time(handling.MovedAt)</small></td><td>@if (handling.Status == "WAITING" && handling.RecordedByUserId == Model.ActorId) { <a asp-action="Handle" asp-route-id="@Model.Plan.StocktakeId" asp-route-handlingId="@handling.HandlingId" asp-route-recountRequestId="@Model.RecountRequestId" class="workspace-button sales-button-small">Xử lý vị trí</a> }</td></tr>
+            <tr><td>@handling.ScannedSerial<small class="d-block muted">@Product(handling.ProductId) · @(handling.ActualCondition == "DAMAGED" ? "Hỏng" : "Tốt")</small></td><td>@Location(handling.FoundLocationId)</td><td>@(handling.TargetLocationId.HasValue ? Location(handling.TargetLocationId) : "Chưa chọn")</td><td>@StocktakeDisplay.HandlingStatus(handling)<small class="d-block muted">@StocktakeDisplay.Time(handling.MovedAt)</small></td><td>@if (handling.Status == "WAITING" && handling.RecordedByUserId == Model.ActorId) { <a asp-action="Handle" asp-route-id="@Model.Plan.StocktakeId" asp-route-handlingId="@handling.HandlingId" asp-route-recountRequestId="@Model.RecountRequestId" class="workspace-button sales-button-small">Xử lý vị trí</a> }</td></tr>
         }
         </tbody></table></div></section>
     }
