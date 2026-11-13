@@ -36,8 +36,10 @@ public class PutawayService(IPutawayRepository repo, IWarehouseCapacityEngine ca
             .Select(l => PutawayRules.Evaluate(item, layout, l, occupants)).ToList();
         model.Locations = evaluations.Where(e => e.Location is not null).Select(e => e.Location!)
             .OrderBy(l => l.IsReserve).ThenBy(l => l.Path, StringComparer.Ordinal).ThenBy(l => l.Id).ToList();
-        var plannedErrors = await capacity.GetPlacementErrorsAsync(actor.WarehouseId, item.SerialItemId,
+        var planned = await capacity.AssessPlacementsAsync(actor.WarehouseId, item.SerialItemId,
             model.Locations.Select(l => l.Id).ToArray(), ct);
+        var plannedErrors = planned.Errors;
+        model.CapacityWarnings = planned.Warnings;
         model.Locations = model.Locations.Where(l => !plannedErrors.ContainsKey(l.Id)).ToList();
         if (model.Locations.Count == 0)
             model.EmptyReason = plannedErrors.Count > 0 ? plannedErrors.Values.First()
@@ -90,7 +92,7 @@ public class PutawayService(IPutawayRepository repo, IWarehouseCapacityEngine ca
             ReceiptId = receipt.ReceiptId, ReceiptCode = receipt.ReceiptCode ?? "Chưa có nguồn nhận hợp lệ",
             TransferOrderId = transfer?.TransferOrderId, TransferCode = transfer?.TransferCode,
             FromWarehouseName = transfer?.FromWarehouse?.WarehouseName,
-            Condition = item.ItemCondition, Quarantined = item.IsQuarantined,
+            Condition = item.ItemCondition,
             LengthCm = item.Product.LengthCm, WidthCm = item.Product.WidthCm, HeightCm = item.Product.HeightCm, WeightKg = item.Product.GrossWeightKg,
             RowVersion = Convert.ToBase64String(item.RowVersion),
             CurrentLocationPath = item.CurrentLocationId is int id ? PutawayRules.Path(layout, id) : null

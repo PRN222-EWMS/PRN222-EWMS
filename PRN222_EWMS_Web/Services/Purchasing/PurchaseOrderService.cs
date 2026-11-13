@@ -273,7 +273,7 @@ public class PurchaseOrderService(
             CanConfirm = (role == "PURCHASING_STAFF" && po.CreatedByUserId == currentUserId)
                          && po.Status == "DRAFT",
 
-            CanCloseRemainder = (role == "PURCHASING_STAFF" || role == "MANAGER")
+            CanCloseRemainder = ((role == "PURCHASING_STAFF" && po.CreatedByUserId == currentUserId) || role == "MANAGER")
                                 && (po.Status == "CONFIRMED" || po.Status == "PARTIALLY_RECEIVED")
                                 && po.PurchaseOrderLines.Any(l => (l.OrderedQuantity - l.ClosedQuantity) > 0),
 
@@ -626,6 +626,8 @@ public class PurchaseOrderService(
             if (po == null) return (false, "Không tìm thấy đơn mua hàng.");
             if (po.Status != "CONFIRMED" && po.Status != "PARTIALLY_RECEIVED")
                 return (false, "Chỉ được đóng phần còn lại của đơn CONFIRMED hoặc PARTIALLY_RECEIVED.");
+            if (role != "MANAGER" && po.CreatedByUserId != actorId)
+                return (false, "Chỉ người tạo PO hoặc Manager được đóng phần còn lại của đơn.");
 
             var now = DateTime.UtcNow;
             po.ClosedAt = now;

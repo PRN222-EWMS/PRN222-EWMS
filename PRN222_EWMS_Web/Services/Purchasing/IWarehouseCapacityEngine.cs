@@ -2,6 +2,12 @@ namespace PRN222_EWMS_Web.Services.Purchasing;
 
 public sealed record CapacityDemand(int ProductId, long Quantity, string Condition = "GOOD");
 
+public sealed class PlacementCapacityAssessment
+{
+    public Dictionary<int, string> Errors { get; } = [];
+    public List<string> Warnings { get; } = [];
+}
+
 public sealed class WarehouseCapacityRequest
 {
     public int WarehouseId { get; init; }
@@ -53,5 +59,7 @@ public interface IWarehouseCapacityEngine
     Task<(bool IsValid, string? ErrorMessage)> ValidatePurchaseOrderLinesCapacityAsync(int warehouseId,
         IEnumerable<(int ProductId, int Quantity)> lines, long? excludePoId = null, CancellationToken cancellationToken = default);
     Task<IReadOnlyDictionary<int, string>> GetPlacementErrorsAsync(int warehouseId, long serialId,
+        IReadOnlyCollection<int> locationIds, CancellationToken ct = default);
+    Task<PlacementCapacityAssessment> AssessPlacementsAsync(int warehouseId, long serialId,
         IReadOnlyCollection<int> locationIds, CancellationToken ct = default);
 }

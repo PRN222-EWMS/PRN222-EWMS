@@ -31,10 +31,14 @@ public class CeoStocktakeAdjustmentService(IStocktakeRepository repo, ISourceRes
             || a.Stocktake.StocktakeCode.Contains(search) || a.Stocktake.Warehouse.WarehouseName.Contains(search));
         var total = await query.CountAsync(ct);
         page = Math.Clamp(page, 1, Math.Max(1, (total + CeoStocktakeAdjustmentListViewModel.PageSize - 1) / CeoStocktakeAdjustmentListViewModel.PageSize));
-        return new() { Search = search, Status = status, Page = page, TotalCount = total,
-            Items = await query.Include(a => a.Stocktake).ThenInclude(s => s.Warehouse).Include(a => a.SubmittedByUser)
+        var items = await query.Include(a => a.Stocktake).ThenInclude(s => s.Warehouse).Include(a => a.SubmittedByUser)
                 .OrderBy(a => a.Status != "SUBMITTED").ThenByDescending(a => a.SubmittedAt).ThenByDescending(a => a.AdjustmentId)
-                .Skip((page - 1) * CeoStocktakeAdjustmentListViewModel.PageSize).Take(CeoStocktakeAdjustmentListViewModel.PageSize).ToListAsync(ct) };
+                .Skip((page - 1) * CeoStocktakeAdjustmentListViewModel.PageSize).Take(CeoStocktakeAdjustmentListViewModel.PageSize).ToListAsync(ct);
+        var ids = items.Select(a => a.AdjustmentId).ToArray();
+        var totals = await repo.Query<InventoryAdjustmentLine>().AsNoTracking().Where(l => ids.Contains(l.AdjustmentId))
+            .GroupBy(l => l.AdjustmentId).Select(g => new { Id = g.Key, Count = g.Count(), Delta = g.Sum(l => l.QuantityDelta) }).ToListAsync(ct);
+        return new() { Search = search, Status = status, Page = page, TotalCount = total, Items = items,
+            SerialCounts = totals.ToDictionary(t => t.Id, t => t.Count), QuantityChanges = totals.ToDictionary(t => t.Id, t => t.Delta) };
     }
 
     public async Task<CeoStocktakeAdjustmentDetailsViewModel?> GetDetailsAsync(int actorId, long id, CancellationToken ct)
@@ -42,15 +46,62 @@ public class CeoStocktakeAdjustmentService(IStocktakeRepository repo, ISourceRes
         await RequireCeoAsync(actorId, ct);
         var request = await repo.Query<InventoryAdjustment>().AsNoTracking().Include(a => a.Stocktake).ThenInclude(s => s.Warehouse)
             .Include(a => a.Stocktake).ThenInclude(s => s.CreatedByUser)
-            .Include(a => a.SubmittedByUser).Include(a => a.DecidedByUser).SingleOrDefaultAsync(a => a.AdjustmentId == id && a.Status != "DRAFT", ct);
+            .Include(a => a.SubmittedByUser).Include(a => a.DecidedByUser)
+            .SingleOrDefaultAsync(a => a.AdjustmentId == id && a.Status != "DRAFT", ct);
         if (request is null) return null;
-        var lines = await repo.Query<InventoryAdjustmentLine>().AsNoTracking().Include(l => l.Product).Include(l => l.Observation).ThenInclude(o => o.ScannedByUser)
+        var planId = request.StocktakeId;
+        var lines = await repo.Query<InventoryAdjustmentLine>().AsNoTracking().Include(l => l.Product)
+            .Include(l => l.Observation).ThenInclude(o => o.ScannedByUser)
             .Where(l => l.AdjustmentId == id).OrderBy(l => l.ScannedSerial).ToListAsync(ct);
+        var observations = await repo.Query<StocktakeObservation>().AsNoTracking().Include(o => o.Product).Include(o => o.ScannedByUser)
+            .Where(o => o.StocktakeId == planId).OrderBy(o => o.RoundNumber).ThenBy(o => o.ScannedSerial).ToListAsync(ct);
+        var rounds = await repo.Query<StocktakeRound>().AsNoTracking().Include(r => r.StartedByUser).Include(r => r.ClosedByUser)
+            .Where(r => r.StocktakeId == planId).OrderBy(r => r.RoundNumber).ToListAsync(ct);
+        var recounts = await repo.Query<StocktakeRecountRequest>().AsNoTracking().Where(r => r.StocktakeId == planId)
+            .OrderBy(r => r.RequestedAt).ToListAsync(ct);
+        var handling = await repo.HandlingAsync(planId, ct);
+        var investigations = await repo.InvestigationsAsync(planId, ct);
         var serials = lines.Select(l => l.ScannedSerial).ToArray();
-        return new() { Request = request, Lines = lines,
-            History = await repo.Query<StocktakeObservation>().AsNoTracking().Include(o => o.ScannedByUser)
-                .Where(o => o.StocktakeId == request.StocktakeId && serials.Contains(o.ScannedSerial)).OrderBy(o => o.RoundNumber).ToListAsync(ct),
-            Locations = await repo.Query<StorageLocation>().AsNoTracking().Where(l => l.WarehouseId == request.Stocktake.WarehouseId).ToListAsync(ct) };
+        var users = recounts.SelectMany(r => new[] { r.AssignedToUserId, r.RequestedByUserId })
+            .Concat(investigations.Select(i => i.RequestedByUserId))
+            .Concat(investigations.Where(i => i.ClosedByUserId.HasValue).Select(i => i.ClosedByUserId!.Value))
+            .Concat(handling.Select(h => h.RecordedByUserId))
+            .Concat(handling.Where(h => h.MovedByUserId.HasValue).Select(h => h.MovedByUserId!.Value)).Distinct().ToArray();
+        var products = recounts.Select(r => r.ProductId).Concat(handling.Select(h => h.ProductId)).Distinct().ToArray();
+        var model = new CeoStocktakeAdjustmentDetailsViewModel
+        {
+            Request = request, Lines = lines, Observations = observations,
+            History = observations.Where(o => serials.Contains(o.ScannedSerial, StringComparer.OrdinalIgnoreCase)).ToList(),
+            EffectiveResults = StocktakeScopeRules.EffectiveObservations(observations, rounds, recounts),
+            Rounds = rounds, Recounts = recounts,
+            Locations = await repo.Query<StorageLocation>().AsNoTracking().Where(l => l.WarehouseId == request.Stocktake.WarehouseId).ToListAsync(ct),
+            Scopes = await repo.Query<StocktakeScope>().AsNoTracking().Where(s => s.StocktakeId == planId).ToListAsync(ct),
+            Assignments = await repo.Query<StocktakeAssignment>().AsNoTracking().Include(a => a.User)
+                .Where(a => a.StocktakeId == planId).OrderBy(a => a.AssignedAt).ThenBy(a => a.AssignmentId).ToListAsync(ct),
+            Handling = handling, Investigations = investigations,
+            UserNames = await repo.Query<User>().AsNoTracking().Where(u => users.Contains(u.UserId)).ToDictionaryAsync(u => u.UserId, u => u.FullName, ct),
+            ProductNames = await repo.Query<Product>().AsNoTracking().Where(p => products.Contains(p.ProductId)).ToDictionaryAsync(p => p.ProductId, p => p.ProductName, ct),
+            CurrentItems = await repo.Query<SerialItem>().AsNoTracking().Include(s => s.CurrentWarehouse)
+                .Where(s => serials.Contains(s.SerialNumber)).ToListAsync(ct)
+        };
+        var itemIds = model.CurrentItems.Select(s => s.SerialItemId).ToArray();
+        var planLocations = StocktakeScopeRules.PlanLocations(request.Stocktake, model.Scopes, model.Locations);
+        foreach (var observation in observations)
+        {
+            var round = rounds.SingleOrDefault(r => r.RoundNumber == observation.RoundNumber);
+            var recount = round is null ? null : recounts.SingleOrDefault(r => r.ResultRoundId == round.RoundId);
+            model.CounterNames[observation.ObservationId] = observation.ScannedByUser?.FullName
+                ?? (recount is not null ? model.UserNames.GetValueOrDefault(recount.AssignedToUserId, "Chưa có thông tin")
+                    : string.Join(", ", model.Assignments.Where(a => a.Status != "CANCELLED"
+                        && StocktakeScopeRules.InAssignment(a, observation.ExpectedQuantity == 1
+                            ? observation.ExpectedLocationId : observation.ActualLocationId, planLocations, model.Locations))
+                        .Select(a => a.User.FullName).Distinct()));
+        }
+        model.Movements = await repo.Query<SerialMovement>().AsNoTracking().Include(m => m.SerialItem).Include(m => m.PerformedByUser)
+            .Include(m => m.FromWarehouse).Include(m => m.ToWarehouse).Include(m => m.FromLocation).Include(m => m.ToLocation)
+            .Where(m => itemIds.Contains(m.SerialItemId) && m.OccurredAt >= (request.Stocktake.StartedAt ?? request.Stocktake.CreatedAt))
+            .OrderBy(m => m.OccurredAt).ThenBy(m => m.MovementId).ToListAsync(ct);
+        return model;
     }
 
     public async Task DecideAsync(int actorId, CeoStocktakeAdjustmentDecisionInput input, bool approve, CancellationToken ct)
@@ -118,6 +169,7 @@ public class CeoStocktakeAdjustmentService(IStocktakeRepository repo, ISourceRes
                 if (item.CurrentSupplySourceId is long sourceId) affectedSources.Add(sourceId);
                 item.StockState = "LOST"; item.CurrentWarehouseId = null; item.CurrentLocationId = null;
                 item.CurrentSupplySourceId = null; item.CurrentSupplySource = null; item.CurrentSupplyState = null;
+                item.IsQuarantined = false; item.QuarantineReason = null;
                 movement.ToState = item.StockState; movement.ToCondition = item.ItemCondition;
                 movement.ToWarehouseId = item.CurrentWarehouseId; movement.ToLocationId = item.CurrentLocationId; movement.ToQuarantined = item.IsQuarantined;
                 changed.Add((line, item, movement));
@@ -204,7 +256,7 @@ public class CeoStocktakeAdjustmentService(IStocktakeRepository repo, ISourceRes
             var source = await repo.Query<SupplySource>().SingleAsync(s => s.SupplySourceId == id, ct);
             var items = await repo.Query<SerialItem>().AsNoTracking().Where(s => s.CurrentSupplySourceId == id && s.StockState == "IN_WAREHOUSE").ToListAsync(ct);
             source.RemainingQuantity = items.Count;
-            source.EligibleQuantity = items.Count(s => s.ItemCondition == "GOOD" && !s.IsQuarantined);
+            source.EligibleQuantity = items.Count;
             var reservations = await repo.Query<Reservation>().Where(r => r.SupplySourceId == id && r.Status == "ACTIVE")
                 .OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.ReservationId).ToListAsync(ct);
             var excess = Math.Max(0, reservations.Sum(r => r.ReservedQuantity - r.ConsumedQuantity - r.ReleasedQuantity) - source.EligibleQuantity);

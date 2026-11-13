@@ -38,7 +38,6 @@
                     <h3>@item.Serial</h3><p>@item.ProductCode — @item.ProductName</p>
                     <p class="muted">@item.Category · @item.Brand</p>
                     <span class="putaway-condition @(item.Condition == "DAMAGED" ? "is-damaged" : "")">@(item.Condition == "DAMAGED" ? "Hàng hỏng" : "Hàng tốt")</span>
-                    @if (item.Quarantined) { <span class="putaway-quarantined">Đang cách ly</span> }
                     <p class="putaway-receipt-link">
                         @if (Model.Filter.Source == "TRANSFER_RECEIPT")
                         {

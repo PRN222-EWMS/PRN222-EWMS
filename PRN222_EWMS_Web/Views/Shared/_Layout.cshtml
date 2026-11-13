@@ -64,7 +64,7 @@
     {
         <link rel="stylesheet" href="~/css/purchasing.css" asp-append-version="true" />
     }
-    @if (User.IsInRole("WAREHOUSE_STAFF") || User.IsInRole("MANAGER"))
+    @if (User.IsInRole("WAREHOUSE_STAFF") || User.IsInRole("MANAGER") || User.IsInRole("CEO"))
     {
         <link rel="stylesheet" href="~/css/warehouse.css" asp-append-version="true" />
     }

@@ -118,10 +118,10 @@ public class WarehouseService(IWarehouseRepository warehouses) : IWarehouseServi
             {
                 var warehouse = await warehouses.FindByIdAsync(id, ct);
                 if (warehouse is null) return new WarehouseSaveResult { NotFound = true };
-                if (await warehouses.HasStockAsync(id, null, ct))
-                    return Problem("Kho đang chứa hàng, kể cả hàng chờ xếp vị trí. Chỉ được sửa thông tin kho khi toàn bộ kho đã hết hàng.", conflict: true);
-                if ((await warehouses.GetLockedScopeRootsAsync(id, ct)).Count > 0)
-                    return Problem("Kho đang có phạm vi kiểm kê bị khóa. Chưa thể sửa thông tin kho.", conflict: true);
+                var occupied = await warehouses.HasStockAsync(id, null, ct);
+                var locked = (await warehouses.GetLockedScopeRootsAsync(id, ct)).Count > 0;
+                if ((occupied || locked) && !IsRentalExtension(warehouse, model))
+                    return Problem("Kho đang chứa hàng hoặc bị khóa kiểm kê. Chỉ được gia hạn riêng ngày kết thúc thuê; các thông tin khác phải giữ nguyên.", conflict: true);
                 var errors = await ValidateFormAsync(model, id, ct);
                 var rowVersion = ParseRowVersion(model.RowVersion);
                 if (rowVersion is null || !warehouse.RowVersion.SequenceEqual(rowVersion))
@@ -139,6 +139,13 @@ public class WarehouseService(IWarehouseRepository warehouses) : IWarehouseServi
         catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
         { return DuplicateName(); }
     }
+
+    internal static bool IsRentalExtension(WarehouseEntity warehouse, WarehouseFormViewModel model) =>
+        warehouse.WarehouseType == "RENTED" && model.WarehouseType == warehouse.WarehouseType
+        && model.WarehouseName?.Trim() == warehouse.WarehouseName && model.Address?.Trim() == warehouse.Address
+        && model.Status == warehouse.Status && model.RentalStartDate == warehouse.RentalStartDate
+        && warehouse.RentalEndDate.HasValue && model.RentalEndDate > warehouse.RentalEndDate
+        && model.RentalEndDate >= DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
 
     public async Task<StorageLocationFormViewModel?> GetLocationFormAsync(int warehouseId, int? locationId,
         int? parentId, CancellationToken cancellationToken = default)

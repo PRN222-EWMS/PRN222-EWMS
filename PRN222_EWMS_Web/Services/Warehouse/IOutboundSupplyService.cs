@@ -5,6 +5,7 @@ namespace PRN222_EWMS_Web.Services.Warehouse;
 public interface IOutboundSupplyService
 {
     Task LockWarehouseAsync(int warehouseId, CancellationToken ct = default);
+    Task<string?> GetReceivingBlockReasonAsync(int warehouseId, CancellationToken ct = default);
     Task ReconcileWarehouseAsync(int warehouseId, CancellationToken ct = default);
     Task AfterInboundPostedAsync(long inboundId, CancellationToken ct = default);
     Task<OutboundSupplySnapshot> GetAvailabilityAsync(long salesOrderId, long? outboundId = null, CancellationToken ct = default);

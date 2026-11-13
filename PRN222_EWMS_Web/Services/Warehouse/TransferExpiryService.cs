@@ -4,13 +4,20 @@ using PRN222_EWMS_Web.Models;
 
 namespace PRN222_EWMS_Web.Services.Warehouse;
 
-public class TransferExpiryService(EwmsDbContext db, TimeProvider clock, ILogger<TransferExpiryService> logger)
+public class TransferExpiryService(EwmsDbContext db, TimeProvider clock, ILogger<TransferExpiryService> logger,
+    ISourceReservationService commitments)
 {
     public async Task<bool> CancelIfExpiredAsync(long id, CancellationToken ct = default)
     {
+        var context = await db.TransferOrders.AsNoTracking().Where(o => o.TransferOrderId == id)
+            .Select(o => new { o.FromWarehouseId, o.ToWarehouseId }).SingleOrDefaultAsync(ct);
+        if (context is null) return false;
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        foreach (var warehouseId in new[] { context.FromWarehouseId, context.ToWarehouseId }.Distinct().Order())
+            await commitments.LockWarehouseAsync(warehouseId, ct);
         var order = await TransferDataAccess.LockOrderAsync(db, id, ct);
-        bool changed = order != null && await CancelLockedAsync(order, ct);
+        bool changed = order != null && order.FromWarehouseId == context.FromWarehouseId
+            && order.ToWarehouseId == context.ToWarehouseId && await CancelLockedAsync(order, ct);
         await tx.CommitAsync(ct);
         db.ChangeTracker.Clear();
         return changed;

@@ -8,6 +8,20 @@ namespace PRN222_EWMS_Web.Services.WarehouseStaff;
 
 public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService expiry, ISourceReservationService commitments)
 {
+    private async Task<int[]> WorkWarehousesAsync(long orderId, int userId)
+    {
+        var context = await db.TransferOrders.AsNoTracking().Where(o => o.TransferOrderId == orderId
+            && db.Users.Any(u => u.UserId == userId && u.Status == "ACTIVE" && u.Role.RoleName == "WAREHOUSE_STAFF"
+                && u.WarehouseId == o.FromWarehouseId))
+            .Select(o => new { o.FromWarehouseId, o.ToWarehouseId }).SingleOrDefaultAsync();
+        return context is null ? [] : [context.FromWarehouseId, context.ToWarehouseId];
+    }
+
+    private async Task LockWarehousesAsync(int[] ids)
+    {
+        foreach (var id in ids.Distinct().Order()) await commitments.LockWarehouseAsync(id);
+    }
+
     private IQueryable<TransferOrder> SourceOrderForUpdate(long orderId, int userId) =>
         db.TransferOrders
             .FromSqlInterpolated($"SELECT * FROM dbo.TransferOrder WITH (UPDLOCK, HOLDLOCK) WHERE TransferOrderID = {orderId}")
@@ -16,12 +30,15 @@ public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService
 
     public async Task<(bool Success, string Message)> ClaimAsync(long orderId, int userId)
     {
+        var warehouses = await WorkWarehousesAsync(orderId, userId);
+        if (warehouses.Length == 0) return (false, "Lệnh không thuộc kho nguồn của bạn.");
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        await LockWarehousesAsync(warehouses);
 
         // Lock the order even when no dispatch exists yet so concurrent claims use the same draft.
         var order = await SourceOrderForUpdate(orderId, userId).SingleOrDefaultAsync();
 
-        if (order is null)
+        if (order is null || order.FromWarehouseId != warehouses[0] || order.ToWarehouseId != warehouses[1])
             return (false, "Bạn chỉ có thể nhận việc xuất tại kho nguồn của mình.");
         if (await expiry.CancelLockedAsync(order))
         {
@@ -75,9 +92,13 @@ public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService
             return (false, "Vui lòng nhập serial.");
 
         var number = serialNumber.Trim();
+        var warehouses = await WorkWarehousesAsync(orderId, userId);
+        if (warehouses.Length == 0) return (false, "Lệnh không thuộc kho nguồn của bạn.");
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        await LockWarehousesAsync(warehouses);
         var order = await SourceOrderForUpdate(orderId, userId).SingleOrDefaultAsync();
-        if (order is null || order.Status is not ("RELEASED" or "IN_PROGRESS"))
+        if (order is null || order.FromWarehouseId != warehouses[0] || order.ToWarehouseId != warehouses[1]
+            || order.Status is not ("RELEASED" or "IN_PROGRESS"))
             return (false, "Lệnh chưa sẵn sàng xuất tại kho của bạn.");
 
         var canScan = await db.TransferDispatches.AnyAsync(d => d.TransferOrderId == orderId
@@ -90,10 +111,13 @@ public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService
             .FromSqlInterpolated($"SELECT * FROM dbo.SerialItem WITH (UPDLOCK, HOLDLOCK) WHERE SerialNumber = {number}")
             .SingleOrDefaultAsync();
         if (serial is null || serial.CurrentWarehouseId != order.FromWarehouseId
-            || serial.StockState != "IN_WAREHOUSE" || serial.IsQuarantined
+            || serial.StockState != "IN_WAREHOUSE"
             || serial.ItemCondition != order.ItemCondition || serial.CurrentSupplyState != "PHYSICAL"
             || serial.CurrentSupplySourceId is not long sourceId)
             return (false, "Serial không thuộc tồn kho nguồn đủ điều kiện xuất.");
+
+        var stocktakeBlock = await commitments.GetStocktakeBlockReasonAsync(order.FromWarehouseId, [serial.CurrentLocationId]);
+        if (stocktakeBlock is not null) return (false, stocktakeBlock);
 
         var claim = await db.PickingClaims.FindAsync(serial.SerialItemId);
         if (claim != null)
@@ -154,7 +178,7 @@ public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService
         foreach (var warehouseId in new[] { context.FromWarehouseId, context.ToWarehouseId }.Distinct().Order())
             await commitments.LockWarehouseAsync(warehouseId);
         var order = await SourceOrderForUpdate(orderId, userId).SingleOrDefaultAsync();
-        if (order is null)
+        if (order is null || order.FromWarehouseId != context.FromWarehouseId || order.ToWarehouseId != context.ToWarehouseId)
             return (false, "Lệnh không thuộc kho nguồn của bạn.");
 
         var dispatch = await db.TransferDispatches.SingleOrDefaultAsync(d =>
@@ -180,12 +204,15 @@ public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService
             var serial = item.SerialItem;
             if (!claimedIds.Contains(serial.SerialItemId) || serial.CurrentWarehouseId != order.FromWarehouseId
                 || serial.StockState != "IN_WAREHOUSE" || serial.CurrentSupplyState != "PHYSICAL"
-                || serial.IsQuarantined || serial.ItemCondition != order.ItemCondition
+                || serial.ItemCondition != order.ItemCondition
                 || serial.CurrentSupplySourceId != item.SourceAtDispatchId || serial.ProductId != item.TransferLine.ProductId)
                 return (false, $"Serial {serial.SerialNumber} không còn đủ điều kiện xuất trên phiếu này.");
         }
         if (claims.Count != items.Count)
             return (false, "Danh sách serial giữ cho phiếu không khớp với các serial đã quét.");
+        var stocktakeBlock = await commitments.GetStocktakeBlockReasonAsync(order.FromWarehouseId,
+            items.Select(i => i.SerialItem.CurrentLocationId).Distinct().ToArray());
+        if (stocktakeBlock is not null) return (false, stocktakeBlock);
 
         var alreadySent = await db.TransferDispatchItems
             .Where(i => i.TransferOrderId == orderId && i.IsActive && i.Dispatch.Status == "DONE")
@@ -207,7 +234,7 @@ public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService
         {
             var source = sourceGroup.Key;
             var quantity = sourceGroup.Count();
-            if (source.RemainingQuantity < quantity || source.EligibleQuantity < quantity)
+            if (source.RemainingQuantity < quantity)
                 return (false, "Nguồn tồn không còn đủ số lượng để xuất phiếu.");
 
             var allocation = new DemandAllocation
@@ -243,7 +270,7 @@ public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService
             }
             db.DemandAllocations.Add(allocation);
             source.RemainingQuantity -= quantity;
-            source.EligibleQuantity -= quantity;
+            source.EligibleQuantity = Math.Min(source.RemainingQuantity, Math.Max(0, source.EligibleQuantity - quantity));
         }
 
         foreach (var item in items)
@@ -262,6 +289,8 @@ public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService
             serial.CurrentLocationId = null;
             serial.CurrentSupplySourceId = null;
             serial.CurrentSupplyState = null;
+            serial.IsQuarantined = false;
+            serial.QuarantineReason = null;
         }
         db.PickingClaims.RemoveRange(claims);
         dispatch.Status = "DONE";
@@ -276,9 +305,13 @@ public class TransferDispatchWorkService(EwmsDbContext db, TransferExpiryService
 
     public async Task<(bool Success, string Message)> RemoveSerialAsync(long orderId, long dispatchId, long itemId, int userId)
     {
+        var warehouses = await WorkWarehousesAsync(orderId, userId);
+        if (warehouses.Length == 0) return (false, "Lệnh không thuộc kho nguồn của bạn.");
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        await LockWarehousesAsync(warehouses);
         var order = await SourceOrderForUpdate(orderId, userId).SingleOrDefaultAsync();
-        if (order is null || order.Status is not ("RELEASED" or "IN_PROGRESS"))
+        if (order is null || order.FromWarehouseId != warehouses[0] || order.ToWarehouseId != warehouses[1]
+            || order.Status is not ("RELEASED" or "IN_PROGRESS"))
             return (false, "Lệnh không cho phép chỉnh sửa tại kho của bạn.");
 
         var item = await db.TransferDispatchItems.SingleOrDefaultAsync(i => i.DispatchItemId == itemId

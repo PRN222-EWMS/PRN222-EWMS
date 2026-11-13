@@ -202,6 +202,10 @@ public class InboundService(IInboundRepository repo, PRN222_EWMS_Web.Services.Wa
             CheckVersion(inbound, version);
             if (inbound.Status != "DRAFT") throw new InvalidOperationException("Phiếu đã khóa.");
             var items = inbound.InboundItemInbounds.Where(x => x.IsActive).ToList();
+            var receivingBlock = await supply.GetReceivingBlockReasonAsync(warehouseId);
+            if (receivingBlock is not null) throw new InvalidOperationException(receivingBlock);
+            if (inbound.PurchaseOrder.Status is not ("CONFIRMED" or "PARTIALLY_RECEIVED"))
+                throw new InvalidOperationException("Đơn mua không còn mở để nhận hàng.");
             if (items.Count == 0) throw new InvalidOperationException("Cần ít nhất một Serial để hoàn tất.");
             var all = await repo.GetOrderItemsAsync(inbound.PurchaseOrderId);
             foreach (var line in inbound.PurchaseOrder.PurchaseOrderLines)
@@ -225,7 +229,7 @@ public class InboundService(IInboundRepository repo, PRN222_EWMS_Web.Services.Wa
             {
                 var source = new SupplySource { ProductId = group.Key.ProductId, WarehouseId = warehouseId,
                     ItemCondition = group.Key.Condition, SourceType = "INBOUND", SupplyState = "PHYSICAL",
-                    InboundId = inboundId, EligibleQuantity = group.Key.Condition == "GOOD" ? group.Count() : 0,
+                    InboundId = inboundId, EligibleQuantity = group.Count(),
                     RemainingQuantity = group.Count(),
                     AvailableFrom = DateOnly.FromDateTime(now), CreatedAt = now };
                 repo.AddSource(source);
@@ -237,8 +241,8 @@ public class InboundService(IInboundRepository repo, PRN222_EWMS_Web.Services.Wa
                         OriginType = "PURCHASE", OriginalInboundId = inboundId, CurrentWarehouseId = warehouseId,
                         CurrentLocationId = null, CurrentSupplySourceId = source.SupplySourceId,
                         CurrentSupplyState = "PHYSICAL", StockState = "IN_WAREHOUSE",
-                        ItemCondition = group.Key.Condition, IsQuarantined = group.Key.Condition == "DAMAGED",
-                        QuarantineReason = group.Key.Condition == "DAMAGED" ? item.ConditionNote : null, RegisteredAt = now };
+                        ItemCondition = group.Key.Condition, IsQuarantined = false,
+                        QuarantineReason = null, RegisteredAt = now };
                     repo.AddSerial(serial);
                     await repo.SaveAsync();
                     item.SerialItemId = serial.SerialItemId;

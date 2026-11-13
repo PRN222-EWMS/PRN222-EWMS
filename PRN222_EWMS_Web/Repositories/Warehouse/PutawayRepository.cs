@@ -45,7 +45,7 @@ public class PutawayRepository(EwmsDbContext db) : IPutawayRepository
             {
                 Id = s.SerialItemId, Serial = s.SerialNumber, s.Product.ProductCode, s.Product.ProductName,
                 Category = s.Product.Category.CategoryName, Brand = s.Product.Brand.BrandName,
-                Condition = s.ItemCondition, Quarantined = s.IsQuarantined,
+                Condition = s.ItemCondition,
                 ReceiptId = sourceType == "RETURN" ? s.CurrentSupplySource!.ReturnReceiptId!.Value
                     : sourceType == "TRANSFER_RECEIPT" ? s.CurrentSupplySource!.TransferReceiptId!.Value
                     : s.CurrentSupplySource!.InboundId!.Value,
@@ -105,7 +105,7 @@ public class PutawayRepository(EwmsDbContext db) : IPutawayRepository
         var items = await query.OrderBy(s => s.ReceivedAt).ThenBy(s => s.Id)
             .Skip((filter.Page - 1) * PutawayQueueViewModel.PageSize).Take(PutawayQueueViewModel.PageSize)
             .Select(s => new PutawayPendingItem(s.Id, s.Serial, s.ProductCode, s.ProductName,
-                s.Category, s.Brand, s.Condition, s.Quarantined, s.ReceiptId, s.ReceiptCode, s.ReceivedAt,
+                s.Category, s.Brand, s.Condition, s.ReceiptId, s.ReceiptCode, s.ReceivedAt,
                 s.TransferOrderId, s.TransferCode, s.FromWarehouseName))
             .ToListAsync(ct);
         return new PutawayQueueViewModel
@@ -190,9 +190,10 @@ public class PutawayRepository(EwmsDbContext db) : IPutawayRepository
             FromCondition = serial.ItemCondition, ToCondition = serial.ItemCondition,
             FromWarehouseId = serial.CurrentWarehouseId, ToWarehouseId = serial.CurrentWarehouseId,
             FromLocationId = null, ToLocationId = locationId,
-            FromQuarantined = serial.IsQuarantined, ToQuarantined = serial.IsQuarantined,
+            FromQuarantined = serial.IsQuarantined, ToQuarantined = false,
             Note = $"Putaway: {path}"
         });
+        serial.IsQuarantined = false; serial.QuarantineReason = null;
         // Existing audit triggers use ActorUserID; no second serial/source/receipt is created.
         await db.SaveChangesAsync(ct);
     }

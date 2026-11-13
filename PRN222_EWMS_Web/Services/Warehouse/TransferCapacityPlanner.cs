@@ -28,7 +28,8 @@ public sealed class CapacitySlot
 // Floor packing follows the existing putaway rule: fixed orientation, no stacking.
 public static class TransferCapacityPlanner
 {
-    public static List<string> Allocate(List<CapacitySlot> slots, IEnumerable<CapacityLoad> demands)
+    public static List<string> Allocate(List<CapacitySlot> slots, IEnumerable<CapacityLoad> demands,
+        IDictionary<(int Product, string Condition), long>? shortages = null)
     {
         var errors = new List<string>();
         foreach (var load in demands.Where(l => l.Quantity > 0)
@@ -39,6 +40,11 @@ public static class TransferCapacityPlanner
             if (load.Product.Length <= 0 || load.Product.Width <= 0 || load.Product.Height <= 0 || load.Product.Weight <= 0)
             {
                 errors.Add($"{load.Product.Code}: thiếu kích thước hoặc khối lượng hợp lệ.");
+                if (shortages is not null)
+                {
+                    var key = (load.Product.Id, load.Condition);
+                    shortages[key] = (shortages.TryGetValue(key, out var existing) ? existing : 0) + load.Quantity;
+                }
                 continue;
             }
             foreach (var slot in slots.Where(s => s.Accepts(load)).OrderBy(s => s.Reserve).ThenBy(s => s.Id))
@@ -53,7 +59,15 @@ public static class TransferCapacityPlanner
                 remaining -= low;
                 if (remaining == 0) break;
             }
-            if (remaining > 0) errors.Add($"{load.Product.Code}: còn thiếu chỗ cho {remaining:N0}/{load.Quantity:N0} sản phẩm ({load.Condition}).");
+            if (remaining > 0)
+            {
+                errors.Add($"{load.Product.Code}: còn thiếu chỗ cho {remaining:N0}/{load.Quantity:N0} sản phẩm ({load.Condition}).");
+                if (shortages is not null)
+                {
+                    var key = (load.Product.Id, load.Condition);
+                    shortages[key] = (shortages.TryGetValue(key, out var existing) ? existing : 0) + remaining;
+                }
+            }
         }
         return errors;
     }
