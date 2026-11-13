@@ -111,6 +111,13 @@
             }
         </fieldset>
     </form>
+    @if (Model.CanCancel && !Model.CanEdit)
+    {
+        <div class="transfer-actions-bar mt-4">
+            <button type="button" class="workspace-button sales-button-danger" data-bs-toggle="modal" data-bs-target="#cancelTransferModal">Hủy lệnh chuyển</button>
+            <a class="workspace-button sales-button-secondary" asp-controller="ManagerTransfer" asp-action="Index">Quay lại</a>
+        </div>
+    }
 </div>
 
 @if (Model.CanCancel)
@@ -128,7 +135,7 @@
                     <p class="mb-3">Bạn có chắc chắn muốn hủy lệnh chuyển kho <strong>@Model.TransferCode</strong>?</p>
                     <div class="transfer-notice transfer-notice-warning" style="font-size: 13px;">
                         <i class="bi bi-info-circle flex-shrink-0" aria-hidden="true"></i>
-                        <span>Toàn bộ phần tồn kho đã giữ chỗ cho lệnh này (nếu có) sẽ được giải phóng ngay lập tức.</span>
+                        <span>Các phiếu gửi/nhận nháp của nhân viên sẽ được hủy cùng lệnh. Serial đã chọn và phần giữ chỗ chưa sử dụng được giải phóng; lịch sử được giữ lại.</span>
                     </div>
                 </div>
                 <div class="modal-footer">

@@ -259,7 +259,7 @@ public class OutboundService(IOutboundRepository repo, IOutboundSupplyService su
                 var serial = await repo.SerialForUpdateAsync(item.SerialItem.SerialNumber)
                     ?? throw new OutboundRuleException("Serial trong phiếu không còn tồn tại.");
                 if (!candidates.Contains(serial.SerialItemId) || serial.StockState != "IN_WAREHOUSE" || serial.ItemCondition != "GOOD"
-                    || serial.CurrentSupplyState != "PHYSICAL" || serial.IsQuarantined || serial.CurrentWarehouseId != order.WarehouseId
+                    || serial.CurrentSupplyState != "PHYSICAL" || serial.CurrentWarehouseId != order.WarehouseId
                     || serial.CurrentSupplySourceId != item.SourceAtIssueId || serial.ProductId != item.ProductId
                     || item.WarehouseId != order.WarehouseId || item.SalesOrderId != order.SalesOrderId
                     || item.ItemCondition != "GOOD" || item.SupplyState != "PHYSICAL")
@@ -330,6 +330,7 @@ public class OutboundService(IOutboundRepository repo, IOutboundSupplyService su
                 });
                 serial.StockState = "SOLD"; serial.CurrentWarehouseId = null; serial.CurrentLocationId = null;
                 serial.CurrentSupplySourceId = null; serial.CurrentSupplyState = null;
+                serial.IsQuarantined = false; serial.QuarantineReason = null;
             }
             foreach (var claim in claims) repo.Remove(claim);
             // Inventory and evidence are flushed before the receipt becomes immutable.

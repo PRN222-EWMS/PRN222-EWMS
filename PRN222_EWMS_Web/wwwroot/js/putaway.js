@@ -249,7 +249,6 @@
             dialog.querySelector('[data-confirm-product]').textContent = selected.product;
             dialog.querySelector('[data-confirm-path]').textContent = option.dataset.path;
             dialog.querySelector('[data-confirm-condition]').textContent = selected.condition === 'DAMAGED' ? 'Hàng hỏng' : 'Hàng tốt';
-            dialog.querySelector('[data-confirm-quarantine]').hidden = selected.quarantined !== 'true';
             confirmForm.elements.SerialItemId.value = selected.id;
             confirmForm.elements.TargetLocationId.value = option.dataset.id;
             confirmForm.elements.RowVersion.value = selected.version;

@@ -35,7 +35,9 @@ public class WarehouseCapacityEngine(EwmsDbContext db, ISourceReservationService
             .Select(g => new CapacityLoad(Profile(g.Key.ProductId), g.Key.Condition, g.LongCount())).ToList();
     }
     private sealed record Simulation(List<CapacitySlot> Slots, List<string> Errors,
-        Dictionary<(int Slot, int Product, string Condition), long> BeforeRequests);
+        Dictionary<(int Slot, int Product, string Condition), long> BeforeRequests,
+        Dictionary<(int Product, string Condition), long> PhysicalShortages,
+        Dictionary<(int Product, string Condition), long> FutureShortages);
 
     public Task LockWarehouseAsync(int warehouseId, CancellationToken ct = default) => sources.LockWarehouseAsync(warehouseId, ct);
 
@@ -141,18 +143,24 @@ public class WarehouseCapacityEngine(EwmsDbContext db, ISourceReservationService
         bool commitments = true, List<CapacitySlot>? slotsOverride = null, List<CapacityLoad>? queueOverride = null)
     {
         var slots = (slotsOverride ?? s.Slots).Select(l => l.Copy()).ToList();
-        var errors = TransferCapacityPlanner.Allocate(slots, queueOverride ?? s.Awaiting);
-        if (commitments && errors.Count == 0)
+        var physicalShortages = new Dictionary<(int Product, string Condition), long>();
+        var futureShortages = new Dictionary<(int Product, string Condition), long>();
+        var errors = TransferCapacityPlanner.Allocate(slots, queueOverride ?? s.Awaiting, physicalShortages);
+        if (commitments)
             errors.AddRange(TransferCapacityPlanner.Allocate(slots, s.Purchases.Concat(s.Transfers)
-                .Concat(s.Returns.Select(l => l with { Condition = scenario }))));
+                .Concat(s.Returns.Select(l => l with { Condition = scenario })), futureShortages));
         var before = slots.SelectMany(slot => slot.Loads.Select(l => new { Slot = slot.Id, Product = l.Product.Id, l.Condition, l.Quantity }))
             .GroupBy(l => (l.Slot, l.Product, l.Condition))
             .ToDictionary(g => g.Key, g => g.Sum(l => l.Quantity));
         if (errors.Count == 0)
             errors.AddRange(TransferCapacityPlanner.Allocate(slots, demands.Where(l => l.Quantity > 0)
                 .Select(l => new CapacityLoad(s.Profile(l.ProductId), l.Condition == "UNKNOWN" ? scenario : l.Condition, l.Quantity))));
-        return new(slots, errors, before);
+        return new(slots, errors, before, physicalShortages, futureShortages);
     }
+
+    private static bool DoesNotWorsen(Simulation baseline, Simulation candidate) =>
+        candidate.PhysicalShortages.All(s => s.Value <= baseline.PhysicalShortages.GetValueOrDefault(s.Key))
+        && candidate.FutureShortages.All(s => s.Value <= baseline.FutureShortages.GetValueOrDefault(s.Key));
 
     private static List<string> Errors(Snapshot s, IReadOnlyList<CapacityDemand> demands, bool commitments = true)
     {
@@ -250,20 +258,31 @@ public class WarehouseCapacityEngine(EwmsDbContext db, ISourceReservationService
     }
 
     public async Task<IReadOnlyDictionary<int, string>> GetPlacementErrorsAsync(int warehouseId, long serialId,
+        IReadOnlyCollection<int> locationIds, CancellationToken ct = default) =>
+        (await AssessPlacementsAsync(warehouseId, serialId, locationIds, ct)).Errors;
+
+    public async Task<PlacementCapacityAssessment> AssessPlacementsAsync(int warehouseId, long serialId,
         IReadOnlyCollection<int> locationIds, CancellationToken ct = default)
     {
-        var errors = new Dictionary<int, string>();
-        if (locationIds.Count == 0) return errors;
+        var assessment = new PlacementCapacityAssessment();
+        var errors = assessment.Errors;
+        if (locationIds.Count == 0) return assessment;
         var s = await ReadAsync(new() { WarehouseId = warehouseId }, ct);
         var serial = s.Serials.SingleOrDefault(i => i.Id == serialId);
         if (s.Errors.Count > 0 || serial == null || serial.LocationId != null || s.AwaitingLocked)
         {
             string reason = s.Errors.FirstOrDefault() ?? "Serial không còn chờ xếp hoặc phạm vi chờ xếp đang bị khóa kiểm kê.";
             foreach (var id in locationIds) errors[id] = reason;
-            return errors;
+            return assessment;
         }
         var load = new CapacityLoad(s.Profile(serial.ProductId), serial.Condition, 1);
         var queue = s.Queue(s.Serials.Where(i => i.Id != serialId));
+        var scenarios = Scenarios(s, []);
+        var baselines = scenarios.ToDictionary(condition => condition, condition => Simulate(s, [], condition));
+        var existingProblems = baselines.Values.SelectMany(run => run.Errors).Distinct().Take(3).ToList();
+        if (existingProblems.Count > 0)
+            assessment.Warnings.Add("Một số hàng chờ/sắp nhận đang thiếu chỗ. Các vị trí được phép chọn không làm tăng phần thiếu: "
+                + string.Join(" ", existingProblems));
         foreach (var id in locationIds.Distinct())
         {
             ct.ThrowIfCancellationRequested();
@@ -283,9 +302,12 @@ public class WarehouseCapacityEngine(EwmsDbContext db, ISourceReservationService
                 continue;
             }
             target.Loads.Add(load);
-            var problems = Scenarios(s, []).SelectMany(condition => Simulate(s, [], condition, true, slots, queue).Errors).Distinct().Take(3).ToList();
+            var problems = scenarios.Select(condition => (Baseline: baselines[condition],
+                    Candidate: Simulate(s, [], condition, true, slots, queue)))
+                .Where(run => !DoesNotWorsen(run.Baseline, run.Candidate))
+                .SelectMany(run => run.Candidate.Errors).Distinct().Take(3).ToList();
             if (problems.Count > 0) errors[id] = "Vị trí này cần dành chỗ cho hàng chờ/sắp nhận: " + string.Join(" ", problems);
         }
-        return errors;
+        return assessment;
     }
 }

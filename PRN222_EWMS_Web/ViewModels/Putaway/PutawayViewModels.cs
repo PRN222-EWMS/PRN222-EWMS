@@ -46,7 +46,7 @@ public class PutawayQueueViewModel
 public record PutawayReceiptOption(long Id, string Code, int PendingCount,
     string? TransferCode = null, string? FromWarehouseName = null);
 public record PutawayPendingItem(long Id, string Serial, string ProductCode, string ProductName,
-    string Category, string Brand, string Condition, bool Quarantined, long ReceiptId,
+    string Category, string Brand, string Condition, long ReceiptId,
     string ReceiptCode, DateTime ReceivedAt, long? TransferOrderId = null,
     string? TransferCode = null, string? FromWarehouseName = null);
 
@@ -72,7 +72,6 @@ public class PutawaySerialViewModel
     public string? TransferCode { get; init; }
     public string? FromWarehouseName { get; init; }
     public string Condition { get; init; } = "";
-    public bool Quarantined { get; init; }
     public decimal LengthCm { get; init; }
     public decimal WidthCm { get; init; }
     public decimal HeightCm { get; init; }
@@ -82,6 +81,7 @@ public class PutawaySerialViewModel
     public string? UnavailableReason { get; set; }
     public List<PutawayLocationViewModel> Locations { get; set; } = [];
     public string? EmptyReason { get; set; }
+    public List<string> CapacityWarnings { get; set; } = [];
 }
 
 public class PutawayLocationViewModel

@@ -329,10 +329,8 @@ public class StocktakeExecutionService(IStocktakeRepository repo) : IStocktakeEx
             }
             await repo.SaveAsync(token);
             var investigationOnly = investigation is not null && investigation.ShortageObservationIds.Count == 0;
-            // Finding a missing serial does not authorize changing its condition from damaged to good.
-            var moveCondition = shortageSearch && item?.ItemCondition == "DAMAGED" ? "DAMAGED" : input.Condition;
+            var moveCondition = input.Condition;
             if (!investigationOnly && item is not null && item.CurrentWarehouseId == plan.WarehouseId && item.StockState == "IN_WAREHOUSE"
-                && !(item.ItemCondition == "DAMAGED" && moveCondition == "GOOD")
                 && (item.CurrentLocationId != input.LocationId || item.ItemCondition != moveCondition))
             {
                 var isNewHandling = handling is null;
@@ -365,12 +363,8 @@ public class StocktakeExecutionService(IStocktakeRepository repo) : IStocktakeEx
         await repo.TransactionAsync(actorId, actor.WarehouseId!.Value, async token =>
         {
             var (plan, assignments, request, locations, planLocations) = await ContextAsync(actorId, input.Id, input.RecountRequestId, token);
-            var oldRecoveryObservationIds = repo.Query<StocktakeObservation>()
-                .Where(o => o.StocktakeId == plan.StocktakeId && o.ExpectedCondition == "DAMAGED" && o.ActualCondition == "GOOD")
-                .Select(o => o.ObservationId);
-            var ignored = (await oldRecoveryObservationIds.ToListAsync(token)).ToHashSet();
             if ((await repo.HandlingAsync(plan.StocktakeId, token)).Any(h =>
-                h.RecordedByUserId == actorId && h.Status == "WAITING" && !ignored.Contains(h.ObservationId)))
+                h.RecordedByUserId == actorId && h.Status == "WAITING"))
                 throw new StocktakeWorkflowException("Còn hàng chờ chuyển đến vị trí hợp lệ. Xác nhận chuyển trước khi gửi kết quả.");
             if (request?.Status == "SUBMITTED" || request is null && assignments.All(a => a.Status == "DONE")) return true;
             CheckVersion(plan, input.Version);

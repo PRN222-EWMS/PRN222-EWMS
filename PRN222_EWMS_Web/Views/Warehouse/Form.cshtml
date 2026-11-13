@@ -2,6 +2,7 @@
 @{
     var editing = Model.WarehouseId > 0;
     var blocked = Model.IsOccupied || Model.IsLocked;
+    var extensionOnly = editing && blocked && Model.WarehouseType == "RENTED";
     ViewData["Title"] = editing ? "Chỉnh sửa kho" : "Tạo kho";
 }
 
@@ -9,7 +10,7 @@
     <div>
         <p class="eyebrow">QUẢN TRỊ KHO</p>
         <h1>@ViewData["Title"]</h1>
-        <p class="muted">@(editing ? "Cập nhật thông tin, trạng thái và thời hạn thuê khi kho chưa chứa hàng." : "Bước 1: Lưu thông tin kho. Tiếp theo, thiết lập Zone, dãy và các vị trí lưu trữ.")</p>
+        <p class="muted">@(extensionOnly ? "Gia hạn thuê kho." : editing ? "Cập nhật thông tin, trạng thái và thời hạn thuê khi kho chưa chứa hàng." : "Bước 1: Lưu thông tin kho. Tiếp theo, thiết lập Zone, dãy và các vị trí lưu trữ.")</p>
     </div>
     <a asp-action="Index" class="workspace-link">← Danh sách kho</a>
 </div>
@@ -17,7 +18,7 @@
 <section class="workspace-card">
     @if (blocked)
     {
-        <div class="warehouse-error" role="alert">@(Model.IsOccupied ? "Kho đang chứa hàng, kể cả hàng chưa xếp vị trí. Không thể chỉnh sửa thông tin kho." : "Kho đang có phạm vi bị khóa kiểm kê. Chưa thể chỉnh sửa thông tin kho.")</div>
+        <div class="warehouse-error" role="alert">@(extensionOnly ? "Kho đang chứa hàng hoặc đang kiểm kê. Bạn chỉ có thể gia hạn ngày kết thúc thuê, giữ nguyên các thông tin khác." : Model.IsOccupied ? "Kho đang chứa hàng, kể cả hàng chưa xếp vị trí. Không thể chỉnh sửa thông tin kho." : "Kho đang có phạm vi bị khóa kiểm kê. Chưa thể chỉnh sửa thông tin kho.")</div>
     }
     <form asp-action="@(editing ? "Edit" : "Create")" asp-route-id="@(editing ? Model.WarehouseId : (int?)null)" method="post" class="workspace-form" id="warehouse-form">
         <div asp-validation-summary="All" class="validation-message" role="alert"></div>
@@ -60,17 +61,31 @@
                 </div>
                 <div>
                     <label asp-for="RentalEndDate"></label>
-                    <input asp-for="RentalEndDate" asp-format="{0:yyyy-MM-dd}" type="date" />
+                    @if (extensionOnly) { <p>@Model.RentalEndDate?.ToString("dd/MM/yyyy")</p> }
+                    else { <input asp-for="RentalEndDate" asp-format="{0:yyyy-MM-dd}" type="date" /> }
                 </div>
             </div>
         </fieldset>
         </fieldset>
+        @if (extensionOnly)
+        {
+            <input type="hidden" name="WarehouseName" value="@Model.WarehouseName" />
+            <input type="hidden" name="Address" value="@Model.Address" />
+            <input type="hidden" name="WarehouseType" value="@Model.WarehouseType" />
+            <input type="hidden" name="Status" value="@Model.Status" />
+            <input type="hidden" name="RentalStartDate" value="@Model.RentalStartDate?.ToString("yyyy-MM-dd")" />
+            <div>
+                <label asp-for="RentalEndDate">Ngày kết thúc thuê mới</label>
+                <input asp-for="RentalEndDate" asp-format="{0:yyyy-MM-dd}" type="date" required />
+                <span asp-validation-for="RentalEndDate" class="validation-message"></span>
+            </div>
+        }
         @if (editing && !ViewData.ModelState.IsValid)
         {
             <a asp-action="Edit" asp-route-id="@Model.WarehouseId" class="warehouse-detail-link">Tải lại dữ liệu kho (bỏ các thay đổi chưa lưu)</a>
         }
         <div class="form-actions">
-            <button type="submit" class="workspace-button" disabled="@blocked">@(editing ? "Lưu thay đổi" : "Lưu và cấu hình vị trí")</button>
+            <button type="submit" class="workspace-button" disabled="@(blocked && !extensionOnly)">@(extensionOnly ? "Gia hạn thuê" : editing ? "Lưu thay đổi" : "Lưu và cấu hình vị trí")</button>
             @if (editing)
             {
                 <a asp-action="Details" asp-route-id="@Model.WarehouseId" class="workspace-link">Hủy</a>

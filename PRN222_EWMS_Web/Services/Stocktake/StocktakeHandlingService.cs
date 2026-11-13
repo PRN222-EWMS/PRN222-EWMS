@@ -35,8 +35,7 @@ public class StocktakeHandlingService(IStocktakeRepository repo, ISourceReservat
         var model = new StocktakeHandlingViewModel { Plan = plan, Handling = handling, Locations = locations,
             ProductName = item.Product.ProductName, Version = Convert.ToBase64String(plan.RowVersion),
             HandlingVersion = Convert.ToBase64String(handling.RowVersion), RecountRequestId = recountRequestId };
-        model.CanMove = handling.Status == "WAITING" && StocktakeScopeRules.LockedStatuses.Contains(plan.Status)
-            && (item.ItemCondition != "DAMAGED" || handling.ActualCondition != "GOOD");
+        model.CanMove = handling.Status == "WAITING" && StocktakeScopeRules.LockedStatuses.Contains(plan.Status);
         if (!model.CanMove) { model.Message = handling.Status == "MOVED" ? "Đã xác nhận chuyển hàng." : "Đợt không còn cho phép chuyển hàng."; return model; }
         if (await repo.Query<InventoryAdjustmentLine>().AnyAsync(l => l.StocktakeId == id && l.ScannedSerial == handling.ScannedSerial
             && l.IsActive && (l.Adjustment.Status == "DRAFT" || l.Adjustment.Status == "SUBMITTED" || l.Adjustment.Status == "APPROVED" || l.Adjustment.Status == "APPLIED"), ct))
@@ -74,7 +73,7 @@ public class StocktakeHandlingService(IStocktakeRepository repo, ISourceReservat
                 EventType = "RELOCATION", OccurredAt = now, FromState = "IN_WAREHOUSE", ToState = "IN_WAREHOUSE",
                 FromWarehouseId = warehouseId, ToWarehouseId = warehouseId, FromLocationId = handling.FoundLocationId,
                 ToLocationId = target, FromCondition = item.ItemCondition, ToCondition = handling.ActualCondition,
-                FromQuarantined = item.IsQuarantined, ToQuarantined = item.IsQuarantined,
+                FromQuarantined = item.IsQuarantined, ToQuarantined = false,
                 Note = $"Kiểm kê {plan.StocktakeCode}; phát hiện tại vị trí {handling.FoundLocationId?.ToString() ?? "chờ xếp"}; xác nhận chuyển; không thay đổi số lượng." };
             if (item.ItemCondition != handling.ActualCondition)
             {
@@ -91,6 +90,7 @@ public class StocktakeHandlingService(IStocktakeRepository repo, ISourceReservat
                 await ReconcileAsync(source.SupplySourceId, now, token);
             }
             else item.CurrentLocationId = target;
+            item.IsQuarantined = false; item.QuarantineReason = null;
             repo.Add(movement); await repo.SaveAsync(token);
             handling.TargetLocationId = target; handling.Status = "MOVED"; handling.MovedByUserId = actorId;
             handling.MovedAt = now; handling.MovementId = movement.MovementId;
@@ -158,7 +158,7 @@ public class StocktakeHandlingService(IStocktakeRepository repo, ISourceReservat
         var source = await repo.Query<SupplySource>().SingleAsync(s => s.SupplySourceId == sourceId, ct);
         var serials = await repo.Query<SerialItem>().AsNoTracking().Where(s => s.CurrentSupplySourceId == sourceId && s.StockState == "IN_WAREHOUSE").ToListAsync(ct);
         source.RemainingQuantity = serials.Count;
-        source.EligibleQuantity = serials.Count(s => s.ItemCondition == "GOOD" && !s.IsQuarantined);
+        source.EligibleQuantity = serials.Count;
         var reservations = await repo.Query<Reservation>().Where(r => r.SupplySourceId == sourceId && r.Status == "ACTIVE")
             .OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.ReservationId).ToListAsync(ct);
         var excess = Math.Max(0, reservations.Sum(r => r.ReservedQuantity-r.ConsumedQuantity-r.ReleasedQuantity)-source.EligibleQuantity);

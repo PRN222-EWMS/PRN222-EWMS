@@ -34,7 +34,6 @@
             <h2 id="putaway-confirm-title">Xác nhận xếp kho</h2>
             <p><strong data-confirm-serial></strong></p><p data-confirm-product></p>
             <dl><dt>Vị trí đích</dt><dd data-confirm-path></dd><dt>Tình trạng</dt><dd data-confirm-condition></dd></dl>
-            <p class="putaway-note" data-confirm-quarantine hidden>Hàng vẫn được cách ly sau khi xếp kho.</p>
             <p class="putaway-error" data-confirm-error role="alert" hidden></p>
             <form asp-controller="Putaway" asp-action="Confirm" method="post" data-confirm-form>
                 <input type="hidden" name="SerialItemId" /><input type="hidden" name="TargetLocationId" /><input type="hidden" name="RowVersion" />

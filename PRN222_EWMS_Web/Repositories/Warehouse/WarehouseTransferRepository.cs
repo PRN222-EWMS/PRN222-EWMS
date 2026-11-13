@@ -170,7 +170,7 @@ public class WarehouseTransferRepository(EwmsDbContext db)
                     from line in remainingLines
                     join serial in db.SerialItems on line.ProductId equals serial.ProductId
                     where serial.CurrentWarehouseId == warehouseId
-                        && serial.StockState == "IN_WAREHOUSE" && !serial.IsQuarantined
+                        && serial.StockState == "IN_WAREHOUSE"
                         && serial.ItemCondition == detail.ItemCondition && serial.CurrentSupplyState == "PHYSICAL"
                         && serial.CurrentSupplySourceId != null
                         && !db.PickingClaims.Any(c => c.SerialItemId == serial.SerialItemId)
