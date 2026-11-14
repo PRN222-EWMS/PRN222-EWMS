@@ -137,12 +137,15 @@ public class WarehouseCapacityEngine(EwmsDbContext db, ISourceReservationService
         if (locked.Count > 0)
             s.Warnings.Add("Kho có phạm vi đang kiểm kê. Sức chứa kế hoạch không đồng nghĩa có thể xếp ngay vào vị trí đang khóa.");
         if (s.Returns.Count > 0 || request.Demands.Any(l => l.Condition == "UNKNOWN"))
-            s.Warnings.Add("Hàng khách trả chưa nhận được kiểm tra ở cả hai khả năng hàng tốt và hàng hỏng.");
+            s.Warnings.Add(s.Slots.Any(l => l.Condition == "DAMAGED")
+                ? "Hàng khách trả chưa nhận được kiểm tra ở cả hai khả năng hàng tốt và hàng hỏng."
+                : "Kho chưa có vị trí hàng hỏng. Đơn trả được kiểm tra sức chứa hàng tốt; hàng hỏng thực nhận cần bố trí vị trí phù hợp trước khi xếp kho.");
         return s;
     }
 
     private static string[] Scenarios(Snapshot s, IEnumerable<CapacityDemand> demands) =>
-        s.Returns.Count > 0 || demands.Any(l => l.Condition == "UNKNOWN") ? ["GOOD", "DAMAGED"] : ["GOOD"];
+        (s.Returns.Count > 0 || demands.Any(l => l.Condition == "UNKNOWN")) && s.Slots.Any(l => l.Condition == "DAMAGED")
+            ? ["GOOD", "DAMAGED"] : ["GOOD"];
 
     private static Simulation Simulate(Snapshot s, IReadOnlyList<CapacityDemand> demands, string scenario,
         bool commitments = true, List<CapacitySlot>? slotsOverride = null, List<CapacityLoad>? queueOverride = null)
@@ -211,7 +214,7 @@ public class WarehouseCapacityEngine(EwmsDbContext db, ISourceReservationService
             var row = new ProductCapacityResult
             {
                 ProductId = product.ProductId, ProductCode = product.ProductCode, ProductName = product.ProductName,
-                HasValidZone = (demand.Condition == "UNKNOWN" ? new[] { "GOOD", "DAMAGED" } : [demand.Condition])
+                HasValidZone = (demand.Condition == "UNKNOWN" ? Scenarios(s, demands) : [demand.Condition])
                     .All(condition => s.Slots.Any(slot => slot.Accepts(new(profile, condition, 1))
                         && TransferCapacityPlanner.Fits(slot, new(profile, condition, 1)))),
                 SupplyPipelineQuantity = (int)Math.Min(int.MaxValue, s.Purchases.Concat(s.Transfers).Concat(s.Returns).Where(l => l.Product.Id == demand.ProductId).Sum(l => l.Quantity)),

@@ -2,8 +2,9 @@ using PRN222_EWMS_Web.Models;
 using PRN222_EWMS_Web.Services.Warehouse;
 using PRN222_EWMS_Web.Repositories.WarehouseStaff;
 using PRN222_EWMS_Web.ViewModels.Returns;
+using PRN222_EWMS_Web.Services.Purchasing;
 namespace PRN222_EWMS_Web.Services.WarehouseStaff;
-public class ReturnReceiveService(IReturnReceiveRepository repo, ISourceReservationService commitments, DocumentCodeGenerator codes):IReturnReceiveService
+public class ReturnReceiveService(IReturnReceiveRepository repo, ISourceReservationService commitments, DocumentCodeGenerator codes, IWarehouseCapacityEngine capacity):IReturnReceiveService
 {
  private async Task<int> Warehouse(int user)=>await repo.WarehouseAsync(user)??throw new UnauthorizedAccessException("Bạn chưa được phân công kho.");
  private static void Version(ReturnReceipt r,string v){if(Convert.ToBase64String(r.RowVersion)!=v)throw new InvalidOperationException("Phiếu đã thay đổi. Tải lại trang.");}
@@ -164,6 +165,18 @@ public class ReturnReceiveService(IReturnReceiveRepository repo, ISourceReservat
                         || item.ReceivedCondition == "DAMAGED" && string.IsNullOrWhiteSpace(item.ConditionNote))
                         throw new InvalidOperationException("Serial thiếu tình trạng thực nhận hoặc ghi chú hàng hỏng.");
                 }
+            }
+            var damaged = items.Where(i => i.ReceivedCondition == "DAMAGED")
+                .GroupBy(i => receipt.ReturnOrder.CustomerReturnOrderLineReturnOrders.Single(l => l.ReturnLineId == i.ReturnLineId).ProductId)
+                .Select(g => new CapacityDemand(g.Key, g.LongCount(), "DAMAGED")).ToList();
+            if (damaged.Count > 0)
+            {
+                var assessment = await capacity.EvaluateAsync(new WarehouseCapacityRequest
+                {
+                    WarehouseId = warehouseId, ExcludeReturnOrderId = receipt.ReturnOrderId, Demands = damaged
+                });
+                if (!assessment.IsValid)
+                    throw new InvalidOperationException("Kho chưa đủ chỗ cho hàng hỏng thực nhận: " + string.Join(" ", assessment.Errors));
             }
             await repo.PostAsync(receipt, userId);
             await commitments.ReconcileWarehouseAsync(warehouseId, "Đã hoàn tất nhận hàng khách trả.");
