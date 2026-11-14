@@ -10,10 +10,10 @@ namespace PRN222_EWMS_Web.Controllers.Manager;
 public class ManagerStocktakeController(IManagerStocktakeService stocktakes, ILogger<ManagerStocktakeController> logger) : Controller
 {
     [HttpGet]
-    public async Task<IActionResult> Index([FromQuery] ManagerStocktakeFilter filter, CancellationToken ct)
+    public async Task<IActionResult> Index([FromQuery] ManagerStocktakeFilter filter)
     {
         if (!ModelState.IsValid) return View(new ManagerStocktakeListViewModel { Filter = filter });
-        try { return View(await stocktakes.GetListAsync(filter, ct)); }
+        try { return View(await stocktakes.GetListAsync(filter)); }
         catch (ManagerStocktakeException ex)
         {
             ModelState.AddModelError(ex.Field ?? "", ex.Message);
@@ -22,38 +22,38 @@ public class ManagerStocktakeController(IManagerStocktakeService stocktakes, ILo
     }
 
     [HttpGet]
-    public async Task<IActionResult> Details(long id, [FromQuery] ManagerStocktakeDetailFilter filter, CancellationToken ct)
+    public async Task<IActionResult> Details(long id, [FromQuery] ManagerStocktakeDetailFilter filter)
     {
         if (id <= 0) return NotFound();
         if (!ModelState.IsValid) return BadRequest("Bộ lọc kết quả kiểm kê không hợp lệ.");
         try
         {
-            var model = await stocktakes.GetDetailsAsync(id, filter, ct);
+            var model = await stocktakes.GetDetailsAsync(id, filter);
             return model is null ? NotFound() : View(model);
         }
         catch (ManagerStocktakeException ex) { return BadRequest(ex.Message); }
     }
 
     [HttpGet]
-    public async Task<IActionResult> Create(int? warehouseId, CancellationToken ct) =>
-        View("Form", await stocktakes.CreateFormAsync(warehouseId, ct));
+    public async Task<IActionResult> Create(int? warehouseId) =>
+        View("Form", await stocktakes.CreateFormAsync(warehouseId));
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(ManagerStocktakeFormViewModel form, CancellationToken ct)
+    public async Task<IActionResult> Create(ManagerStocktakeFormViewModel form)
     {
         form.Id = null;
         form.Code = null;
         form.RowVersion = null;
-        return await SaveFormAsync(form, ct);
+        return await SaveFormAsync(form);
     }
 
     [HttpGet]
-    public async Task<IActionResult> Edit(long id, CancellationToken ct)
+    public async Task<IActionResult> Edit(long id)
     {
         if (id <= 0) return NotFound();
         try
         {
-            var model = await stocktakes.EditFormAsync(id, ct);
+            var model = await stocktakes.EditFormAsync(id);
             return model is null ? NotFound() : View("Form", model);
         }
         catch (ManagerStocktakeException ex)
@@ -64,32 +64,32 @@ public class ManagerStocktakeController(IManagerStocktakeService stocktakes, ILo
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(long id, ManagerStocktakeFormViewModel form, CancellationToken ct)
+    public async Task<IActionResult> Edit(long id, ManagerStocktakeFormViewModel form)
     {
         if (id <= 0) return NotFound();
         form.Id = id;
-        return await SaveFormAsync(form, ct);
+        return await SaveFormAsync(form);
     }
 
     [HttpGet]
-    public async Task<IActionResult> PlanningData(int warehouseId, CancellationToken ct)
+    public async Task<IActionResult> PlanningData(int warehouseId)
     {
-        var form = await stocktakes.CreateFormAsync(warehouseId, ct);
+        var form = await stocktakes.CreateFormAsync(warehouseId);
         var warehouse = form.Warehouses.SingleOrDefault(w => w.Id == warehouseId);
         if (warehouse is null) return NotFound(new { message = "Kho không tồn tại, ngừng hoạt động hoặc ngoài thời hạn thuê." });
         return Json(new { warehouse, locations = form.Locations, staff = form.Staff, awaitingCount = form.AwaitingCount, warnings = form.Warnings });
     }
 
     [HttpGet]
-    public async Task<IActionResult> Delete(long id, CancellationToken ct)
+    public async Task<IActionResult> Delete(long id)
     {
         if (id <= 0) return NotFound();
-        var model = await stocktakes.GetDetailsAsync(id, new ManagerStocktakeDetailFilter(), ct);
+        var model = await stocktakes.GetDetailsAsync(id, new ManagerStocktakeDetailFilter());
         return model is null ? NotFound() : View(model);
     }
 
     [HttpPost, ActionName("Delete"), ValidateAntiForgeryToken]
-    public async Task<IActionResult> DeleteConfirmed(ManagerStocktakeDeleteInput input, CancellationToken ct)
+    public async Task<IActionResult> DeleteConfirmed(ManagerStocktakeDeleteInput input)
     {
         if (input.Id <= 0) return NotFound();
         if (!ModelState.IsValid)
@@ -100,7 +100,7 @@ public class ManagerStocktakeController(IManagerStocktakeService stocktakes, ILo
         if (!TryActor(out var actorId)) return Forbid();
         try
         {
-            await stocktakes.DeleteAsync(input, actorId, ct);
+            await stocktakes.DeleteAsync(input, actorId);
             TempData["Success"] = "Đã xóa đợt kiểm kê chưa bắt đầu.";
             return RedirectToAction(nameof(Index));
         }
@@ -118,14 +118,14 @@ public class ManagerStocktakeController(IManagerStocktakeService stocktakes, ILo
         return RedirectToAction(nameof(Delete), new { id = input.Id });
     }
 
-    private async Task<IActionResult> SaveFormAsync(ManagerStocktakeFormViewModel form, CancellationToken ct)
+    private async Task<IActionResult> SaveFormAsync(ManagerStocktakeFormViewModel form)
     {
         if (!TryActor(out var actorId)) return Forbid();
         if (ModelState.IsValid)
         {
             try
             {
-                var id = await stocktakes.SaveAsync(form, actorId, ct);
+                var id = await stocktakes.SaveAsync(form, actorId);
                 TempData["Success"] = form.SaveMode == "PLANNED" ? "Đã lưu kế hoạch và phân công kiểm kê. Đợt chưa bắt đầu." : "Đã lưu nháp đợt kiểm kê.";
                 return RedirectToAction(nameof(Details), new { id });
             }
@@ -146,7 +146,7 @@ public class ManagerStocktakeController(IManagerStocktakeService stocktakes, ILo
                 ModelState.AddModelError("", "Chưa lưu được kế hoạch. Vui lòng tải lại trang và kiểm tra thông tin phân công.");
             }
         }
-        await stocktakes.PopulateFormAsync(form, ct);
+        await stocktakes.PopulateFormAsync(form);
         if (form.Id.HasValue) ModelState.Remove(nameof(form.WarehouseId));
         return View("Form", form);
     }

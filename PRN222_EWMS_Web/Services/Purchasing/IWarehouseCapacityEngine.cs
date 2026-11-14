@@ -59,9 +59,9 @@ public interface IWarehouseCapacityEngine
     Task<(bool IsValid, string? ErrorMessage)> ValidatePurchaseOrderLinesCapacityAsync(int warehouseId,
         IEnumerable<(int ProductId, int Quantity)> lines, long? excludePoId = null, CancellationToken cancellationToken = default);
     Task<IReadOnlyDictionary<int, string>> GetPlacementErrorsAsync(int warehouseId, long serialId,
-        IReadOnlyCollection<int> locationIds, CancellationToken ct = default);
+        IReadOnlyCollection<int> locationIds);
     Task<PlacementCapacityAssessment> AssessPlacementsAsync(int warehouseId, long serialId,
-        IReadOnlyCollection<int> locationIds, CancellationToken ct = default);
+        IReadOnlyCollection<int> locationIds);
     Task<PlacementCapacityAssessment> AssessStocktakePlacementsAsync(int warehouseId, long serialId, string condition,
-        IReadOnlyCollection<int> locationIds, IReadOnlyCollection<long> stocktakeIds, CancellationToken ct = default);
+        IReadOnlyCollection<int> locationIds, IReadOnlyCollection<long> stocktakeIds);
 }

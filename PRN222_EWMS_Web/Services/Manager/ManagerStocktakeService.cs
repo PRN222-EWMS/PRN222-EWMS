@@ -10,7 +10,7 @@ namespace PRN222_EWMS_Web.Services.Manager;
 public class ManagerStocktakeService(IManagerStocktakeRepository repository, IStocktakeRepository stocktakeHistory,
     DocumentCodeGenerator codes) : IManagerStocktakeService
 {
-    public Task<ManagerStocktakeListViewModel> GetListAsync(ManagerStocktakeFilter filter, CancellationToken ct)
+    public Task<ManagerStocktakeListViewModel> GetListAsync(ManagerStocktakeFilter filter)
     {
         filter.Search = Clean(filter.Search);
         filter.Status = Clean(filter.Status)?.ToUpperInvariant();
@@ -20,10 +20,10 @@ public class ManagerStocktakeService(IManagerStocktakeRepository repository, ISt
         if (filter.WarehouseId <= 0) throw new ManagerStocktakeException("Kho đã chọn không hợp lệ.", "WarehouseId");
         if (filter.FromDate > filter.ToDate) throw new ManagerStocktakeException("Ngày kết thúc phải từ ngày bắt đầu trở đi.", "ToDate");
         filter.Page = Math.Max(1, filter.Page);
-        return repository.GetListAsync(filter, ct);
+        return repository.GetListAsync(filter);
     }
 
-    public async Task<ManagerStocktakeDetailViewModel?> GetDetailsAsync(long id, ManagerStocktakeDetailFilter filter, CancellationToken ct)
+    public async Task<ManagerStocktakeDetailViewModel?> GetDetailsAsync(long id, ManagerStocktakeDetailFilter filter)
     {
         filter.Search = Clean(filter.Search);
         filter.DifferenceType = Clean(filter.DifferenceType)?.ToUpperInvariant();
@@ -33,14 +33,14 @@ public class ManagerStocktakeService(IManagerStocktakeRepository repository, ISt
         if (filter.RoundNumber <= 0) throw new ManagerStocktakeException("Vòng đếm không hợp lệ.");
         filter.Page = Math.Max(1, filter.Page);
         ManagerStocktakeDetailViewModel? detail;
-        try { detail = await repository.GetDetailsAsync(id, filter, ct); }
+        try { detail = await repository.GetDetailsAsync(id, filter); }
         catch (ArgumentException) { throw new ManagerStocktakeException("Vòng đếm đã chọn không thuộc đợt kiểm kê này."); }
         if (detail is null) return null;
 
         // Existing seed/legacy plans may not yet cover awaiting stock. Read them as-is.
         if (detail.CanEdit)
         {
-            var data = await repository.GetPlanningDataAsync(detail.WarehouseId, ct);
+            var data = await repository.GetPlanningDataAsync(detail.WarehouseId);
             if (data is not null)
             {
                 if (!data.Warehouse.CanPlan(ManagerStocktakeLabels.Today))
@@ -48,8 +48,8 @@ public class ManagerStocktakeService(IManagerStocktakeRepository repository, ISt
                 try
                 {
                     PrepareLocations(data.Locations);
-                    var scopes = await repository.GetScopesAsync(id, ct);
-                    var assignments = await repository.GetAssignmentsAsync(id, ct);
+                    var scopes = await repository.GetScopesAsync(id);
+                    var assignments = await repository.GetAssignmentsAsync(id);
                     var form = new ManagerStocktakeFormViewModel
                     {
                         ScopeType = detail.ScopeType, IncludeAwaitingPutaway = detail.IncludeAwaitingPutaway,
@@ -65,20 +65,20 @@ public class ManagerStocktakeService(IManagerStocktakeRepository repository, ISt
         return detail;
     }
 
-    public async Task<ManagerStocktakeFormViewModel> CreateFormAsync(int? warehouseId, CancellationToken ct)
+    public async Task<ManagerStocktakeFormViewModel> CreateFormAsync(int? warehouseId)
     {
         var form = new ManagerStocktakeFormViewModel { WarehouseId = warehouseId ?? 0 };
-        await PopulateFormAsync(form, ct);
+        await PopulateFormAsync(form);
         return form;
     }
 
-    public async Task<ManagerStocktakeFormViewModel?> EditFormAsync(long id, CancellationToken ct)
+    public async Task<ManagerStocktakeFormViewModel?> EditFormAsync(long id)
     {
-        var plan = await repository.FindAsync(id, false, ct);
+        var plan = await repository.FindAsync(id, false);
         if (plan is null) return null;
-        await EnsureUnstartedAsync(plan, ct);
-        var scopes = await repository.GetScopesAsync(id, ct);
-        var assignments = await repository.GetAssignmentsAsync(id, ct);
+        await EnsureUnstartedAsync(plan);
+        var scopes = await repository.GetScopesAsync(id);
+        var assignments = await repository.GetAssignmentsAsync(id);
         var form = new ManagerStocktakeFormViewModel
         {
             Id = id, Code = plan.StocktakeCode, WarehouseId = plan.WarehouseId,
@@ -89,30 +89,30 @@ public class ManagerStocktakeService(IManagerStocktakeRepository repository, ISt
             Assignments = assignments.Where(a => a.Status != "CANCELLED").Select(a => new ManagerStocktakeAssignmentInput
             { UserId = a.UserId, ScopeKind = a.ScopeKind, LocationId = a.LocationId }).ToList()
         };
-        await PopulateFormAsync(form, ct);
+        await PopulateFormAsync(form);
         return form;
     }
 
-    public async Task PopulateFormAsync(ManagerStocktakeFormViewModel form, CancellationToken ct)
+    public async Task PopulateFormAsync(ManagerStocktakeFormViewModel form)
     {
         form.Warnings = [];
         if (form.Id.HasValue)
         {
-            var existing = await repository.FindAsync(form.Id.Value, false, ct);
+            var existing = await repository.FindAsync(form.Id.Value, false);
             if (existing is not null)
             {
                 form.Code = existing.StocktakeCode;
                 form.WarehouseId = existing.WarehouseId;
             }
         }
-        form.Warehouses = (await repository.GetWarehousesAsync(ct))
+        form.Warehouses = (await repository.GetWarehousesAsync())
             .Where(w => w.CanPlan(ManagerStocktakeLabels.Today) || (form.Id.HasValue && w.Id == form.WarehouseId)).ToList();
         form.Locations = [];
         form.Staff = [];
         form.AwaitingCount = 0;
         if (form.Warehouses.Count == 0) form.Warnings.Add("Chưa có kho đang hoạt động và còn thời hạn thuê để lập kế hoạch.");
         if (form.WarehouseId <= 0) return;
-        var data = await repository.GetPlanningDataAsync(form.WarehouseId, ct);
+        var data = await repository.GetPlanningDataAsync(form.WarehouseId);
         if (data is null) { form.Warnings.Add("Kho đã chọn không còn tồn tại."); return; }
         if (!data.Warehouse.CanPlan(ManagerStocktakeLabels.Today))
             form.Warnings.Add("Kho đang ngừng hoạt động hoặc ngoài thời hạn thuê. Không thể lưu kế hoạch; vẫn có thể xóa đợt chưa bắt đầu.");
@@ -123,7 +123,7 @@ public class ManagerStocktakeService(IManagerStocktakeRepository repository, ISt
         if (form.Staff.Count == 0) form.Warnings.Add("Kho chưa có Warehouse Staff đang hoạt động. Có thể lưu nháp, chưa thể hoàn tất kế hoạch.");
     }
 
-    public async Task<long> SaveAsync(ManagerStocktakeFormViewModel form, int actorId, CancellationToken ct)
+    public async Task<long> SaveAsync(ManagerStocktakeFormViewModel form, int actorId)
     {
         if (form.ScopeType is not ("WHOLE_WAREHOUSE" or "LOCATIONS"))
             throw new ManagerStocktakeException("Phạm vi kiểm kê không hợp lệ.", nameof(form.ScopeType));
@@ -142,18 +142,18 @@ public class ManagerStocktakeService(IManagerStocktakeRepository repository, ISt
         {
             return await repository.InTransactionAsync(actorId, async () =>
             {
-                await EnsureManagerAsync(actorId, ct);
+                await EnsureManagerAsync(actorId);
                 Stocktake? plan = null;
                 if (form.Id.HasValue)
                 {
-                    plan = await repository.FindAsync(form.Id.Value, true, ct)
+                    plan = await repository.FindAsync(form.Id.Value, true)
                         ?? throw new ManagerStocktakeException("Đợt kiểm kê không còn tồn tại.", statusCode: 404);
-                    await EnsureUnstartedAsync(plan, ct);
+                    await EnsureUnstartedAsync(plan);
                     CheckVersion(form.RowVersion, plan.RowVersion);
                     if (form.WarehouseId != plan.WarehouseId)
                         throw new ManagerStocktakeException("Không được đổi kho của đợt đã tạo.", nameof(form.WarehouseId));
                 }
-                var data = await repository.GetPlanningDataAsync(form.WarehouseId, ct)
+                var data = await repository.GetPlanningDataAsync(form.WarehouseId)
                     ?? throw new ManagerStocktakeException("Kho đã chọn không tồn tại.", nameof(form.WarehouseId));
                 if (!data.Warehouse.CanPlan(ManagerStocktakeLabels.Today) || !data.Warehouse.CanPlan(plannedDay))
                     throw new ManagerStocktakeException("Kho phải đang hoạt động; hôm nay và ngày dự kiến đều phải nằm trong thời hạn thuê của kho.", nameof(form.WarehouseId));
@@ -163,21 +163,21 @@ public class ManagerStocktakeService(IManagerStocktakeRepository repository, ISt
                 var rebuild = plan is null;
                 if (plan is not null)
                 {
-                    var oldScopes = await repository.GetScopesAsync(plan.StocktakeId, ct);
-                    var oldAssignments = await repository.GetAssignmentsAsync(plan.StocktakeId, ct);
+                    var oldScopes = await repository.GetScopesAsync(plan.StocktakeId);
+                    var oldAssignments = await repository.GetAssignmentsAsync(plan.StocktakeId);
                     rebuild = plan.ScopeType != form.ScopeType || plan.IncludeAwaitingPutaway != form.IncludeAwaitingPutaway
                         || !oldScopes.Select(s => s.LocationId).Order().SequenceEqual(roots.Order())
                         || !oldAssignments.Where(a => a.Status != "CANCELLED").Select(a => (a.UserId, a.ScopeKind, a.LocationId)).OrderBy(a => a.UserId).ThenBy(a => a.ScopeKind).ThenBy(a => a.LocationId)
                             .SequenceEqual(form.Assignments.Select(a => (a.UserId, a.ScopeKind, a.LocationId)).OrderBy(a => a.UserId).ThenBy(a => a.ScopeKind).ThenBy(a => a.LocationId));
                     // Scope deletion must happen while the old header is still DRAFT/PLANNED.
-                    if (rebuild) await repository.ClearPlanChildrenAsync(plan.StocktakeId, ct);
+                    if (rebuild) await repository.ClearPlanChildrenAsync(plan.StocktakeId);
                 }
                 else
                 {
                     plan = new Stocktake
                     {
                         WarehouseId = form.WarehouseId, CreatedByUserId = actorId, CreatedAt = DateTime.UtcNow,
-                        StocktakeCode = await codes.NextAsync(DocumentType.Stocktake, ct)
+                        StocktakeCode = await codes.NextAsync(DocumentType.Stocktake)
                     };
                 }
                 plan.ScopeType = form.ScopeType;
@@ -185,11 +185,11 @@ public class ManagerStocktakeService(IManagerStocktakeRepository repository, ISt
                 plan.Status = form.SaveMode;
                 plan.PlannedAt = form.PlannedAt.HasValue ? ManagerStocktakeLabels.Utc(form.PlannedAt.Value) : null;
                 plan.Note = Clean(form.Note);
-                if (plan.StocktakeId == 0) await repository.InsertHeaderAsync(plan, ct);
-                else await repository.SaveHeaderAsync(plan, ct);
-                if (rebuild) await repository.InsertPlanChildrenAsync(plan, roots, form.Assignments, ct);
+                if (plan.StocktakeId == 0) await repository.InsertHeaderAsync(plan);
+                else await repository.SaveHeaderAsync(plan);
+                if (rebuild) await repository.InsertPlanChildrenAsync(plan, roots, form.Assignments);
                 return plan.StocktakeId;
-            }, ct);
+            });
         }
         catch (DbUpdateConcurrencyException) { throw new ManagerStocktakeException("Kế hoạch vừa được người khác cập nhật. Vui lòng tải lại trang trước khi lưu.", statusCode: 409); }
         catch (DbUpdateException ex) when (ex.InnerException is SqlException sql && sql.Number is 2601 or 2627)
@@ -200,23 +200,23 @@ public class ManagerStocktakeService(IManagerStocktakeRepository repository, ISt
         { throw new ManagerStocktakeException("Dữ liệu đang được thao tác đồng thời. Vui lòng tải lại và thực hiện lại.", statusCode: 409); }
     }
 
-    public async Task DeleteAsync(ManagerStocktakeDeleteInput input, int actorId, CancellationToken ct)
+    public async Task DeleteAsync(ManagerStocktakeDeleteInput input, int actorId)
     {
         try
         {
             await repository.InTransactionAsync(actorId, async () =>
             {
-                await EnsureManagerAsync(actorId, ct);
-                var plan = await repository.FindAsync(input.Id, true, ct)
+                await EnsureManagerAsync(actorId);
+                var plan = await repository.FindAsync(input.Id, true)
                     ?? throw new ManagerStocktakeException("Đợt kiểm kê không còn tồn tại.", statusCode: 404);
-                await EnsureUnstartedAsync(plan, ct);
+                await EnsureUnstartedAsync(plan);
                 CheckVersion(input.RowVersion, plan.RowVersion);
-                if ((await stocktakeHistory.InvestigationsAsync(plan.StocktakeId, ct)).Count > 0)
+                if ((await stocktakeHistory.InvestigationsAsync(plan.StocktakeId, default)).Count > 0)
                     throw new ManagerStocktakeException("Đợt có liên kết đối soát. Cần giữ lại để tra cứu lịch sử.");
-                await repository.ClearPlanChildrenAsync(plan.StocktakeId, ct);
-                await repository.DeleteHeaderAsync(plan, ct);
+                await repository.ClearPlanChildrenAsync(plan.StocktakeId);
+                await repository.DeleteHeaderAsync(plan);
                 return true;
-            }, ct);
+            });
         }
         catch (DbUpdateConcurrencyException) { throw new ManagerStocktakeException("Kế hoạch vừa thay đổi. Vui lòng xem lại trước khi xóa.", statusCode: 409); }
         catch (DbUpdateException ex) when (ex.InnerException is SqlException sql && sql.Number is 1205 or 1222)
@@ -225,16 +225,16 @@ public class ManagerStocktakeService(IManagerStocktakeRepository repository, ISt
         { throw new ManagerStocktakeException("Đợt kiểm kê đang được thao tác đồng thời. Vui lòng tải lại trang.", statusCode: 409); }
     }
 
-    private async Task EnsureManagerAsync(int actorId, CancellationToken ct)
+    private async Task EnsureManagerAsync(int actorId)
     {
-        if (!await repository.IsActiveManagerAsync(actorId, ct))
+        if (!await repository.IsActiveManagerAsync(actorId))
             throw new ManagerStocktakeException("Tài khoản Manager không còn hoạt động hoặc không có quyền thực hiện.", statusCode: 403);
     }
 
-    private async Task EnsureUnstartedAsync(Stocktake plan, CancellationToken ct)
+    private async Task EnsureUnstartedAsync(Stocktake plan)
     {
         if (plan.Status is not ("DRAFT" or "PLANNED") || plan.StartedAt.HasValue
-            || await repository.HasExecutionDataAsync(plan.StocktakeId, ct))
+            || await repository.HasExecutionDataAsync(plan.StocktakeId))
             throw new ManagerStocktakeException("Chỉ được sửa hoặc xóa đợt chưa bắt đầu và chưa phát sinh dữ liệu kiểm kê, điều chỉnh.", statusCode: 409);
     }
 

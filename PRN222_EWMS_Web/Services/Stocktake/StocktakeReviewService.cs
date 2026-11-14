@@ -252,7 +252,7 @@ public partial class StocktakeReviewService(IStocktakeRepository repo, DocumentC
             var adjustment = new InventoryAdjustment
             {
                 StocktakeId = input.Id, SubmittedByUserId = actorId,
-                AdjustmentCode = await codes.NextAsync(DocumentType.InventoryAdjustment, token),
+                AdjustmentCode = await codes.NextAsync(DocumentType.InventoryAdjustment),
                 Status = "DRAFT", Reason = reason, CreatedAt = now
             };
             repo.Add(adjustment);

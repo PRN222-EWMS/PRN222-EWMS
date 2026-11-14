@@ -35,30 +35,30 @@ public sealed class DocumentCodeGenerator(EwmsDbContext db, TimeProvider clock)
         _ => throw new ArgumentOutOfRangeException(nameof(type))
     };
 
-    public async Task<string> NextAsync(DocumentType type, CancellationToken ct = default)
+    public async Task<string> NextAsync(DocumentType type)
     {
         RequireTransaction();
         var definition = Definition(type);
         var prefix = DayPrefix(definition.Prefix);
-        await LockAsync($"EWMS:DocumentCode:{definition.Table}:{prefix}", ct);
-        return await ReadNextAsync(definition.Table, definition.Column, prefix, ct);
+        await LockAsync($"EWMS:DocumentCode:{definition.Table}:{prefix}");
+        return await ReadNextAsync(definition.Table, definition.Column, prefix);
     }
 
     // A form preview is not a reservation; save always calls NextAsync again inside its transaction.
-    public Task<string> PreviewAsync(DocumentType type, CancellationToken ct = default)
+    public Task<string> PreviewAsync(DocumentType type)
     {
         var definition = Definition(type);
-        return ReadNextAsync(definition.Table, definition.Column, DayPrefix(definition.Prefix), ct);
+        return ReadNextAsync(definition.Table, definition.Column, DayPrefix(definition.Prefix));
     }
 
     private string DayPrefix(string prefix) =>
         $"{prefix}-{clock.GetUtcNow().UtcDateTime.AddHours(7).ToString("yyMMdd", CultureInfo.InvariantCulture)}-";
 
-    private async Task<string> ReadNextAsync(string table, string column, string prefix, CancellationToken ct)
+    private async Task<string> ReadNextAsync(string table, string column, string prefix)
     {
         var connection = db.Database.GetDbConnection();
         var opened = connection.State != ConnectionState.Open;
-        if (opened) await db.Database.OpenConnectionAsync(ct);
+        if (opened) await db.Database.OpenConnectionAsync();
         try
         {
             await using var command = connection.CreateCommand();
@@ -79,7 +79,7 @@ public sealed class DocumentCodeGenerator(EwmsDbContext db, TimeProvider clock)
             var tableName = command.CreateParameter(); tableName.ParameterName = "@TableName"; tableName.Value = table;
             var codePath = command.CreateParameter(); codePath.ParameterName = "@CodePath"; codePath.Value = "$." + column;
             command.Parameters.Add(tableName); command.Parameters.Add(codePath);
-            var maximum = Math.Max(0, Convert.ToInt64(await command.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture));
+            var maximum = Math.Max(0, Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
             return prefix + checked(maximum + 1).ToString("D3", CultureInfo.InvariantCulture);
         }
         finally { if (opened) await db.Database.CloseConnectionAsync(); }
@@ -87,18 +87,18 @@ public sealed class DocumentCodeGenerator(EwmsDbContext db, TimeProvider clock)
 
     /// <summary>Keep the request token separate from the readable number, including reuse of an open draft.</summary>
     public async Task<T> WithRequestAsync<T>(DocumentType type, string token, int actorId,
-        Func<long?, Task<T>> action, Func<T, long> documentId, CancellationToken ct = default)
+        Func<long?, Task<T>> action, Func<T, long> documentId)
     {
         RequireTransaction();
         if (actorId <= 0 || !Guid.TryParseExact(token, "N", out _))
             throw new InvalidOperationException("Yêu cầu tạo chứng từ không hợp lệ. Vui lòng tải lại trang.");
         token = token.ToLowerInvariant();
         var table = Definition(type).Table;
-        await LockAsync($"EWMS:DocumentRequest:{table}:{token}", ct);
+        await LockAsync($"EWMS:DocumentRequest:{table}:{token}");
         var keyPrefix = table + ":";
         var previous = await db.AuditLogs.AsNoTracking().Where(a => a.TableName == RequestAuditTable
                 && a.RequestId == token && a.ActorUserId == actorId && a.EntityKey.StartsWith(keyPrefix))
-            .OrderBy(a => a.AuditId).Select(a => a.EntityKey).FirstOrDefaultAsync(ct);
+            .OrderBy(a => a.AuditId).Select(a => a.EntityKey).FirstOrDefaultAsync();
         long? previousId = null;
         if (previous != null)
         {
@@ -118,7 +118,7 @@ public sealed class DocumentCodeGenerator(EwmsDbContext db, TimeProvider clock)
                 AfterData = JsonSerializer.Serialize(new { Document = table, DocumentId = savedId }),
                 Reason = "Ghi nhận yêu cầu tạo hoặc mở lại phiếu để tránh tạo trùng."
             });
-            await db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync();
         }
         return result;
     }
@@ -129,10 +129,10 @@ public sealed class DocumentCodeGenerator(EwmsDbContext db, TimeProvider clock)
             throw new InvalidOperationException("Cấp mã chứng từ cần nằm trong giao dịch lưu chứng từ.");
     }
 
-    private Task LockAsync(string resource, CancellationToken ct) => db.Database.ExecuteSqlInterpolatedAsync($"""
+    private Task LockAsync(string resource) => db.Database.ExecuteSqlInterpolatedAsync($"""
         DECLARE @result int;
         EXEC @result = sys.sp_getapplock @Resource = {resource}, @LockMode = 'Exclusive',
              @LockOwner = 'Transaction', @LockTimeout = 15000;
         IF @result < 0 THROW 51320, N'Chưa cấp được mã chứng từ. Vui lòng thử lại.', 1;
-        """, ct);
+        """);
 }

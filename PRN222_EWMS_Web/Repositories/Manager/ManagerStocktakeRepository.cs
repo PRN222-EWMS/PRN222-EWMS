@@ -8,33 +8,33 @@ namespace PRN222_EWMS_Web.Repositories.Manager;
 
 public class ManagerStocktakeRepository(EwmsDbContext db) : IManagerStocktakeRepository
 {
-    public Task<bool> IsActiveManagerAsync(int userId, CancellationToken ct) => db.Users.AsNoTracking()
-        .AnyAsync(u => u.UserId == userId && u.Status == "ACTIVE" && u.Role.RoleName == "MANAGER", ct);
+    public Task<bool> IsActiveManagerAsync(int userId) => db.Users.AsNoTracking()
+        .AnyAsync(u => u.UserId == userId && u.Status == "ACTIVE" && u.Role.RoleName == "MANAGER");
 
-    public Task<List<ManagerStocktakeWarehouseOption>> GetWarehousesAsync(CancellationToken ct) => db.Warehouses.AsNoTracking()
+    public Task<List<ManagerStocktakeWarehouseOption>> GetWarehousesAsync() => db.Warehouses.AsNoTracking()
         .OrderBy(w => w.WarehouseName)
         .Select(w => new ManagerStocktakeWarehouseOption(w.WarehouseId, w.WarehouseName, w.WarehouseType, w.Status,
-            w.RentalStartDate, w.RentalEndDate)).ToListAsync(ct);
+            w.RentalStartDate, w.RentalEndDate)).ToListAsync();
 
-    public async Task<ManagerStocktakePlanningData?> GetPlanningDataAsync(int warehouseId, CancellationToken ct)
+    public async Task<ManagerStocktakePlanningData?> GetPlanningDataAsync(int warehouseId)
     {
         var warehouse = await db.Warehouses.AsNoTracking().Where(w => w.WarehouseId == warehouseId)
             .Select(w => new ManagerStocktakeWarehouseOption(w.WarehouseId, w.WarehouseName, w.WarehouseType, w.Status,
-                w.RentalStartDate, w.RentalEndDate)).SingleOrDefaultAsync(ct);
+                w.RentalStartDate, w.RentalEndDate)).SingleOrDefaultAsync();
         if (warehouse is null) return null;
 
-        var locations = await LocationOptions(warehouseId).ToListAsync(ct);
+        var locations = await LocationOptions(warehouseId).ToListAsync();
         var staff = await db.Users.AsNoTracking()
             .Where(u => u.WarehouseId == warehouseId && u.Status == "ACTIVE" && u.Role.RoleName == "WAREHOUSE_STAFF")
             .OrderBy(u => u.FullName).ThenBy(u => u.UserId)
-            .Select(u => new ManagerStocktakeStaffOption(u.UserId, u.FullName)).ToListAsync(ct);
+            .Select(u => new ManagerStocktakeStaffOption(u.UserId, u.FullName)).ToListAsync();
         // A stocktake counts physical stock regardless of receipt source, condition or reservation.
         var awaiting = await db.SerialItems.AsNoTracking().CountAsync(s => s.CurrentWarehouseId == warehouseId
-            && s.StockState == "IN_WAREHOUSE" && s.CurrentLocationId == null, ct);
+            && s.StockState == "IN_WAREHOUSE" && s.CurrentLocationId == null);
         return new ManagerStocktakePlanningData(warehouse, locations, staff, awaiting);
     }
 
-    public async Task<ManagerStocktakeListViewModel> GetListAsync(ManagerStocktakeFilter filter, CancellationToken ct)
+    public async Task<ManagerStocktakeListViewModel> GetListAsync(ManagerStocktakeFilter filter)
     {
         var query = db.Stocktakes.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(filter.Search)) query = query.Where(s => s.StocktakeCode.Contains(filter.Search));
@@ -51,7 +51,7 @@ public class ManagerStocktakeRepository(EwmsDbContext db) : IManagerStocktakeRep
             query = query.Where(s => s.PlannedAt < until);
         }
 
-        var total = await query.CountAsync(ct);
+        var total = await query.CountAsync();
         filter.Page = Math.Clamp(filter.Page, 1, Math.Max(1, (total + ManagerStocktakeListViewModel.PageSize - 1) / ManagerStocktakeListViewModel.PageSize));
         var page = await query.OrderByDescending(s => s.CreatedAt).ThenByDescending(s => s.StocktakeId)
             .Skip((filter.Page - 1) * ManagerStocktakeListViewModel.PageSize).Take(ManagerStocktakeListViewModel.PageSize)
@@ -62,22 +62,22 @@ public class ManagerStocktakeRepository(EwmsDbContext db) : IManagerStocktakeRep
                     || db.StocktakeObservations.Any(o => o.StocktakeId == s.StocktakeId)
                     || db.InventoryAdjustments.Any(a => a.StocktakeId == s.StocktakeId)
                     || db.StocktakeAssignments.Any(a => a.StocktakeId == s.StocktakeId && (a.Status == "IN_PROGRESS" || a.Status == "DONE"))
-            }).ToListAsync(ct);
+            }).ToListAsync();
         var ids = page.Select(s => s.Plan.StocktakeId).ToArray();
         var scopeCounts = await db.StocktakeScopes.AsNoTracking().Where(s => ids.Contains(s.StocktakeId))
-            .GroupBy(s => s.StocktakeId).Select(g => new { Id = g.Key, Count = g.Count() }).ToDictionaryAsync(s => s.Id, s => s.Count, ct);
+            .GroupBy(s => s.StocktakeId).Select(g => new { Id = g.Key, Count = g.Count() }).ToDictionaryAsync(s => s.Id, s => s.Count);
         var assignments = await db.StocktakeAssignments.AsNoTracking()
             .Where(a => ids.Contains(a.StocktakeId) && a.Status != "CANCELLED")
-            .Select(a => new { a.StocktakeId, a.UserId, a.Status }).ToListAsync(ct);
+            .Select(a => new { a.StocktakeId, a.UserId, a.Status }).ToListAsync();
         var rounds = await db.StocktakeRounds.AsNoTracking().Where(r => ids.Contains(r.StocktakeId))
-            .Select(r => new { r.StocktakeId, r.RoundNumber }).ToListAsync(ct);
+            .Select(r => new { r.StocktakeId, r.RoundNumber }).ToListAsync();
         var observations = await db.StocktakeObservations.AsNoTracking().Where(o => ids.Contains(o.StocktakeId))
             .GroupBy(o => new { o.StocktakeId, o.RoundNumber })
             .Select(g => new
             {
                 g.Key.StocktakeId, g.Key.RoundNumber,
                 Expected = g.Count(o => o.ExpectedQuantity == 1), Scanned = g.Count(o => o.ScannedAt != null)
-            }).ToListAsync(ct);
+            }).ToListAsync();
 
         var items = page.Select(row =>
         {
@@ -96,24 +96,24 @@ public class ManagerStocktakeRepository(EwmsDbContext db) : IManagerStocktakeRep
                 CanEdit = (plan.Status is "DRAFT" or "PLANNED") && plan.StartedAt is null && !row.HasExecution
             };
         }).ToList();
-        return new ManagerStocktakeListViewModel { Filter = filter, TotalCount = total, Items = items, Warehouses = await GetWarehousesAsync(ct) };
+        return new ManagerStocktakeListViewModel { Filter = filter, TotalCount = total, Items = items, Warehouses = await GetWarehousesAsync() };
     }
 
-    public async Task<ManagerStocktakeDetailViewModel?> GetDetailsAsync(long id, ManagerStocktakeDetailFilter filter, CancellationToken ct)
+    public async Task<ManagerStocktakeDetailViewModel?> GetDetailsAsync(long id, ManagerStocktakeDetailFilter filter)
     {
         var plan = await db.Stocktakes.AsNoTracking().Include(s => s.Warehouse).Include(s => s.CreatedByUser)
-            .SingleOrDefaultAsync(s => s.StocktakeId == id, ct);
+            .SingleOrDefaultAsync(s => s.StocktakeId == id);
         if (plan is null) return null;
 
-        var locations = await LocationOptions(plan.WarehouseId).ToListAsync(ct);
+        var locations = await LocationOptions(plan.WarehouseId).ToListAsync();
         var paths = BuildPaths(locations);
-        var scopes = await GetScopesAsync(id, ct);
-        var assignments = await GetAssignmentsAsync(id, ct);
+        var scopes = await GetScopesAsync(id);
+        var assignments = await GetAssignmentsAsync(id);
         var rounds = await db.StocktakeRounds.AsNoTracking().Where(r => r.StocktakeId == id)
             .OrderBy(r => r.RoundNumber)
             .Select(r => new ManagerStocktakeRoundView(r.RoundNumber, r.Status, r.StartedAt, r.ClosedAt, r.StartedByUser.FullName, r.RecountReason))
-            .ToListAsync(ct);
-        var hasExecution = await HasExecutionDataAsync(id, ct);
+            .ToListAsync();
+        var hasExecution = await HasExecutionDataAsync(id);
         var editable = (plan.Status is "DRAFT" or "PLANNED") && plan.StartedAt is null && !hasExecution;
         var model = new ManagerStocktakeDetailViewModel
         {
@@ -136,7 +136,7 @@ public class ManagerStocktakeRepository(EwmsDbContext db) : IManagerStocktakeRep
             model.Warnings.Add("Kế hoạch có hàng chờ xếp nhưng chưa phân công người kiểm phần này. Hãy bổ sung trước khi bắt đầu.");
 
         model.OriginalCapturedAt = await db.StocktakeObservations.AsNoTracking().Where(o => o.StocktakeId == id && o.RoundNumber == 1)
-            .Select(o => (DateTime?)o.CapturedAt).MinAsync(ct);
+            .Select(o => (DateTime?)o.CapturedAt).MinAsync();
         if (rounds.Count == 0) return model;
 
         if (filter.RoundNumber.HasValue && rounds.All(r => r.Number != filter.RoundNumber.Value))
@@ -144,20 +144,20 @@ public class ManagerStocktakeRepository(EwmsDbContext db) : IManagerStocktakeRep
         filter.RoundNumber ??= rounds[^1].Number;
         var round = rounds.Single(r => r.Number == filter.RoundNumber.Value);
         var roundQuery = db.StocktakeObservations.AsNoTracking().Where(o => o.StocktakeId == id && o.RoundNumber == round.Number);
-        model.ExpectedCount = await roundQuery.CountAsync(o => o.ExpectedQuantity == 1, ct);
-        model.ScannedCount = await roundQuery.CountAsync(o => o.ScannedAt != null, ct);
+        model.ExpectedCount = await roundQuery.CountAsync(o => o.ExpectedQuantity == 1);
+        model.ScannedCount = await roundQuery.CountAsync(o => o.ScannedAt != null);
         var effective = roundQuery.Select(o => new
         {
             Observation = o,
             Difference = round.Status == "OPEN" && o.ExpectedQuantity == 1 && o.ActualQuantity == 0 && o.ScannedAt == null
                 ? "PENDING" : o.DifferenceType
         });
-        model.DiscrepancyCount = await effective.CountAsync(o => o.Difference != "PENDING" && o.Difference != "MATCHED", ct);
+        model.DiscrepancyCount = await effective.CountAsync(o => o.Difference != "PENDING" && o.Difference != "MATCHED");
         if (!string.IsNullOrWhiteSpace(filter.Search)) effective = effective.Where(o => o.Observation.ScannedSerial.Contains(filter.Search)
             || (o.Observation.Product != null && (o.Observation.Product.ProductName.Contains(filter.Search)
                 || o.Observation.Product.ProductCode.Contains(filter.Search))));
         if (!string.IsNullOrWhiteSpace(filter.DifferenceType)) effective = effective.Where(o => o.Difference == filter.DifferenceType);
-        model.ObservationCount = await effective.CountAsync(ct);
+        model.ObservationCount = await effective.CountAsync();
         filter.Page = Math.Clamp(filter.Page, 1, model.TotalPages);
         var rows = await effective.OrderBy(o => o.Observation.ScannedSerial).ThenBy(o => o.Observation.ObservationId)
             .Skip((filter.Page - 1) * ManagerStocktakeDetailViewModel.PageSize).Take(ManagerStocktakeDetailViewModel.PageSize)
@@ -165,7 +165,7 @@ public class ManagerStocktakeRepository(EwmsDbContext db) : IManagerStocktakeRep
             {
                 Item = o.Observation, o.Difference, Product = o.Observation.Product == null ? null : o.Observation.Product.ProductName,
                 Scanner = o.Observation.ScannedByUser == null ? null : o.Observation.ScannedByUser.FullName
-            }).ToListAsync(ct);
+            }).ToListAsync();
 
         // Actual locations can be outside the expected warehouse when recording a discrepancy.
         var extraIds = rows.SelectMany(r => new[] { r.Item.ExpectedLocationId, r.Item.ActualLocationId })
@@ -173,12 +173,12 @@ public class ManagerStocktakeRepository(EwmsDbContext db) : IManagerStocktakeRep
         if (extraIds.Length > 0)
         {
             var otherWarehouses = await db.StorageLocations.AsNoTracking().Where(l => extraIds.Contains(l.LocationId))
-                .Select(l => l.WarehouseId).Distinct().ToListAsync(ct);
+                .Select(l => l.WarehouseId).Distinct().ToListAsync();
             foreach (var warehouseId in otherWarehouses)
             {
                 var warehouseName = await db.Warehouses.AsNoTracking().Where(w => w.WarehouseId == warehouseId)
-                    .Select(w => w.WarehouseName).SingleAsync(ct);
-                var otherPaths = BuildPaths(await LocationOptions(warehouseId).ToListAsync(ct));
+                    .Select(w => w.WarehouseName).SingleAsync();
+                var otherPaths = BuildPaths(await LocationOptions(warehouseId).ToListAsync());
                 foreach (var pair in otherPaths) paths.TryAdd(pair.Key, $"{warehouseName} / {pair.Value}");
             }
         }
@@ -192,31 +192,31 @@ public class ManagerStocktakeRepository(EwmsDbContext db) : IManagerStocktakeRep
         return model;
     }
 
-    public Task<Stocktake?> FindAsync(long id, bool forUpdate, CancellationToken ct)
+    public Task<Stocktake?> FindAsync(long id, bool forUpdate)
     {
         if (forUpdate && db.Database.CurrentTransaction is null)
             throw new InvalidOperationException("Locking a stocktake requires a transaction.");
         var query = forUpdate
             ? db.Stocktakes.FromSqlInterpolated($"SELECT * FROM dbo.Stocktake WITH (UPDLOCK,HOLDLOCK) WHERE StocktakeID={id}")
             : db.Stocktakes;
-        return query.AsTracking().SingleOrDefaultAsync(s => s.StocktakeId == id, ct);
+        return query.AsTracking().SingleOrDefaultAsync(s => s.StocktakeId == id);
     }
 
-    public Task<List<StocktakeScope>> GetScopesAsync(long id, CancellationToken ct) => db.StocktakeScopes.AsNoTracking()
-        .Where(s => s.StocktakeId == id).OrderBy(s => s.ScopeId).ToListAsync(ct);
+    public Task<List<StocktakeScope>> GetScopesAsync(long id) => db.StocktakeScopes.AsNoTracking()
+        .Where(s => s.StocktakeId == id).OrderBy(s => s.ScopeId).ToListAsync();
 
-    public Task<List<StocktakeAssignment>> GetAssignmentsAsync(long id, CancellationToken ct) => db.StocktakeAssignments.AsNoTracking()
-        .Where(a => a.StocktakeId == id).Include(a => a.User).OrderBy(a => a.AssignmentId).ToListAsync(ct);
+    public Task<List<StocktakeAssignment>> GetAssignmentsAsync(long id) => db.StocktakeAssignments.AsNoTracking()
+        .Where(a => a.StocktakeId == id).Include(a => a.User).OrderBy(a => a.AssignmentId).ToListAsync();
 
-    public async Task<bool> HasExecutionDataAsync(long id, CancellationToken ct) =>
-        await db.StocktakeRounds.AsNoTracking().AnyAsync(r => r.StocktakeId == id, ct)
-        || await db.StocktakeObservations.AsNoTracking().AnyAsync(o => o.StocktakeId == id, ct)
-        || await db.InventoryAdjustments.AsNoTracking().AnyAsync(a => a.StocktakeId == id, ct)
-        || await db.StocktakeAssignments.AsNoTracking().AnyAsync(a => a.StocktakeId == id && (a.Status == "IN_PROGRESS" || a.Status == "DONE"), ct);
+    public async Task<bool> HasExecutionDataAsync(long id) =>
+        await db.StocktakeRounds.AsNoTracking().AnyAsync(r => r.StocktakeId == id)
+        || await db.StocktakeObservations.AsNoTracking().AnyAsync(o => o.StocktakeId == id)
+        || await db.InventoryAdjustments.AsNoTracking().AnyAsync(a => a.StocktakeId == id)
+        || await db.StocktakeAssignments.AsNoTracking().AnyAsync(a => a.StocktakeId == id && (a.Status == "IN_PROGRESS" || a.Status == "DONE"));
 
-    public async Task<T> InTransactionAsync<T>(int actorId, Func<Task<T>> operation, CancellationToken ct)
+    public async Task<T> InTransactionAsync<T>(int actorId, Func<Task<T>> operation)
     {
-        await db.Database.OpenConnectionAsync(ct);
+        await db.Database.OpenConnectionAsync();
         object? previousActor = null;
         var contextChanged = false;
         Exception? operationFailure = null;
@@ -225,18 +225,18 @@ public class ManagerStocktakeRepository(EwmsDbContext db) : IManagerStocktakeRep
             await using (var command = db.Database.GetDbConnection().CreateCommand())
             {
                 command.CommandText = "SELECT SESSION_CONTEXT(N'ActorUserID')";
-                previousActor = await command.ExecuteScalarAsync(ct);
+                previousActor = await command.ExecuteScalarAsync();
             }
-            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
-            await db.Database.ExecuteSqlInterpolatedAsync($"EXEC sys.sp_set_session_context @key=N'ActorUserID', @value={actorId}", ct);
+            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            await db.Database.ExecuteSqlInterpolatedAsync($"EXEC sys.sp_set_session_context @key=N'ActorUserID', @value={actorId}");
             contextChanged = true;
             var result = await operation();
             // Cleanup must succeed before commit, otherwise the operation rolls back.
             var previousActorParameter = new SqlParameter("@previousActor", SqlDbType.Variant) { Value = previousActor ?? DBNull.Value };
             await db.Database.ExecuteSqlRawAsync("EXEC sys.sp_set_session_context @key=N'ActorUserID', @value=@previousActor",
-                new object[] { previousActorParameter }, CancellationToken.None);
+                new object[] { previousActorParameter });
             contextChanged = false;
-            await transaction.CommitAsync(ct);
+            await transaction.CommitAsync();
             return result;
         }
         catch (Exception error)
@@ -252,7 +252,7 @@ public class ManagerStocktakeRepository(EwmsDbContext db) : IManagerStocktakeRep
                 {
                     var parameter = new SqlParameter("@previousActor", SqlDbType.Variant) { Value = previousActor ?? DBNull.Value };
                     await db.Database.ExecuteSqlRawAsync("EXEC sys.sp_set_session_context @key=N'ActorUserID', @value=@previousActor",
-                        new object[] { parameter }, CancellationToken.None);
+                        new object[] { parameter });
                 }
             }
             catch (Exception restoreFailure)
@@ -267,30 +267,30 @@ public class ManagerStocktakeRepository(EwmsDbContext db) : IManagerStocktakeRep
         }
     }
 
-    public async Task InsertHeaderAsync(Stocktake plan, CancellationToken ct)
+    public async Task InsertHeaderAsync(Stocktake plan)
     {
         RequireTransaction();
         db.Stocktakes.Add(plan);
-        await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync();
     }
 
-    public async Task SaveHeaderAsync(Stocktake plan, CancellationToken ct)
+    public async Task SaveHeaderAsync(Stocktake plan)
     {
         RequireTransaction();
         // Updating children alone does not advance the header's RowVersion.
         db.Entry(plan).Property(s => s.Note).IsModified = true;
-        await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync();
     }
 
-    public async Task ClearPlanChildrenAsync(long id, CancellationToken ct)
+    public async Task ClearPlanChildrenAsync(long id)
     {
         RequireTransaction();
-        await db.StocktakeAssignments.Where(a => a.StocktakeId == id).ExecuteDeleteAsync(ct);
-        await db.StocktakeScopes.Where(s => s.StocktakeId == id).ExecuteDeleteAsync(ct);
+        await db.StocktakeAssignments.Where(a => a.StocktakeId == id).ExecuteDeleteAsync();
+        await db.StocktakeScopes.Where(s => s.StocktakeId == id).ExecuteDeleteAsync();
     }
 
     public async Task InsertPlanChildrenAsync(Stocktake plan, IReadOnlyCollection<int> scopeIds,
-        IReadOnlyCollection<ManagerStocktakeAssignmentInput> assignments, CancellationToken ct)
+        IReadOnlyCollection<ManagerStocktakeAssignmentInput> assignments)
     {
         RequireTransaction();
         db.StocktakeScopes.AddRange(scopeIds.Select(id => new StocktakeScope
@@ -303,14 +303,14 @@ public class ManagerStocktakeRepository(EwmsDbContext db) : IManagerStocktakeRep
             StocktakeId = plan.StocktakeId, WarehouseId = plan.WarehouseId, UserId = a.UserId,
             LocationId = a.LocationId, ScopeKind = a.ScopeKind, Status = "ASSIGNED", AssignedAt = assignedAt
         }));
-        await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync();
     }
 
-    public async Task DeleteHeaderAsync(Stocktake plan, CancellationToken ct)
+    public async Task DeleteHeaderAsync(Stocktake plan)
     {
         RequireTransaction();
         db.Stocktakes.Remove(plan);
-        await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync();
     }
 
     private IQueryable<ManagerStocktakeLocationOption> LocationOptions(int warehouseId) => db.StorageLocations.AsNoTracking()

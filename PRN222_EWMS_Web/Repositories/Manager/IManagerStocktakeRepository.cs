@@ -5,19 +5,19 @@ namespace PRN222_EWMS_Web.Repositories.Manager;
 
 public interface IManagerStocktakeRepository
 {
-    Task<bool> IsActiveManagerAsync(int userId, CancellationToken ct);
-    Task<List<ManagerStocktakeWarehouseOption>> GetWarehousesAsync(CancellationToken ct);
-    Task<ManagerStocktakePlanningData?> GetPlanningDataAsync(int warehouseId, CancellationToken ct);
-    Task<ManagerStocktakeListViewModel> GetListAsync(ManagerStocktakeFilter filter, CancellationToken ct);
-    Task<ManagerStocktakeDetailViewModel?> GetDetailsAsync(long id, ManagerStocktakeDetailFilter filter, CancellationToken ct);
-    Task<Stocktake?> FindAsync(long id, bool forUpdate, CancellationToken ct);
-    Task<List<StocktakeScope>> GetScopesAsync(long id, CancellationToken ct);
-    Task<List<StocktakeAssignment>> GetAssignmentsAsync(long id, CancellationToken ct);
-    Task<bool> HasExecutionDataAsync(long id, CancellationToken ct);
-    Task<T> InTransactionAsync<T>(int actorId, Func<Task<T>> operation, CancellationToken ct);
-    Task InsertHeaderAsync(Stocktake plan, CancellationToken ct);
-    Task SaveHeaderAsync(Stocktake plan, CancellationToken ct);
-    Task ClearPlanChildrenAsync(long id, CancellationToken ct);
-    Task InsertPlanChildrenAsync(Stocktake plan, IReadOnlyCollection<int> scopeIds, IReadOnlyCollection<ManagerStocktakeAssignmentInput> assignments, CancellationToken ct);
-    Task DeleteHeaderAsync(Stocktake plan, CancellationToken ct);
+    Task<bool> IsActiveManagerAsync(int userId);
+    Task<List<ManagerStocktakeWarehouseOption>> GetWarehousesAsync();
+    Task<ManagerStocktakePlanningData?> GetPlanningDataAsync(int warehouseId);
+    Task<ManagerStocktakeListViewModel> GetListAsync(ManagerStocktakeFilter filter);
+    Task<ManagerStocktakeDetailViewModel?> GetDetailsAsync(long id, ManagerStocktakeDetailFilter filter);
+    Task<Stocktake?> FindAsync(long id, bool forUpdate);
+    Task<List<StocktakeScope>> GetScopesAsync(long id);
+    Task<List<StocktakeAssignment>> GetAssignmentsAsync(long id);
+    Task<bool> HasExecutionDataAsync(long id);
+    Task<T> InTransactionAsync<T>(int actorId, Func<Task<T>> operation);
+    Task InsertHeaderAsync(Stocktake plan);
+    Task SaveHeaderAsync(Stocktake plan);
+    Task ClearPlanChildrenAsync(long id);
+    Task InsertPlanChildrenAsync(Stocktake plan, IReadOnlyCollection<int> scopeIds, IReadOnlyCollection<ManagerStocktakeAssignmentInput> assignments);
+    Task DeleteHeaderAsync(Stocktake plan);
 }

@@ -263,16 +263,16 @@ public class WarehouseCapacityEngine(EwmsDbContext db, ISourceReservationService
     }
 
     public async Task<IReadOnlyDictionary<int, string>> GetPlacementErrorsAsync(int warehouseId, long serialId,
-        IReadOnlyCollection<int> locationIds, CancellationToken ct = default) =>
-        (await AssessPlacementsAsync(warehouseId, serialId, locationIds, ct)).Errors;
+        IReadOnlyCollection<int> locationIds) =>
+        (await AssessPlacementsAsync(warehouseId, serialId, locationIds)).Errors;
 
     public async Task<PlacementCapacityAssessment> AssessPlacementsAsync(int warehouseId, long serialId,
-        IReadOnlyCollection<int> locationIds, CancellationToken ct = default)
+        IReadOnlyCollection<int> locationIds)
     {
         var assessment = new PlacementCapacityAssessment();
         var errors = assessment.Errors;
         if (locationIds.Count == 0) return assessment;
-        var s = await ReadAsync(new() { WarehouseId = warehouseId }, ct);
+        var s = await ReadAsync(new() { WarehouseId = warehouseId }, default);
         var serial = s.Serials.SingleOrDefault(i => i.Id == serialId);
         if (s.Errors.Count > 0 || serial == null || serial.LocationId != null || s.AwaitingLocked)
         {
@@ -280,15 +280,15 @@ public class WarehouseCapacityEngine(EwmsDbContext db, ISourceReservationService
             foreach (var id in locationIds) errors[id] = reason;
             return assessment;
         }
-        return AssessPlacementCandidates(s, serial, serial.Condition, locationIds, ct);
+        return AssessPlacementCandidates(s, serial, serial.Condition, locationIds);
     }
 
     public async Task<PlacementCapacityAssessment> AssessStocktakePlacementsAsync(int warehouseId, long serialId, string condition,
-        IReadOnlyCollection<int> locationIds, IReadOnlyCollection<long> stocktakeIds, CancellationToken ct = default)
+        IReadOnlyCollection<int> locationIds, IReadOnlyCollection<long> stocktakeIds)
     {
         var assessment = new PlacementCapacityAssessment();
         if (locationIds.Count == 0) return assessment;
-        var s = await ReadAsync(new() { WarehouseId = warehouseId }, ct, stocktakeIds);
+        var s = await ReadAsync(new() { WarehouseId = warehouseId }, default, stocktakeIds);
         var serial = s.Serials.SingleOrDefault(i => i.Id == serialId);
         if (s.Errors.Count > 0 || serial == null || condition is not ("GOOD" or "DAMAGED")
             || stocktakeIds.Count == 0 || PlacementLocked(s, serial.LocationId))
@@ -297,7 +297,7 @@ public class WarehouseCapacityEngine(EwmsDbContext db, ISourceReservationService
             foreach (var id in locationIds) assessment.Errors[id] = reason;
             return assessment;
         }
-        return AssessPlacementCandidates(s, serial, condition, locationIds, ct);
+        return AssessPlacementCandidates(s, serial, condition, locationIds);
     }
 
     private static bool PlacementLocked(Snapshot s, int? locationId)
@@ -313,7 +313,7 @@ public class WarehouseCapacityEngine(EwmsDbContext db, ISourceReservationService
     }
 
     private static PlacementCapacityAssessment AssessPlacementCandidates(Snapshot s, PositionedStock serial, string condition,
-        IReadOnlyCollection<int> locationIds, CancellationToken ct)
+        IReadOnlyCollection<int> locationIds)
     {
         var assessment = new PlacementCapacityAssessment();
         var load = new CapacityLoad(s.Profile(serial.ProductId), condition, 1);
@@ -326,7 +326,6 @@ public class WarehouseCapacityEngine(EwmsDbContext db, ISourceReservationService
                 + string.Join(" ", existingProblems));
         foreach (var id in locationIds.Distinct())
         {
-            ct.ThrowIfCancellationRequested();
             var slots = s.Slots.Select(l => l.Copy()).ToList();
             // Remove this serial once from its registered place before simulating the new place/condition.
             // Staying in the same place therefore does not count the serial twice.

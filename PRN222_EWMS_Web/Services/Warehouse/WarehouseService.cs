@@ -11,13 +11,13 @@ namespace PRN222_EWMS_Web.Services.Warehouse;
 
 public class WarehouseService(IWarehouseRepository warehouses) : IWarehouseService
 {
-    public async Task<WarehouseListViewModel> GetListAsync(WarehouseListFilter filter, CancellationToken cancellationToken = default)
+    public async Task<WarehouseListViewModel> GetListAsync(WarehouseListFilter filter)
     {
         var search = string.IsNullOrWhiteSpace(filter.Search) ? null : filter.Search.Trim();
         var warehouseType = string.IsNullOrWhiteSpace(filter.WarehouseType) ? null : filter.WarehouseType;
         var status = string.IsNullOrWhiteSpace(filter.Status) ? null : filter.Status;
         var result = await warehouses.GetPageAsync(search, warehouseType, status,
-            filter.RentalFrom, filter.RentalTo, filter.Page, WarehouseListViewModel.DefaultPageSize, cancellationToken);
+            filter.RentalFrom, filter.RentalTo, filter.Page, WarehouseListViewModel.DefaultPageSize);
 
         return new WarehouseListViewModel(filter)
         {
@@ -32,12 +32,12 @@ public class WarehouseService(IWarehouseRepository warehouses) : IWarehouseServi
         };
     }
 
-    public async Task<WarehouseDetailsViewModel?> GetDetailsAsync(int id, CancellationToken cancellationToken = default)
+    public async Task<WarehouseDetailsViewModel?> GetDetailsAsync(int id)
     {
-        var warehouse = await warehouses.FindByIdAsync(id, cancellationToken);
+        var warehouse = await warehouses.FindByIdAsync(id);
         if (warehouse is null) return null;
-        var locations = await warehouses.GetLocationsAsync(id, cancellationToken);
-        var rules = await warehouses.GetZoneRulesAsync(id, cancellationToken);
+        var locations = await warehouses.GetLocationsAsync(id);
+        var rules = await warehouses.GetZoneRulesAsync(id);
         var rulesByZone = rules.ToLookup(r => r.ZoneLocationId);
         var nodes = locations.Select(l => new StorageLocationViewModel
         {
@@ -79,58 +79,58 @@ public class WarehouseService(IWarehouseRepository warehouses) : IWarehouseServi
             RackCount = nodes.Count(n => n.LocationType == "RACK"), TierCount = nodes.Count(n => n.LocationType == "TIER"),
             FloorSlotCount = nodes.Count(n => n.LocationType == "FLOOR_SLOT"),
             RackVolumeM3 = nodes.Sum(n => n.VolumeM3 ?? 0), FloorAreaM2 = nodes.Sum(n => n.FloorAreaM2 ?? 0),
-            HasStoredItems = await warehouses.HasStockAsync(id, null, cancellationToken),
+            HasStoredItems = await warehouses.HasStockAsync(id, null),
             SetupIssues = GetSetupIssues(locations, rules, attached)
         };
     }
 
-    public async Task<WarehouseFormViewModel?> GetEditAsync(int id, CancellationToken cancellationToken = default)
+    public async Task<WarehouseFormViewModel?> GetEditAsync(int id)
     {
-        var w = await warehouses.FindByIdAsync(id, cancellationToken);
+        var w = await warehouses.FindByIdAsync(id);
         return w is null ? null : new WarehouseFormViewModel
         {
             WarehouseId = w.WarehouseId, WarehouseName = w.WarehouseName, Address = w.Address,
             WarehouseType = w.WarehouseType, Status = w.Status,
             RentalStartDate = w.RentalStartDate, RentalEndDate = w.RentalEndDate,
             RowVersion = Convert.ToBase64String(w.RowVersion),
-            IsOccupied = await warehouses.HasStockAsync(id, null, cancellationToken),
-            IsLocked = (await warehouses.GetLockedScopeRootsAsync(id, cancellationToken)).Count > 0
+            IsOccupied = await warehouses.HasStockAsync(id, null),
+            IsLocked = (await warehouses.GetLockedScopeRootsAsync(id)).Count > 0
         };
     }
 
-    public async Task<WarehouseSaveResult> CreateAsync(WarehouseFormViewModel model, CancellationToken cancellationToken = default)
+    public async Task<WarehouseSaveResult> CreateAsync(WarehouseFormViewModel model)
     {
-        var errors = await ValidateFormAsync(model, null, cancellationToken);
+        var errors = await ValidateFormAsync(model, null);
         if (errors.Count > 0) return new() { Errors = errors };
         var warehouse = new WarehouseEntity { RowVersion = [] };
         ApplyForm(warehouse, model);
-        try { await warehouses.AddAsync(warehouse, cancellationToken); }
+        try { await warehouses.AddAsync(warehouse); }
         catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
         { return DuplicateName(); }
         return new() { WarehouseId = warehouse.WarehouseId };
     }
 
-    public async Task<WarehouseSaveResult> UpdateAsync(int id, WarehouseFormViewModel model, CancellationToken cancellationToken = default)
+    public async Task<WarehouseSaveResult> UpdateAsync(int id, WarehouseFormViewModel model)
     {
         try
         {
-            return await warehouses.InTransactionAsync(id, async ct =>
+            return await warehouses.InTransactionAsync(id, async () =>
             {
-                var warehouse = await warehouses.FindByIdAsync(id, ct);
+                var warehouse = await warehouses.FindByIdAsync(id);
                 if (warehouse is null) return new WarehouseSaveResult { NotFound = true };
-                var occupied = await warehouses.HasStockAsync(id, null, ct);
-                var locked = (await warehouses.GetLockedScopeRootsAsync(id, ct)).Count > 0;
+                var occupied = await warehouses.HasStockAsync(id, null);
+                var locked = (await warehouses.GetLockedScopeRootsAsync(id)).Count > 0;
                 if ((occupied || locked) && !IsRentalExtension(warehouse, model))
                     return Problem("Kho đang chứa hàng hoặc bị khóa kiểm kê. Chỉ được gia hạn riêng ngày kết thúc thuê; các thông tin khác phải giữ nguyên.", conflict: true);
-                var errors = await ValidateFormAsync(model, id, ct);
+                var errors = await ValidateFormAsync(model, id);
                 var rowVersion = ParseRowVersion(model.RowVersion);
                 if (rowVersion is null || !warehouse.RowVersion.SequenceEqual(rowVersion))
                     return StaleData();
                 if (errors.Count > 0) return new WarehouseSaveResult { Errors = errors };
                 ApplyForm(warehouse, model);
-                await warehouses.UpdateAsync(warehouse, rowVersion, ct);
+                await warehouses.UpdateAsync(warehouse, rowVersion);
                 return new WarehouseSaveResult { WarehouseId = warehouse.WarehouseId };
-            }, cancellationToken);
+            });
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -148,11 +148,11 @@ public class WarehouseService(IWarehouseRepository warehouses) : IWarehouseServi
         && model.RentalEndDate >= DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
 
     public async Task<StorageLocationFormViewModel?> GetLocationFormAsync(int warehouseId, int? locationId,
-        int? parentId, CancellationToken cancellationToken = default)
+        int? parentId)
     {
-        var warehouse = await warehouses.FindByIdAsync(warehouseId, cancellationToken);
+        var warehouse = await warehouses.FindByIdAsync(warehouseId);
         if (warehouse is null) return null;
-        var locations = await warehouses.GetLocationsAsync(warehouseId, cancellationToken);
+        var locations = await warehouses.GetLocationsAsync(warehouseId);
         StorageLocationFormViewModel model;
         if (locationId.HasValue)
         {
@@ -160,7 +160,7 @@ public class WarehouseService(IWarehouseRepository warehouses) : IWarehouseServi
             if (location is null) return null;
             model = ToLocationForm(location);
             if (location.LocationType == "ZONE")
-                model.Rules = (await warehouses.GetZoneRulesAsync(warehouseId, cancellationToken))
+                model.Rules = (await warehouses.GetZoneRulesAsync(warehouseId))
                     .Where(r => r.ZoneLocationId == locationId)
                     .Select(r => new ZoneRuleFormViewModel { CategoryId = r.CategoryId, BrandId = r.BrandId }).ToList();
         }
@@ -177,14 +177,14 @@ public class WarehouseService(IWarehouseRepository warehouses) : IWarehouseServi
                 ConditionPolicy = type is "RACK" or "FLOOR_SLOT" ? "GOOD" : null
             };
         }
-        await PopulateLocationOptionsAsync(model, cancellationToken);
+        await PopulateLocationOptionsAsync(model);
         return model;
     }
 
-    public async Task PopulateLocationOptionsAsync(StorageLocationFormViewModel model, CancellationToken cancellationToken = default)
+    public async Task PopulateLocationOptionsAsync(StorageLocationFormViewModel model)
     {
-        var warehouse = await warehouses.FindByIdAsync(model.WarehouseId, cancellationToken);
-        var locations = await warehouses.GetLocationsAsync(model.WarehouseId, cancellationToken);
+        var warehouse = await warehouses.FindByIdAsync(model.WarehouseId);
+        var locations = await warehouses.GetLocationsAsync(model.WarehouseId);
         var current = locations.SingleOrDefault(l => l.LocationId == model.LocationId);
         var parentId = current?.ParentLocationId ?? model.ParentLocationId;
         var parent = locations.SingleOrDefault(l => l.LocationId == parentId);
@@ -194,25 +194,25 @@ public class WarehouseService(IWarehouseRepository warehouses) : IWarehouseServi
         model.HasChildren = current is not null && locations.Any(l => l.ParentLocationId == current.LocationId);
         var scopeId = current?.LocationId ?? parentId;
         model.IsOccupied = scopeId.HasValue && await warehouses.HasStockAsync(model.WarehouseId,
-            SubtreeIds(locations, scopeId.Value), cancellationToken);
-        model.IsLocked = IsScopeLocked(locations, await warehouses.GetLockedScopeRootsAsync(model.WarehouseId, cancellationToken),
+            SubtreeIds(locations, scopeId.Value));
+        model.IsLocked = IsScopeLocked(locations, await warehouses.GetLockedScopeRootsAsync(model.WarehouseId),
             scopeId, includeDescendants: current is not null);
-        model.Categories = (await warehouses.GetCategoriesAsync(cancellationToken))
+        model.Categories = (await warehouses.GetCategoriesAsync())
             .Select(c => new SelectListItem(c.CategoryName, c.CategoryId.ToString())).ToList();
-        model.Brands = (await warehouses.GetBrandsAsync(cancellationToken))
+        model.Brands = (await warehouses.GetBrandsAsync())
             .Select(b => new SelectListItem(b.BrandName + (b.Status == "ACTIVE" ? "" : " (ngừng hoạt động)"), b.BrandId.ToString())).ToList();
     }
 
     public async Task<WarehouseSaveResult> SaveLocationAsync(int warehouseId, int? locationId,
-        StorageLocationFormViewModel model, CancellationToken cancellationToken = default)
+        StorageLocationFormViewModel model)
     {
         try
         {
-            return await warehouses.InTransactionAsync(warehouseId, async ct =>
+            return await warehouses.InTransactionAsync(warehouseId, async () =>
             {
-                if (await warehouses.FindByIdAsync(warehouseId, ct) is null)
+                if (await warehouses.FindByIdAsync(warehouseId) is null)
                     return new WarehouseSaveResult { NotFound = true };
-                var locations = await warehouses.GetLocationsAsync(warehouseId, ct);
+                var locations = await warehouses.GetLocationsAsync(warehouseId);
                 var current = locationId.HasValue ? locations.SingleOrDefault(l => l.LocationId == locationId) : null;
                 if (locationId.HasValue && current is null) return new WarehouseSaveResult { NotFound = true };
                 if (current is not null && (current.ParentLocationId != model.ParentLocationId || current.LocationType != model.LocationType))
@@ -230,9 +230,9 @@ public class WarehouseService(IWarehouseRepository warehouses) : IWarehouseServi
                 // Adding a child also changes its parent's structure, so that parent branch must be empty.
                 var scopeId = current?.LocationId ?? parent?.LocationId;
                 var scopeIds = scopeId.HasValue ? SubtreeIds(locations, scopeId.Value) : [];
-                if (scopeId.HasValue && await warehouses.HasStockAsync(warehouseId, scopeIds, ct))
+                if (scopeId.HasValue && await warehouses.HasStockAsync(warehouseId, scopeIds))
                     return Problem("Vị trí hoặc nhánh cha đang chứa hàng. Chỉ được sửa cấu hình hoặc thêm vị trí con khi phạm vi bị ảnh hưởng đã hết hàng.", conflict: true);
-                if (IsScopeLocked(locations, await warehouses.GetLockedScopeRootsAsync(warehouseId, ct), scopeId, current is not null))
+                if (IsScopeLocked(locations, await warehouses.GetLockedScopeRootsAsync(warehouseId), scopeId, current is not null))
                     return Problem("Phạm vi này đang bị khóa kiểm kê. Chưa thể thay đổi cấu trúc hoặc quy tắc.", conflict: true);
 
                 var rowVersion = current is null ? null : ParseRowVersion(model.RowVersion);
@@ -243,15 +243,15 @@ public class WarehouseService(IWarehouseRepository warehouses) : IWarehouseServi
                     && locations.Any(l => l.ParentLocationId == current.LocationId))
                     errors[nameof(model.StorageType)] = "Dãy đã có vị trí con nên không thể đổi giữa kệ và sàn. Hãy ngừng sử dụng nhánh cũ khi hết hàng rồi tạo dãy mới.";
                 if (errors.Count == 0 && await warehouses.LocationNameExistsAsync(warehouseId, model.ParentLocationId,
-                    model.LocationName.Trim(), locationId, ct))
+                    model.LocationName.Trim(), locationId))
                     errors[nameof(model.LocationName)] = "Tên vị trí đã tồn tại trong cùng cấp cha, kể cả vị trí ngừng hoạt động.";
 
                 var rules = new List<ZoneStorageRule>();
                 if (model.LocationType == "ZONE" && model.ZoneType == "STANDARD")
                 {
-                    var categories = (await warehouses.GetCategoriesAsync(ct)).Select(c => c.CategoryId).ToHashSet();
-                    var brands = (await warehouses.GetBrandsAsync(ct)).ToDictionary(b => b.BrandId);
-                    var existingPairs = current is null ? [] : (await warehouses.GetZoneRulesAsync(warehouseId, ct))
+                    var categories = (await warehouses.GetCategoriesAsync()).Select(c => c.CategoryId).ToHashSet();
+                    var brands = (await warehouses.GetBrandsAsync()).ToDictionary(b => b.BrandId);
+                    var existingPairs = current is null ? [] : (await warehouses.GetZoneRulesAsync(warehouseId))
                         .Where(r => r.ZoneLocationId == current.LocationId).Select(r => (r.CategoryId, r.BrandId)).ToHashSet();
                     var pairs = new HashSet<(int, int?)>();
                     for (var i = 0; i < model.Rules.Count; i++)
@@ -284,9 +284,9 @@ public class WarehouseService(IWarehouseRepository warehouses) : IWarehouseServi
                     RowVersion = current?.RowVersion ?? []
                 };
                 await warehouses.SaveLocationAsync(location, rowVersion, rules,
-                    current is not null && model.Status == "INACTIVE" ? scopeIds : [], ct);
+                    current is not null && model.Status == "INACTIVE" ? scopeIds : []);
                 return new WarehouseSaveResult { WarehouseId = warehouseId, LocationId = location.LocationId };
-            }, cancellationToken);
+            });
         }
         catch (DbUpdateConcurrencyException) { return StaleData(); }
         catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
@@ -389,13 +389,13 @@ public class WarehouseService(IWarehouseRepository warehouses) : IWarehouseServi
     private static WarehouseSaveResult StaleData() => Problem(
         "Dữ liệu đã thay đổi hoặc phiên chỉnh sửa không hợp lệ. Hãy tải lại trang trước khi lưu tiếp.", conflict: true);
 
-    private async Task<Dictionary<string, string>> ValidateFormAsync(WarehouseFormViewModel model, int? id, CancellationToken cancellationToken)
+    private async Task<Dictionary<string, string>> ValidateFormAsync(WarehouseFormViewModel model, int? id)
     {
         var results = new List<ValidationResult>();
         Validator.TryValidateObject(model, new ValidationContext(model), results, validateAllProperties: true);
         var errors = results.GroupBy(r => r.MemberNames.FirstOrDefault() ?? "")
             .ToDictionary(g => g.Key, g => g.First().ErrorMessage ?? "Dữ liệu không hợp lệ.");
-        if (errors.Count == 0 && await warehouses.NameExistsAsync(model.WarehouseName.Trim(), id, cancellationToken))
+        if (errors.Count == 0 && await warehouses.NameExistsAsync(model.WarehouseName.Trim(), id))
             errors[nameof(model.WarehouseName)] = "Tên kho đã tồn tại. Vui lòng chọn tên khác.";
         return errors;
     }

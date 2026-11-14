@@ -9,11 +9,11 @@ public class PutawayRepository(EwmsDbContext db) : IPutawayRepository
 {
     private static readonly string[] LockedStatuses = ["COUNTING", "RECOUNTING", "REVIEWING", "PENDING_APPROVAL"];
 
-    public Task<PutawayActor?> GetActorAsync(int userId, CancellationToken ct) => db.Users.AsNoTracking()
+    public Task<PutawayActor?> GetActorAsync(int userId) => db.Users.AsNoTracking()
         .Where(u => u.UserId == userId && u.Status == "ACTIVE" && u.Role.RoleName == "WAREHOUSE_STAFF"
             && u.WarehouseId != null && u.Warehouse != null)
         .Select(u => new PutawayActor(u.UserId, u.WarehouseId!.Value, u.Warehouse!.WarehouseName))
-        .SingleOrDefaultAsync(ct);
+        .SingleOrDefaultAsync();
 
     private IQueryable<SerialItem> Pending(int warehouseId) => db.SerialItems.AsNoTracking()
         .Where(s => s.CurrentWarehouseId == warehouseId && s.StockState == "IN_WAREHOUSE" && s.CurrentLocationId == null
@@ -31,7 +31,7 @@ public class PutawayRepository(EwmsDbContext db) : IPutawayRepository
                     && s.CurrentSupplySource.TransferReceipt.Status == "DONE"
                     && s.CurrentSupplySource.TransferReceipt.TransferOrder.ToWarehouseId == warehouseId)));
 
-    public async Task<PutawayQueueViewModel> GetQueueAsync(int warehouseId, PutawayFilter filter, CancellationToken ct)
+    public async Task<PutawayQueueViewModel> GetQueueAsync(int warehouseId, PutawayFilter filter)
     {
         var sourceType = filter.Source switch
         {
@@ -65,7 +65,7 @@ public class PutawayRepository(EwmsDbContext db) : IPutawayRepository
                 Id = s.ReceiptId, Code = s.ReceiptCode, s.TransferCode, s.FromWarehouseName
             })
             .Select(g => new { g.Key.Id, g.Key.Code, PendingCount = g.Count(), g.Key.TransferCode, g.Key.FromWarehouseName })
-            .OrderByDescending(r => r.Id).ToListAsync(ct);
+            .OrderByDescending(r => r.Id).ToListAsync();
         var receipts = receiptRows.Select(r => new PutawayReceiptOption(r.Id, r.Code, r.PendingCount, r.TransferCode, r.FromWarehouseName)).ToList();
 
         if (filter.ReceiptId is long receiptId)
@@ -77,14 +77,14 @@ public class PutawayRepository(EwmsDbContext db) : IPutawayRepository
                 {
                     "RETURN" => await db.ReturnReceipts.AsNoTracking().Where(r => r.ReturnReceiptId == receiptId
                         && r.ReturnOrder.WarehouseId == warehouseId && r.Status == "DONE")
-                        .Select(r => new PutawayReceiptOption(r.ReturnReceiptId, r.ReceiptCode, 0, null, null)).SingleOrDefaultAsync(ct),
+                        .Select(r => new PutawayReceiptOption(r.ReturnReceiptId, r.ReceiptCode, 0, null, null)).SingleOrDefaultAsync(),
                     "TRANSFER_RECEIPT" => await db.TransferReceipts.AsNoTracking().Where(r => r.TransferReceiptId == receiptId
                         && r.TransferOrder.ToWarehouseId == warehouseId && r.Status == "DONE")
                         .Select(r => new PutawayReceiptOption(r.TransferReceiptId, r.ReceiptCode, 0,
-                            r.TransferOrder.TransferCode, r.TransferOrder.FromWarehouse.WarehouseName)).SingleOrDefaultAsync(ct),
+                            r.TransferOrder.TransferCode, r.TransferOrder.FromWarehouse.WarehouseName)).SingleOrDefaultAsync(),
                     _ => await db.Inbounds.AsNoTracking().Where(r => r.InboundId == receiptId
                         && r.PurchaseOrder.WarehouseId == warehouseId && r.Status == "DONE")
-                        .Select(r => new PutawayReceiptOption(r.InboundId, r.ReceiptCode, 0, null, null)).SingleOrDefaultAsync(ct)
+                        .Select(r => new PutawayReceiptOption(r.InboundId, r.ReceiptCode, 0, null, null)).SingleOrDefaultAsync()
                 };
                 if (receipt is null) throw new PutawayException("Phiếu đã chọn không thuộc nguồn hàng hoặc kho được giao, hoặc chưa hoàn tất.", 404);
                 receipts.Insert(0, receipt);
@@ -100,14 +100,14 @@ public class PutawayRepository(EwmsDbContext db) : IPutawayRepository
                 || (s.FromWarehouseName != null && s.FromWarehouseName.Contains(search)));
         }
         if (!string.IsNullOrWhiteSpace(filter.Condition)) query = query.Where(s => s.Condition == filter.Condition);
-        var count = await query.CountAsync(ct);
+        var count = await query.CountAsync();
         filter.Page = Math.Clamp(filter.Page, 1, Math.Max(1, (count + PutawayQueueViewModel.PageSize - 1) / PutawayQueueViewModel.PageSize));
         var items = await query.OrderBy(s => s.ReceivedAt).ThenBy(s => s.Id)
             .Skip((filter.Page - 1) * PutawayQueueViewModel.PageSize).Take(PutawayQueueViewModel.PageSize)
             .Select(s => new PutawayPendingItem(s.Id, s.Serial, s.ProductCode, s.ProductName,
                 s.Category, s.Brand, s.Condition, s.ReceiptId, s.ReceiptCode, s.ReceivedAt,
                 s.TransferOrderId, s.TransferCode, s.FromWarehouseName))
-            .ToListAsync(ct);
+            .ToListAsync();
         return new PutawayQueueViewModel
         {
             Filter = filter, Receipts = receipts, TotalCount = count,
@@ -115,7 +115,7 @@ public class PutawayRepository(EwmsDbContext db) : IPutawayRepository
         };
     }
 
-    public Task<SerialItem?> GetSerialAsync(int warehouseId, long? id, string? serial, bool tracked, CancellationToken ct)
+    public Task<SerialItem?> GetSerialAsync(int warehouseId, long? id, string? serial, bool tracked)
     {
         var query = db.SerialItems.Where(s => s.CurrentWarehouseId == warehouseId
             && (id.HasValue ? s.SerialItemId == id.Value : s.SerialNumber == serial));
@@ -125,20 +125,20 @@ public class PutawayRepository(EwmsDbContext db) : IPutawayRepository
             .Include(s => s.CurrentSupplySource).ThenInclude(s => s!.Inbound).ThenInclude(i => i!.PurchaseOrder)
             .Include(s => s.CurrentSupplySource).ThenInclude(s => s!.ReturnReceipt).ThenInclude(r => r!.ReturnOrder)
             .Include(s => s.CurrentSupplySource).ThenInclude(s => s!.TransferReceipt).ThenInclude(r => r!.TransferOrder).ThenInclude(o => o.FromWarehouse)
-            .AsSplitQuery().SingleOrDefaultAsync(ct);
+            .AsSplitQuery().SingleOrDefaultAsync();
     }
 
-    public async Task<PutawayLayout?> GetLayoutAsync(int warehouseId, CancellationToken ct)
+    public async Task<PutawayLayout?> GetLayoutAsync(int warehouseId)
     {
-        var warehouse = await db.Warehouses.AsNoTracking().SingleOrDefaultAsync(w => w.WarehouseId == warehouseId, ct);
+        var warehouse = await db.Warehouses.AsNoTracking().SingleOrDefaultAsync(w => w.WarehouseId == warehouseId);
         if (warehouse is null) return null;
-        var locations = await db.StorageLocations.AsNoTracking().Where(l => l.WarehouseId == warehouseId).ToListAsync(ct);
-        var rules = await db.ZoneStorageRules.AsNoTracking().Where(r => r.ZoneLocation.WarehouseId == warehouseId).ToListAsync(ct);
+        var locations = await db.StorageLocations.AsNoTracking().Where(l => l.WarehouseId == warehouseId).ToListAsync();
+        var rules = await db.ZoneStorageRules.AsNoTracking().Where(r => r.ZoneLocation.WarehouseId == warehouseId).ToListAsync();
         var stocktakes = await db.Stocktakes.AsNoTracking().Where(s => s.WarehouseId == warehouseId && LockedStatuses.Contains(s.Status))
-            .Select(s => new { s.StocktakeId, s.ScopeType, s.IncludeAwaitingPutaway }).ToListAsync(ct);
+            .Select(s => new { s.StocktakeId, s.ScopeType, s.IncludeAwaitingPutaway }).ToListAsync();
         var ids = stocktakes.Select(s => s.StocktakeId).ToArray();
         var scopes = await db.StocktakeScopes.AsNoTracking().Where(s => ids.Contains(s.StocktakeId))
-            .Select(s => new { s.StocktakeId, s.WarehouseId, s.LocationId }).ToListAsync(ct);
+            .Select(s => new { s.StocktakeId, s.WarehouseId, s.LocationId }).ToListAsync();
         var awaitingLocked = stocktakes.Any(s => s.ScopeType == "WHOLE_WAREHOUSE" || s.IncludeAwaitingPutaway)
             || stocktakes.Any(s => s.ScopeType != "LOCATIONS" && s.ScopeType != "WHOLE_WAREHOUSE")
             || stocktakes.Any(s => s.ScopeType == "LOCATIONS" && scopes.All(x => x.StocktakeId != s.StocktakeId))
@@ -146,39 +146,39 @@ public class PutawayRepository(EwmsDbContext db) : IPutawayRepository
         return new PutawayLayout(warehouse, locations, rules, awaitingLocked, scopes.Select(s => s.LocationId).ToHashSet());
     }
 
-    public Task<bool> HasPickingClaimAsync(long serialId, CancellationToken ct) =>
-        db.PickingClaims.AsNoTracking().AnyAsync(c => c.SerialItemId == serialId, ct);
+    public Task<bool> HasPickingClaimAsync(long serialId) =>
+        db.PickingClaims.AsNoTracking().AnyAsync(c => c.SerialItemId == serialId);
 
-    public Task<List<PutawayOccupant>> GetOccupantsAsync(int warehouseId, int? locationId, CancellationToken ct) =>
+    public Task<List<PutawayOccupant>> GetOccupantsAsync(int warehouseId, int? locationId) =>
         db.SerialItems.AsNoTracking().Where(s => s.StockState == "IN_WAREHOUSE" && s.CurrentLocationId != null
             && s.CurrentLocation!.WarehouseId == warehouseId && (!locationId.HasValue || s.CurrentLocationId == locationId.Value))
             .Select(s => new PutawayOccupant(s.SerialItemId, s.CurrentWarehouseId ?? 0, s.CurrentLocationId!.Value, s.ItemCondition,
-                s.Product.LengthCm, s.Product.WidthCm, s.Product.HeightCm, s.Product.GrossWeightKg)).ToListAsync(ct);
+                s.Product.LengthCm, s.Product.WidthCm, s.Product.HeightCm, s.Product.GrossWeightKg)).ToListAsync();
 
-    public async Task<T> InTransactionAsync<T>(int userId, int warehouseId, Func<CancellationToken, Task<T>> work, CancellationToken ct)
+    public async Task<T> InTransactionAsync<T>(int userId, int warehouseId, Func<Task<T>> work)
     {
-        await db.Database.OpenConnectionAsync(ct);
+        await db.Database.OpenConnectionAsync();
         try
         {
-            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
             // Same first lock as warehouse configuration: an empty-branch edit and putaway cannot pass stale guards.
-            await db.Database.SqlQuery<int>($"SELECT WarehouseID AS [Value] FROM dbo.Warehouse WITH (UPDLOCK,HOLDLOCK) WHERE WarehouseID={warehouseId}").ToListAsync(ct);
-            await db.Database.ExecuteSqlInterpolatedAsync($"EXEC sys.sp_set_session_context @key=N'ActorUserID', @value={userId}", ct);
-            var result = await work(ct);
-            await transaction.CommitAsync(ct);
+            await db.Database.SqlQuery<int>($"SELECT WarehouseID AS [Value] FROM dbo.Warehouse WITH (UPDLOCK,HOLDLOCK) WHERE WarehouseID={warehouseId}").ToListAsync();
+            await db.Database.ExecuteSqlInterpolatedAsync($"EXEC sys.sp_set_session_context @key=N'ActorUserID', @value={userId}");
+            var result = await work();
+            await transaction.CommitAsync();
             return result;
         }
         finally
         {
-            try { await db.Database.ExecuteSqlRawAsync("EXEC sys.sp_set_session_context @key=N'ActorUserID', @value=NULL", CancellationToken.None); }
+            try { await db.Database.ExecuteSqlRawAsync("EXEC sys.sp_set_session_context @key=N'ActorUserID', @value=NULL"); }
             finally { await db.Database.CloseConnectionAsync(); }
         }
     }
 
-    public Task LockSerialAsync(int warehouseId, long serialId, CancellationToken ct) => db.Database.SqlQuery<long>(
-        $"SELECT SerialItemID AS [Value] FROM dbo.SerialItem WITH (UPDLOCK,HOLDLOCK) WHERE SerialItemID={serialId} AND CurrentWarehouseID={warehouseId}").ToListAsync(ct);
+    public Task LockSerialAsync(int warehouseId, long serialId) => db.Database.SqlQuery<long>(
+        $"SELECT SerialItemID AS [Value] FROM dbo.SerialItem WITH (UPDLOCK,HOLDLOCK) WHERE SerialItemID={serialId} AND CurrentWarehouseID={warehouseId}").ToListAsync();
 
-    public async Task SavePlacementAsync(SerialItem serial, int locationId, int userId, byte[] version, string path, CancellationToken ct)
+    public async Task SavePlacementAsync(SerialItem serial, int locationId, int userId, byte[] version, string path)
     {
         if (db.Database.CurrentTransaction is null) throw new InvalidOperationException("Putaway requires a transaction.");
         db.Entry(serial).Property(s => s.RowVersion).OriginalValue = version;
@@ -195,6 +195,6 @@ public class PutawayRepository(EwmsDbContext db) : IPutawayRepository
         });
         serial.IsQuarantined = false; serial.QuarantineReason = null;
         // Existing audit triggers use ActorUserID; no second serial/source/receipt is created.
-        await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync();
     }
 }
