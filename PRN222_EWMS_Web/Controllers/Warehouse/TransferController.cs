@@ -16,7 +16,9 @@ public class TransferController(ITransferOrderService transfers) : Controller
 
     [HttpGet("")]
     [HttpGet("Index")]
-    public IActionResult Index() => RedirectToAction("Index", "ManagerTransfer");
+    public IActionResult Index() => User.IsInRole("WAREHOUSE_STAFF")
+        ? RedirectToAction("Index", "WarehouseTransfer")
+        : RedirectToAction("Index", "ManagerTransfer");
 
     [HttpGet("Details/{id:long}")]
     public IActionResult Details(long id) => RedirectToAction(nameof(Edit), new { id });
