@@ -83,7 +83,7 @@ public class SalesOrderSourceService(EwmsDbContext db, ISourceReservationService
             }
             else
             {
-                order = new SalesOrder { Socode = await codes.NextAsync(DocumentType.SalesOrder, ct), CreatedByUserId = actorId, CreatedAt = Now,
+                order = new SalesOrder { Socode = await codes.NextAsync(DocumentType.SalesOrder), CreatedByUserId = actorId, CreatedAt = Now,
                     WarehouseId = warehouse.WarehouseId, Status = "DRAFT" };
                 db.SalesOrders.Add(order);
             }

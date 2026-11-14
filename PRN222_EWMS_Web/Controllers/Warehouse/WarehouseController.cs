@@ -11,18 +11,17 @@ namespace PRN222_EWMS_Web.Controllers.Warehouse;
 public class WarehouseController(IWarehouseService warehouses, ILogger<WarehouseController> logger) : Controller
 {
     [HttpGet]
-    public async Task<IActionResult> Index([FromQuery] WarehouseListFilter filter, CancellationToken cancellationToken)
+    public async Task<IActionResult> Index([FromQuery] WarehouseListFilter filter)
     {
         if (!ModelState.IsValid) return View(new WarehouseListViewModel(filter));
 
         try
         {
-            return View(await warehouses.GetListAsync(filter, cancellationToken));
+            return View(await warehouses.GetListAsync(filter));
         }
         catch (Exception ex) when (ex is DbException or TimeoutException)
         {
             logger.LogError(ex, "Unable to load the warehouse list.");
-            Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             return View(new WarehouseListViewModel(filter)
             {
                 LoadError = "Không tải được danh sách kho. Vui lòng thử lại sau."
@@ -31,18 +30,17 @@ public class WarehouseController(IWarehouseService warehouses, ILogger<Warehouse
     }
 
     [HttpGet, Authorize(Roles = "MANAGER")]
-    public async Task<IActionResult> Details(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Details(int id)
     {
         if (id <= 0) return MissingWarehouse();
         try
         {
-            var model = await warehouses.GetDetailsAsync(id, cancellationToken);
+            var model = await warehouses.GetDetailsAsync(id);
             return model is null ? MissingWarehouse() : View(model);
         }
         catch (Exception ex) when (ex is DbException or TimeoutException)
         {
             logger.LogError(ex, "Unable to load warehouse {WarehouseId} details.", id);
-            Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             return View("Unavailable", "Không tải được chi tiết kho. Vui lòng thử lại sau.");
         }
     }
@@ -51,12 +49,12 @@ public class WarehouseController(IWarehouseService warehouses, ILogger<Warehouse
     public IActionResult Create() => View("Form", new WarehouseFormViewModel());
 
     [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "MANAGER")]
-    public async Task<IActionResult> Create(WarehouseFormViewModel model, CancellationToken cancellationToken)
+    public async Task<IActionResult> Create(WarehouseFormViewModel model)
     {
         if (!ModelState.IsValid) return View("Form", model);
         try
         {
-            var result = await warehouses.CreateAsync(model, cancellationToken);
+            var result = await warehouses.CreateAsync(model);
             if (result.WarehouseId is int id)
             {
                 TempData["Success"] = "Đã lưu kho. Tiếp tục thêm Zone và cấu hình các vị trí lưu trữ.";
@@ -67,31 +65,29 @@ public class WarehouseController(IWarehouseService warehouses, ILogger<Warehouse
         catch (Exception ex) when (ex is DbException or DbUpdateException or TimeoutException)
         {
             logger.LogError(ex, "Unable to create warehouse.");
-            Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             ModelState.AddModelError("", "Không lưu được kho. Vui lòng thử lại sau.");
         }
         return View("Form", model);
     }
 
     [HttpGet, Authorize(Roles = "MANAGER")]
-    public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Edit(int id)
     {
         if (id <= 0) return MissingWarehouse();
         try
         {
-            var model = await warehouses.GetEditAsync(id, cancellationToken);
+            var model = await warehouses.GetEditAsync(id);
             return model is null ? MissingWarehouse() : View("Form", model);
         }
         catch (Exception ex) when (ex is DbException or TimeoutException)
         {
             logger.LogError(ex, "Unable to load warehouse {WarehouseId} for editing.", id);
-            Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             return View("Unavailable", "Không tải được thông tin kho để chỉnh sửa. Vui lòng thử lại sau.");
         }
     }
 
     [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "MANAGER")]
-    public async Task<IActionResult> Edit([FromRoute] int id, WarehouseFormViewModel model, CancellationToken cancellationToken)
+    public async Task<IActionResult> Edit([FromRoute] int id, WarehouseFormViewModel model)
     {
         if (id <= 0) return MissingWarehouse();
         model.WarehouseId = id;
@@ -99,7 +95,7 @@ public class WarehouseController(IWarehouseService warehouses, ILogger<Warehouse
         {
             if (ModelState.IsValid)
             {
-                var result = await warehouses.UpdateAsync(id, model, cancellationToken);
+                var result = await warehouses.UpdateAsync(id, model);
                 if (result.NotFound) return MissingWarehouse();
                 if (result.WarehouseId.HasValue)
                 {
@@ -107,9 +103,8 @@ public class WarehouseController(IWarehouseService warehouses, ILogger<Warehouse
                     return RedirectToAction(nameof(Details), new { id });
                 }
                 AddErrors(result);
-                if (result.Conflict) Response.StatusCode = StatusCodes.Status409Conflict;
             }
-            var current = await warehouses.GetEditAsync(id, cancellationToken);
+            var current = await warehouses.GetEditAsync(id);
             if (current is null) return MissingWarehouse();
             model.IsOccupied = current.IsOccupied;
             model.IsLocked = current.IsLocked;
@@ -117,19 +112,18 @@ public class WarehouseController(IWarehouseService warehouses, ILogger<Warehouse
         catch (Exception ex) when (ex is DbException or DbUpdateException or TimeoutException)
         {
             logger.LogError(ex, "Unable to update warehouse {WarehouseId}.", id);
-            Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             ModelState.AddModelError("", "Không lưu được thay đổi. Vui lòng thử lại sau.");
         }
         return View("Form", model);
     }
 
     [HttpGet, Authorize(Roles = "MANAGER")]
-    public async Task<IActionResult> Setup(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Setup(int id)
     {
         if (id <= 0) return MissingWarehouse();
         try
         {
-            var model = await warehouses.GetDetailsAsync(id, cancellationToken);
+            var model = await warehouses.GetDetailsAsync(id);
             if (model is null) return MissingWarehouse();
             ViewData["Configuring"] = true;
             return View("Details", model);
@@ -137,31 +131,29 @@ public class WarehouseController(IWarehouseService warehouses, ILogger<Warehouse
         catch (Exception ex) when (ex is DbException or TimeoutException)
         {
             logger.LogError(ex, "Unable to load warehouse {WarehouseId} setup.", id);
-            Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             return View("Unavailable", "Không tải được cấu trúc kho. Vui lòng thử lại sau.");
         }
     }
 
     [HttpGet, Authorize(Roles = "MANAGER")]
-    public async Task<IActionResult> ConfigureLocation(int id, int? locationId, int? parentId, CancellationToken cancellationToken)
+    public async Task<IActionResult> ConfigureLocation(int id, int? locationId, int? parentId)
     {
         if (id <= 0 || locationId is <= 0 || parentId is <= 0) return MissingLocation();
         try
         {
-            var model = await warehouses.GetLocationFormAsync(id, locationId, parentId, cancellationToken);
+            var model = await warehouses.GetLocationFormAsync(id, locationId, parentId);
             return model is null ? MissingLocation() : View("LocationForm", model);
         }
         catch (Exception ex) when (ex is DbException or TimeoutException)
         {
             logger.LogError(ex, "Unable to load location configuration in warehouse {WarehouseId}.", id);
-            Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             return View("Unavailable", "Không tải được cấu hình vị trí. Vui lòng thử lại sau.");
         }
     }
 
     [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "MANAGER")]
     public async Task<IActionResult> ConfigureLocation([FromRoute] int id, [FromQuery] int? locationId,
-        StorageLocationFormViewModel model, CancellationToken cancellationToken)
+        StorageLocationFormViewModel model)
     {
         if (id <= 0 || locationId is <= 0) return MissingLocation();
         model.WarehouseId = id;
@@ -170,7 +162,7 @@ public class WarehouseController(IWarehouseService warehouses, ILogger<Warehouse
         {
             if (ModelState.IsValid)
             {
-                var result = await warehouses.SaveLocationAsync(id, locationId, model, cancellationToken);
+                var result = await warehouses.SaveLocationAsync(id, locationId, model);
                 if (result.NotFound) return MissingLocation();
                 if (result.LocationId.HasValue)
                 {
@@ -180,19 +172,17 @@ public class WarehouseController(IWarehouseService warehouses, ILogger<Warehouse
                     return RedirectToAction(nameof(Setup), new { id });
                 }
                 AddErrors(result);
-                if (result.Conflict) Response.StatusCode = StatusCodes.Status409Conflict;
             }
-            await warehouses.PopulateLocationOptionsAsync(model, cancellationToken);
+            await warehouses.PopulateLocationOptionsAsync(model);
             return View("LocationForm", model);
         }
         catch (Exception ex) when (ex is DbException or DbUpdateException or TimeoutException)
         {
             logger.LogError(ex, "Unable to save location configuration in warehouse {WarehouseId}.", id);
-            Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             ModelState.AddModelError("", "Không lưu được cấu hình vị trí. Vui lòng thử lại sau.");
             try
             {
-                await warehouses.PopulateLocationOptionsAsync(model, cancellationToken);
+                await warehouses.PopulateLocationOptionsAsync(model);
                 return View("LocationForm", model);
             }
             catch (Exception reloadException) when (reloadException is DbException or TimeoutException)
@@ -204,17 +194,16 @@ public class WarehouseController(IWarehouseService warehouses, ILogger<Warehouse
     }
 
     [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "MANAGER")]
-    public async Task<IActionResult> CompleteSetup([FromRoute] int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> CompleteSetup([FromRoute] int id)
     {
         if (id <= 0) return MissingWarehouse();
         try
         {
-            var model = await warehouses.GetDetailsAsync(id, cancellationToken);
+            var model = await warehouses.GetDetailsAsync(id);
             if (model is null) return MissingWarehouse();
             if (model.SetupIssues.Count > 0)
             {
                 ViewData["Configuring"] = true;
-                Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
                 ModelState.AddModelError("", "Cấu trúc kho chưa đầy đủ. Vui lòng xử lý các mục được liệt kê trước khi hoàn tất.");
                 return View("Details", model);
             }
@@ -225,20 +214,17 @@ public class WarehouseController(IWarehouseService warehouses, ILogger<Warehouse
         catch (Exception ex) when (ex is DbException or TimeoutException)
         {
             logger.LogError(ex, "Unable to complete warehouse {WarehouseId} setup.", id);
-            Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             return View("Unavailable", "Không tải được cấu trúc kho để hoàn tất. Vui lòng thử lại sau.");
         }
     }
 
     private IActionResult MissingLocation()
     {
-        Response.StatusCode = StatusCodes.Status404NotFound;
         return View("Unavailable", "Kho hoặc vị trí không tồn tại, hoặc vị trí không thuộc cấu trúc kho này.");
     }
 
     private IActionResult MissingWarehouse()
     {
-        Response.StatusCode = StatusCodes.Status404NotFound;
         return View("Unavailable", "Kho không tồn tại hoặc đã bị xóa.");
     }
 

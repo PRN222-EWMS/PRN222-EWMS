@@ -15,45 +15,43 @@ public class PutawayController(IPutawayService putaway, ILogger<PutawayControlle
     private int UserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpGet]
-    public async Task<IActionResult> Index([FromQuery] PutawayFilter filter, CancellationToken ct)
+    public async Task<IActionResult> Index([FromQuery] PutawayFilter filter)
     {
         if (!ModelState.IsValid)
         {
-            Response.StatusCode = StatusCodes.Status400BadRequest;
             return View("~/Views/Inbound/PendingPutaway.cshtml", new PutawayIndexViewModel { LoadError = "Bộ lọc không hợp lệ. Hãy mở lại trang Chờ xếp kho." });
         }
-        try { return View("~/Views/Inbound/PendingPutaway.cshtml", await putaway.GetIndexAsync(UserId, filter, ct)); }
+        try { return View("~/Views/Inbound/PendingPutaway.cshtml", await putaway.GetIndexAsync(UserId, filter)); }
         catch (Exception ex) when (Handled(ex))
         {
             var error = Describe(ex);
-            Response.StatusCode = error.Status;
             return View("~/Views/Inbound/PendingPutaway.cshtml", new PutawayIndexViewModel { LoadError = error.Message });
         }
     }
 
     [HttpGet]
-    public async Task<IActionResult> Pending([FromQuery] PutawayFilter filter, CancellationToken ct)
+    public async Task<IActionResult> Pending([FromQuery] PutawayFilter filter)
     {
         if (!ModelState.IsValid) return BadRequest("Bộ lọc nguồn, phiếu hoặc tìm kiếm không hợp lệ.");
-        try { return PartialView("_Queue", (await putaway.GetIndexAsync(UserId, filter, ct)).Queue); }
+        try { return PartialView("_Queue", (await putaway.GetIndexAsync(UserId, filter)).Queue); }
         catch (Exception ex) when (Handled(ex)) { var error = Describe(ex); return StatusCode(error.Status, error.Message); }
     }
 
     [HttpGet]
-    public async Task<IActionResult> Lookup(string serial, CancellationToken ct)
+    public async Task<IActionResult> Lookup(string serial)
     {
         if (!ModelState.IsValid) return BadRequest("Vui lòng nhập hoặc quét Serial.");
-        try { return PartialView("_SerialDetails", await putaway.LookupAsync(UserId, serial, ct)); }
+        try { return PartialView("_SerialDetails", await putaway.LookupAsync(UserId, serial)); }
         catch (Exception ex) when (Handled(ex)) { var error = Describe(ex); return StatusCode(error.Status, error.Message); }
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Confirm(ConfirmPutawayInput input, CancellationToken ct)
+    public async Task<IActionResult> Confirm(ConfirmPutawayInput input)
     {
         if (!ModelState.IsValid) return BadRequest(new { ok = false, message = "Thông tin xác nhận không hợp lệ. Hãy tra cứu lại Serial." });
         try
         {
-            var result = await putaway.ConfirmAsync(UserId, input, ct);
+            var result = await putaway.ConfirmAsync(UserId, input);
             return Json(new { ok = true, message = $"Đã xếp {result.Serial} tại {result.Path}.", result });
         }
         catch (Exception ex) when (Handled(ex))

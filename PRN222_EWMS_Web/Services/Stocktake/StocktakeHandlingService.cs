@@ -151,7 +151,7 @@ public class StocktakeHandlingService(IStocktakeRepository repo, ISourceReservat
         var valid = locations.Where(l => l.LocationType is "TIER" or "FLOOR_SLOT")
             .Select(l => PutawayRules.Evaluate(probe, layout, l, occupants)).Where(e => e.Location is not null).Select(e => e.Location!).ToList();
         var planned = await capacity.AssessStocktakePlacementsAsync(plan.WarehouseId, item.SerialItemId, handling.ActualCondition,
-            valid.Select(l => l.Id).ToArray(), ignoredStocktakes, ct);
+            valid.Select(l => l.Id).ToArray(), ignoredStocktakes);
         var choices = valid.Where(l => !planned.Errors.ContainsKey(l.Id))
             .OrderBy(l => l.Id == handling.FoundLocationId ? 0 : l.Id == handling.OriginalLocationId ? 1 : 2)
             .ThenBy(l => l.IsReserve).ThenBy(l => l.Path).ThenBy(l => l.Id).ToList();

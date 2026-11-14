@@ -9,48 +9,48 @@ public class OutboundSupplyService(EwmsDbContext db, ISourceReservationService c
     private static readonly string[] OpenOrders = ["SUBMITTED", "PARTIALLY_FULFILLED"];
     private static readonly string[] StocktakeLocks = ["COUNTING", "RECOUNTING", "REVIEWING", "PENDING_APPROVAL"];
 
-    public Task LockWarehouseAsync(int warehouseId, CancellationToken ct = default) =>
-        commitments.LockWarehouseAsync(warehouseId, ct);
+    public Task LockWarehouseAsync(int warehouseId) =>
+        commitments.LockWarehouseAsync(warehouseId);
 
-    public Task<string?> GetReceivingBlockReasonAsync(int warehouseId, CancellationToken ct = default) =>
-        commitments.GetReceivingBlockReasonAsync(warehouseId, ct);
+    public Task<string?> GetReceivingBlockReasonAsync(int warehouseId) =>
+        commitments.GetReceivingBlockReasonAsync(warehouseId);
 
-    public async Task ReconcileWarehouseAsync(int warehouseId, CancellationToken ct = default)
+    public async Task ReconcileWarehouseAsync(int warehouseId)
     {
-        await commitments.ReconcileWarehouseAsync(warehouseId, "Đối soát nguồn phục vụ xuất hàng.", ct);
-        await RefreshLegacyAsync(warehouseId, ct);
+        await commitments.ReconcileWarehouseAsync(warehouseId, "Đối soát nguồn phục vụ xuất hàng.");
+        await RefreshLegacyAsync(warehouseId);
     }
 
-    public async Task AfterInboundPostedAsync(long inboundId, CancellationToken ct = default)
+    public async Task AfterInboundPostedAsync(long inboundId)
     {
-        await commitments.AfterInboundAsync(inboundId, ct);
+        await commitments.AfterInboundAsync(inboundId);
         var warehouseId = await db.Inbounds.AsNoTracking().Where(i => i.InboundId == inboundId)
-            .Select(i => i.PurchaseOrder.WarehouseId).SingleAsync(ct);
-        await RefreshLegacyAsync(warehouseId, ct);
+            .Select(i => i.PurchaseOrder.WarehouseId).SingleAsync();
+        await RefreshLegacyAsync(warehouseId);
     }
 
-    private async Task RefreshLegacyAsync(int warehouseId, CancellationToken ct)
+    private async Task RefreshLegacyAsync(int warehouseId)
     {
-        var state = await LoadAsync(warehouseId, true, ct);
+        var state = await LoadAsync(warehouseId, true);
         ReleaseUnpickedPlans(state);
         UpdateShortages(state);
-        await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync();
     }
 
-    public async Task<OutboundSupplySnapshot> GetAvailabilityAsync(long salesOrderId, long? outboundId = null, CancellationToken ct = default)
+    public async Task<OutboundSupplySnapshot> GetAvailabilityAsync(long salesOrderId, long? outboundId = null)
     {
         var warehouseId = await db.SalesOrders.AsNoTracking().Where(o => o.SalesOrderId == salesOrderId)
-            .Select(o => (int?)o.WarehouseId).SingleOrDefaultAsync(ct)
+            .Select(o => (int?)o.WarehouseId).SingleOrDefaultAsync()
             ?? throw new InvalidOperationException("Không tìm thấy đơn bán hàng.");
-        if (outboundId.HasValue && !await db.Outbounds.AsNoTracking().AnyAsync(o => o.OutboundId == outboundId && o.SalesOrderId == salesOrderId, ct))
+        if (outboundId.HasValue && !await db.Outbounds.AsNoTracking().AnyAsync(o => o.OutboundId == outboundId && o.SalesOrderId == salesOrderId))
             throw new InvalidOperationException("Phiếu xuất không thuộc đơn bán hàng.");
-        var state = await LoadAsync(warehouseId, false, ct);
+        var state = await LoadAsync(warehouseId, false);
         var selected = outboundId.HasValue ? await db.OutboundItems.AsNoTracking()
             .Where(i => i.OutboundId == outboundId && i.IsActive)
-            .Select(i => new { i.SerialItemId, i.SolineId, i.SourceAtIssueId }).ToListAsync(ct) : [];
+            .Select(i => new { i.SerialItemId, i.SolineId, i.SourceAtIssueId }).ToListAsync() : [];
         var selectedIds = selected.Select(i => i.SerialItemId).ToHashSet();
         var otherClaimIds = state.Claims.Where(c => !outboundId.HasValue || c.OutboundId != outboundId).Select(c => c.SerialItemId).ToHashSet();
-        var locks = await GetLocksAsync(warehouseId, ct);
+        var locks = await GetLocksAsync(warehouseId);
         var sources = state.Sources.ToDictionary(s => s.SupplySourceId);
         var candidates = state.Serials.Where(s => sources.TryGetValue(s.CurrentSupplySourceId!.Value, out var source)
             && IsPhysical(source) && !otherClaimIds.Contains(s.SerialItemId) && !locks.Blocks(s.CurrentLocationId)).ToList();
@@ -122,13 +122,13 @@ public class OutboundSupplyService(EwmsDbContext db, ISourceReservationService c
         return new OutboundSupplySnapshot(lines, suggestions);
     }
 
-    public async Task EnsureSourceReservationAsync(long salesOrderId, long lineId, long sourceId, int minimumBalance, CancellationToken ct = default)
+    public async Task EnsureSourceReservationAsync(long salesOrderId, long lineId, long sourceId, int minimumBalance)
     {
         RequireTransaction();
         if (minimumBalance <= 0) throw new InvalidOperationException("Số lượng lấy hàng không hợp lệ.");
-        var warehouseId = await db.SalesOrders.Where(o => o.SalesOrderId == salesOrderId).Select(o => o.WarehouseId).SingleAsync(ct);
-        await LockWarehouseAsync(warehouseId, ct);
-        var state = await LoadAsync(warehouseId, true, ct);
+        var warehouseId = await db.SalesOrders.Where(o => o.SalesOrderId == salesOrderId).Select(o => o.WarehouseId).SingleAsync();
+        await LockWarehouseAsync(warehouseId);
+        var state = await LoadAsync(warehouseId, true);
         ReleaseUnpickedPlans(state);
         var line = state.Lines.SingleOrDefault(l => l.SolineId == lineId && l.SalesOrderId == salesOrderId)
             ?? throw new InvalidOperationException("Dòng hàng không thuộc SO.");
@@ -154,19 +154,19 @@ public class OutboundSupplyService(EwmsDbContext db, ISourceReservationService c
             state.Reservations.Add(reservation);
         }
         UpdateShortages(state);
-        await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync();
     }
 
-    public async Task RefreshShortageAsync(long salesOrderId, CancellationToken ct = default)
+    public async Task RefreshShortageAsync(long salesOrderId)
     {
         RequireTransaction();
-        var warehouseId = await db.SalesOrders.Where(o => o.SalesOrderId == salesOrderId).Select(o => o.WarehouseId).SingleAsync(ct);
-        var state = await LoadAsync(warehouseId, true, ct);
+        var warehouseId = await db.SalesOrders.Where(o => o.SalesOrderId == salesOrderId).Select(o => o.WarehouseId).SingleAsync();
+        var state = await LoadAsync(warehouseId, true);
         UpdateShortages(state);
-        await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync();
     }
 
-    private async Task<SupplyState> LoadAsync(int warehouseId, bool tracking, CancellationToken ct)
+    private async Task<SupplyState> LoadAsync(int warehouseId, bool tracking)
     {
         IQueryable<SupplySource> sourceQuery = db.SupplySources.Where(s => s.WarehouseId == warehouseId);
         IQueryable<Reservation> reservationQuery = db.Reservations.Where(r => r.WarehouseId == warehouseId);
@@ -176,23 +176,23 @@ public class OutboundSupplyService(EwmsDbContext db, ISourceReservationService c
             .Include(s => s.Inbound).ThenInclude(i => i!.PurchaseOrder).Include(s => s.ReturnReceipt)
             .Include(s => s.TransferReceipt).Include(s => s.Adjustment)
             .Include(s => s.IncomingTransferLine).ThenInclude(l => l!.TransferOrder).ThenInclude(o => o.FromWarehouse)
-            .AsSplitQuery().ToListAsync(ct);
-        var reservations = await reservationQuery.ToListAsync(ct);
-        var lines = await lineQuery.Include(l => l.Product).Include(l => l.SalesOrder).ToListAsync(ct);
+            .AsSplitQuery().ToListAsync();
+        var reservations = await reservationQuery.ToListAsync();
+        var lines = await lineQuery.Include(l => l.Product).Include(l => l.SalesOrder).ToListAsync();
         var serials = await db.SerialItems.AsNoTracking().Where(s => s.CurrentWarehouseId == warehouseId
                 && s.CurrentSupplySourceId != null && s.CurrentSupplyState == "PHYSICAL" && s.StockState == "IN_WAREHOUSE"
                 && s.ItemCondition == "GOOD")
-            .Include(s => s.Product).Include(s => s.OriginalInbound).ThenInclude(i => i!.PurchaseOrder).AsSplitQuery().ToListAsync(ct);
+            .Include(s => s.Product).Include(s => s.OriginalInbound).ThenInclude(i => i!.PurchaseOrder).AsSplitQuery().ToListAsync();
         var claims = await db.PickingClaims.AsNoTracking().Where(c => c.SerialItem.CurrentWarehouseId == warehouseId)
             .Select(c => new SourceClaim(c.SerialItemId, c.SerialItem.CurrentSupplySourceId ?? 0, c.SerialItem.ProductId,
                 c.OutboundId, c.DispatchId, c.Outbound == null ? null : c.Outbound.SalesOrderId,
-                c.Dispatch == null ? null : (long?)c.Dispatch.TransferOrderId)).ToListAsync(ct);
+                c.Dispatch == null ? null : (long?)c.Dispatch.TransferOrderId)).ToListAsync();
         var issued = await db.OutboundItems.AsNoTracking().Where(i => i.Outbound.SalesOrder.WarehouseId == warehouseId && i.IsActive && i.Outbound.Status == "DONE")
-            .GroupBy(i => i.SolineId).Select(g => new { Id = g.Key, Count = g.LongCount() }).ToDictionaryAsync(g => g.Id, g => g.Count, ct);
-        var locations = await db.StorageLocations.AsNoTracking().Where(l => l.WarehouseId == warehouseId).ToListAsync(ct);
+            .GroupBy(i => i.SolineId).Select(g => new { Id = g.Key, Count = g.LongCount() }).ToDictionaryAsync(g => g.Id, g => g.Count);
+        var locations = await db.StorageLocations.AsNoTracking().Where(l => l.WarehouseId == warehouseId).ToListAsync();
         var plannedOrders = (await db.SalesOrderSourcePlans.AsNoTracking()
             .Where(p => p.SalesOrderLine.SalesOrder.WarehouseId == warehouseId)
-            .Select(p => p.SalesOrderLine.SalesOrderId).Distinct().ToListAsync(ct)).ToHashSet();
+            .Select(p => p.SalesOrderLine.SalesOrderId).Distinct().ToListAsync()).ToHashSet();
         return new SupplyState(sources, reservations, lines, serials, claims, issued, locations, plannedOrders);
     }
 
@@ -273,13 +273,13 @@ public class OutboundSupplyService(EwmsDbContext db, ISourceReservationService c
         ? Math.Max(0, Math.Min(source.RemainingQuantity, source.EligibleQuantity)) : 0;
     private static string SourceCode(SupplySource source) => SourceReservationService.Label(source);
 
-    private async Task<LocationLocks> GetLocksAsync(int warehouseId, CancellationToken ct)
+    private async Task<LocationLocks> GetLocksAsync(int warehouseId)
     {
         var active = await db.Stocktakes.AsNoTracking().Where(s => s.WarehouseId == warehouseId && StocktakeLocks.Contains(s.Status))
-            .Select(s => new { s.StocktakeId, s.ScopeType, s.IncludeAwaitingPutaway }).ToListAsync(ct);
+            .Select(s => new { s.StocktakeId, s.ScopeType, s.IncludeAwaitingPutaway }).ToListAsync();
         var ids = active.Select(s => s.StocktakeId).ToArray();
-        var scopes = await db.StocktakeScopes.AsNoTracking().Where(s => ids.Contains(s.StocktakeId)).Select(s => new { s.StocktakeId, s.LocationId }).ToListAsync(ct);
-        var locations = await db.StorageLocations.AsNoTracking().Where(l => l.WarehouseId == warehouseId).ToListAsync(ct);
+        var scopes = await db.StocktakeScopes.AsNoTracking().Where(s => ids.Contains(s.StocktakeId)).Select(s => new { s.StocktakeId, s.LocationId }).ToListAsync();
+        var locations = await db.StorageLocations.AsNoTracking().Where(l => l.WarehouseId == warehouseId).ToListAsync();
         var invalid = active.Any(s => s.ScopeType is not ("LOCATIONS" or "WHOLE_WAREHOUSE")
             || (s.ScopeType == "LOCATIONS" && scopes.All(r => r.StocktakeId != s.StocktakeId)))
             || scopes.Any(s => locations.All(l => l.LocationId != s.LocationId));

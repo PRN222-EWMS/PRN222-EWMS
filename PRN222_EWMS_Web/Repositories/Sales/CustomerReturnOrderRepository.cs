@@ -153,7 +153,7 @@ public class CustomerReturnOrderRepository(EwmsDbContext db, DocumentCodeGenerat
     }
 
     public Task<string> GenerateReturnCodeAsync(CancellationToken cancellationToken = default) =>
-        codes.NextAsync(DocumentType.CustomerReturnOrder, cancellationToken);
+        codes.NextAsync(DocumentType.CustomerReturnOrder);
 
     public async Task<T> InTransactionAsync<T>(int actorId, Func<Task<T>> work)
     {

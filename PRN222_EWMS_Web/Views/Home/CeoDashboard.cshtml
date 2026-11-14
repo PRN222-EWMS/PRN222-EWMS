@@ -1,8 +1,319 @@
+@using System.Globalization
+@model PRN222_EWMS_Web.ViewModels.Ceo.CeoDashboardViewModel
 @{
-    ViewData["Title"] = "Tổng quan";
+    ViewData["Title"] = "Tổng quan CEO";
+    var culture = CultureInfo.GetCultureInfo("vi-VN");
+    string N(long value) => value.ToString("N0", culture);
+    string M(decimal value) => value.ToString("0.##", culture);
+    string P(decimal used, decimal total) => total > 0 ? (used / total * 100).ToString("0.#", culture) + "%" : "Chưa cấu hình";
+    string W(decimal used, decimal total) => total > 0 ? Math.Clamp(used / total * 100, 0, 100).ToString("0.##", CultureInfo.InvariantCulture) + "%" : "0%";
+    var trendMax = Math.Max(1L, Model.Trend.Select(d => Math.Max(d.Incoming, d.Outgoing)).DefaultIfEmpty(0).Max());
+    var purchased = Model.Trend.Sum(d => d.Purchased);
+    var sold = Model.Trend.Sum(d => d.Sold);
+    var returned = Model.Trend.Sum(d => d.Returned);
+    var transferredIn = Model.Trend.Sum(d => d.TransferReceived);
+    var transferredOut = Model.Trend.Sum(d => d.TransferDispatched);
+    var periodLabel = Model.PeriodStart == default ? "" : $"{Model.PeriodStart:dd/MM/yyyy} – {Model.PeriodEnd:dd/MM/yyyy}";
+    var scopeLabel = Model.WarehouseOptions.FirstOrDefault(w => w.Id == Model.Filter.WarehouseId)?.Name ?? "Tất cả kho";
 }
 
-<p class="eyebrow">EWMS WORKSPACE</p>
-<h1>Xin chào, CEO</h1>
-<p class="muted">Chào mừng @User.Identity?.Name đến với hệ thống quản lý kho.</p>
-<section class="workspace-card mt-4"><h2 class="h5">Theo dõi mua hàng</h2><p class="muted">Xem số lượng đã đặt, đã nhận, còn chờ nhận và đã đóng của từng đơn mua.</p><a class="workspace-button" asp-controller="CeoPurchaseProgress" asp-action="Index">Xem tiến độ đơn mua <i class="bi bi-arrow-right ms-2" aria-hidden="true"></i></a></section>
+<div class="ceo-dashboard">
+    <div class="workspace-heading ceo-heading">
+        <div>
+            <p class="eyebrow">ĐIỀU HÀNH KHO</p>
+            <h1>Tổng quan kho hàng</h1>
+            <p class="muted mb-0">Xin chào @User.Identity?.Name. Theo dõi tồn kho và hoạt động trên toàn hệ thống.</p>
+        </div>
+        <a class="ceo-secondary" asp-controller="Warehouse" asp-action="Index"><i class="bi bi-buildings" aria-hidden="true"></i> Danh sách kho</a>
+    </div>
+
+    <form class="workspace-card ceo-filter" asp-controller="Home" asp-action="Index" method="get">
+        <div class="ceo-filter-field ceo-filter-warehouse">
+            <label for="ceo-warehouse">Phạm vi kho</label>
+            <select id="ceo-warehouse" name="WarehouseId">
+                <option value="">Tất cả kho</option>
+                @foreach (var option in Model.WarehouseOptions)
+                {
+                    <option value="@option.Id" selected="@(Model.Filter.WarehouseId == option.Id)">@option.Name</option>
+                }
+            </select>
+        </div>
+        <div class="ceo-filter-field">
+            <label for="ceo-period">Hoạt động trong</label>
+            <select id="ceo-period" name="Days">
+                @foreach (var days in new[] { 7, 30, 90 })
+                {
+                    <option value="@days" selected="@(Model.Filter.Days == days)">@days ngày gần nhất</option>
+                }
+                @if (Model.Filter.Days is >= 7 and <= 90 && !new[] { 7, 30, 90 }.Contains(Model.Filter.Days))
+                {
+                    <option value="@Model.Filter.Days" selected>@Model.Filter.Days ngày gần nhất</option>
+                }
+            </select>
+        </div>
+        <button type="submit" class="workspace-button ceo-filter-submit"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Cập nhật</button>
+        @if (Model.UpdatedAt != default)
+        {
+            <div class="ceo-updated"><span>Cập nhật lúc</span><strong>@Model.UpdatedAt.ToString("HH:mm · dd/MM/yyyy")</strong></div>
+        }
+    </form>
+
+    @if (Model.Error is not null)
+    {
+        <section class="workspace-card ceo-load-error" role="alert">
+            <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+            <div><h2>Chưa tải được tổng quan</h2><p>@Model.Error</p><a asp-controller="Home" asp-action="Index">Mở lại tổng quan</a></div>
+        </section>
+    }
+    else
+    {
+        <div class="ceo-scope-line"><strong>@scopeLabel</strong><span>Tồn kho và công việc hiện tại</span></div>
+        <section class="ceo-kpis" aria-label="Chỉ số kho hiện tại">
+            <article class="workspace-card ceo-kpi">
+                <div class="ceo-kpi-label">Kho đang hoạt động <i class="bi bi-buildings" aria-hidden="true"></i></div>
+                <p class="ceo-kpi-value">@Model.OperationalWarehouses<span>/ @Model.Warehouses.Count</span></p>
+                <p class="ceo-kpi-note">Đang hoạt động và còn hiệu lực thuê</p>
+            </article>
+            <article class="workspace-card ceo-kpi">
+                <div class="ceo-kpi-label">Hàng đang trong kho <i class="bi bi-box-seam" aria-hidden="true"></i></div>
+                <p class="ceo-kpi-value">@N(Model.InventoryCount)<span>serial</span></p>
+                <p class="ceo-kpi-note"><span class="ceo-dot ceo-dot-good"></span>Tốt @N(Model.GoodCount)<span class="ceo-kpi-separator">·</span><span class="ceo-dot ceo-dot-damaged"></span>Hỏng @N(Model.DamagedCount)</p>
+            </article>
+            <article class="workspace-card ceo-kpi">
+                <div class="ceo-kpi-label">Hàng chờ xếp kho <i class="bi bi-boxes" aria-hidden="true"></i></div>
+                <p class="ceo-kpi-value">@N(Model.AwaitingCount)<span>serial</span></p>
+                <p class="ceo-kpi-note">Đã nhận, chưa được gán vị trí lưu trữ</p>
+            </article>
+            <article class="workspace-card ceo-kpi ceo-kpi-incoming">
+                <div class="ceo-kpi-label">Hàng còn chờ nhận <i class="bi bi-truck" aria-hidden="true"></i></div>
+                <p class="ceo-kpi-value">@N(Model.IncomingCount)<span>sản phẩm</span></p>
+                <p class="ceo-kpi-note">Mua @N(Model.Warehouses.Sum(w => w.IncomingPurchase)) · Chuyển @N(Model.Warehouses.Sum(w => w.IncomingTransfer)) · Trả @N(Model.Warehouses.Sum(w => w.IncomingReturn))</p>
+            </article>
+        </section>
+
+        <div class="ceo-main-grid">
+            <section class="workspace-card ceo-trend-panel">
+                <div class="ceo-panel-heading"><div><h2>Nhịp hoạt động nhập · xuất</h2><p>@periodLabel</p></div><span class="ceo-caption">Serial đã hoàn tất xử lý</span></div>
+                <div class="ceo-flow-totals">
+                    <div><span class="ceo-dot ceo-dot-in"></span>Nhập vào <strong>@N(Model.Trend.Sum(d => d.Incoming))</strong></div>
+                    <div><span class="ceo-dot ceo-dot-out"></span>Xuất ra <strong>@N(Model.Trend.Sum(d => d.Outgoing))</strong></div>
+                </div>
+                @if (Model.Trend.All(d => d.Incoming == 0 && d.Outgoing == 0))
+                {
+                    <div class="ceo-chart-empty"><i class="bi bi-bar-chart-line" aria-hidden="true"></i><strong>Chưa có hoạt động nhập · xuất hoàn tất</strong><p>Biểu đồ sẽ hiển thị khi có hàng được nhận hoặc xuất trong khoảng thời gian này.</p></div>
+                }
+                else
+                {
+                    <div class="ceo-chart-scroll" tabindex="0" aria-label="Biểu đồ nhập và xuất theo ngày, có thể cuộn ngang">
+                        <div class="ceo-chart" style="min-width:@(Math.Max(480, Model.Trend.Count * 12))px">
+                            <div class="ceo-chart-scale"><span>@N(trendMax)</span><span>@N(trendMax / 2)</span><span>0</span></div>
+                            <div class="ceo-chart-plot" style="grid-template-columns:repeat(@Math.Max(1, Model.Trend.Count),minmax(0,1fr))">
+                                @for (var index = 0; index < Model.Trend.Count; index++)
+                                {
+                                    var day = Model.Trend[index];
+                                    var showLabel = index == 0 || index == Model.Trend.Count - 1 || index % Math.Max(1, Model.Trend.Count / 6) == 0;
+                                    <div class="ceo-chart-column" title="@day.Day.ToString("dd/MM/yyyy"): nhập @N(day.Incoming), xuất @N(day.Outgoing)">
+                                        <div class="ceo-chart-bars"><span class="ceo-bar-in" style="height:@W(day.Incoming, trendMax)"></span><span class="ceo-bar-out" style="height:@W(day.Outgoing, trendMax)"></span></div>
+                                        <span class="ceo-chart-date">@(showLabel ? day.Day.ToString("dd/MM") : "")</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+                <div class="ceo-flow-breakdown">
+                    <div><span>Nhập mua</span><strong>@N(purchased)</strong></div>
+                    <div><span>Xuất bán</span><strong>@N(sold)</strong></div>
+                    <div><span>Khách trả</span><strong>@N(returned)</strong></div>
+                    <div><span>Chuyển đến / đi</span><strong>@N(transferredIn) / @N(transferredOut)</strong></div>
+                </div>
+                <p class="ceo-footnote">Bao gồm nhận và gửi chuyển kho. Các số liệu này thể hiện khối lượng xử lý trong kỳ.</p>
+            </section>
+
+            <section class="workspace-card ceo-work-panel">
+                <div class="ceo-panel-heading"><div><h2>Công việc đang mở</h2><p>Tại thời điểm hiện tại</p></div><i class="bi bi-list-check ceo-panel-icon" aria-hidden="true"></i></div>
+                <div class="ceo-work-list">
+                    <div><span class="ceo-work-icon"><i class="bi bi-bag" aria-hidden="true"></i></span><div><strong>Đơn mua chờ nhận</strong><span>@N(Model.Workload.RemainingPurchaseQuantity) sản phẩm còn lại</span></div><b>@Model.Workload.OpenPurchaseOrders</b></div>
+                    <div><span class="ceo-work-icon"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></span><div><strong>Đơn bán chờ xuất</strong><span>@N(Model.Workload.RemainingSalesQuantity) sản phẩm còn lại</span></div><b>@Model.Workload.OpenSalesOrders</b></div>
+                    <div><span class="ceo-work-icon"><i class="bi bi-arrow-left-right" aria-hidden="true"></i></span><div><strong>Lệnh chuyển đang mở</strong><span>@N(Model.Workload.RemainingTransferQuantity) sản phẩm chưa nhận đủ</span></div><b>@Model.Workload.OpenTransfers</b></div>
+                    <div><span class="ceo-work-icon"><i class="bi bi-arrow-return-left" aria-hidden="true"></i></span><div><strong>Đơn khách trả chờ nhận</strong><span>@N(Model.Workload.RemainingReturnQuantity) sản phẩm còn lại</span></div><b>@Model.Workload.OpenReturns</b></div>
+                </div>
+                <div class="ceo-work-footer"><span>Phiếu nhận chưa hoàn tất <strong>@Model.Workload.DraftInboundCount</strong></span><span>Phiếu xuất chưa hoàn tất <strong>@Model.Workload.OpenOutboundCount</strong></span><span>Đang chuyển đến <strong>@N(Model.Workload.InTransitQuantity) serial</strong></span></div>
+                <a class="ceo-text-link" asp-controller="CeoPurchaseProgress" asp-action="Index" asp-route-warehouseId="@Model.Filter.WarehouseId">Theo dõi tiến độ mua hàng <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+            </section>
+        </div>
+
+        <section class="ceo-warehouses-section">
+            <div class="ceo-section-heading"><div><h2>Tình hình từng kho</h2><p>Tồn thực tế và mức sử dụng các vị trí lưu trữ</p></div><span class="ceo-caption">@Model.Warehouses.Count kho trong phạm vi</span></div>
+            @if (Model.Warehouses.Count == 0)
+            {
+                <div class="workspace-card ceo-empty"><i class="bi bi-buildings" aria-hidden="true"></i><p>Chưa có kho trong phạm vi được chọn.</p></div>
+            }
+            else
+            {
+                <div class="ceo-warehouse-grid">
+                    @foreach (var warehouse in Model.Warehouses)
+                    {
+                        <article class="workspace-card ceo-warehouse">
+                            <div class="ceo-warehouse-title"><div><h3>@warehouse.Name</h3><p>@(warehouse.Type == "RENTED" ? "Kho thuê" : "Kho chính") · @warehouse.ZoneCount zone · @warehouse.LocationCount vị trí</p></div><span class="ceo-state @(warehouse.IsOperational ? "ceo-state-active" : "ceo-state-inactive")">@(warehouse.IsOperational ? "Đang hoạt động" : warehouse.Status != "ACTIVE" ? "Ngừng hoạt động" : "Chưa đủ điều kiện hoạt động")</span></div>
+                            <div class="ceo-warehouse-stock"><div><span>Hàng trong kho</span><strong>@N(warehouse.InventoryCount)<small>serial</small></strong></div><dl><div><dt>Tốt</dt><dd>@N(warehouse.GoodCount)</dd></div><div><dt>Hỏng</dt><dd class="@(warehouse.DamagedCount > 0 ? "ceo-text-amber" : "")">@N(warehouse.DamagedCount)</dd></div><div><dt>Chờ xếp</dt><dd>@N(warehouse.AwaitingCount)</dd></div></dl></div>
+                            <div class="ceo-capacity-row"><div><span>Ô sàn</span><strong>@P(warehouse.UsedFloorArea, warehouse.TotalFloorArea)</strong></div><div class="ceo-progress" role="img" aria-label="Ô sàn: @M(warehouse.UsedFloorArea) trên @M(warehouse.TotalFloorArea) mét vuông"><span class="@(warehouse.TotalFloorArea > 0 && warehouse.UsedFloorArea / warehouse.TotalFloorArea >= .8m ? "ceo-progress-warning" : "")" style="width:@W(warehouse.UsedFloorArea, warehouse.TotalFloorArea)"></span></div><p>@M(warehouse.UsedFloorArea) / @M(warehouse.TotalFloorArea) m² đã sử dụng</p></div>
+                            <div class="ceo-capacity-row"><div><span>Tầng kệ</span><strong>@P(warehouse.UsedRackVolume, warehouse.TotalRackVolume)</strong></div><div class="ceo-progress ceo-progress-rack" role="img" aria-label="Tầng kệ: @M(warehouse.UsedRackVolume) trên @M(warehouse.TotalRackVolume) mét khối"><span class="@(warehouse.TotalRackVolume > 0 && warehouse.UsedRackVolume / warehouse.TotalRackVolume >= .8m ? "ceo-progress-warning" : "")" style="width:@W(warehouse.UsedRackVolume, warehouse.TotalRackVolume)"></span></div><p>@M(warehouse.UsedRackVolume) / @M(warehouse.TotalRackVolume) m³ đã sử dụng</p></div>
+                            @if (warehouse.OverloadedCount > 0 || warehouse.NearFullCount > 0 || warehouse.InvalidLocationCount > 0)
+                            {
+                                <div class="ceo-location-flags">
+                                    @if (warehouse.OverloadedCount > 0) { <span class="ceo-flag-danger">@warehouse.OverloadedCount vị trí quá tải</span> }
+                                    @if (warehouse.NearFullCount > 0) { <span class="ceo-flag-warning">@warehouse.NearFullCount vị trí đạt từ 80%</span> }
+                                    @if (warehouse.InvalidLocationCount > 0) { <span>@warehouse.InvalidLocationCount vị trí cần kiểm tra cấu hình</span> }
+                                </div>
+                            }
+                            <div class="ceo-warehouse-bottom"><span><i class="bi bi-clipboard-check" aria-hidden="true"></i> @warehouse.ActiveStocktakes đợt kiểm kê đang xử lý</span><span>Chờ nhận <strong>@N(warehouse.IncomingPurchase + warehouse.IncomingTransfer + warehouse.IncomingReturn)</strong></span></div>
+                            @if (warehouse.Type == "RENTED")
+                            {
+                                <p class="ceo-lease @(warehouse.LeaseDaysLeft is <= 30 ? "ceo-text-amber" : "")"><i class="bi bi-calendar3" aria-hidden="true"></i> @(warehouse.RentalEndDate.HasValue ? $"Hết hạn thuê {warehouse.RentalEndDate:dd/MM/yyyy}" : "Chưa cấu hình thời hạn thuê")@(warehouse.LeaseDaysLeft is >= 0 ? $" · còn {warehouse.LeaseDaysLeft} ngày" : "")</p>
+                            }
+                        </article>
+                    }
+                </div>
+                <p class="ceo-footnote ceo-capacity-note">Mức sử dụng tính trên hàng đã xếp. Hàng chờ xếp và hàng sắp nhận được theo dõi riêng; tỷ lệ tổng không thay cho kiểm tra vị trí khi nhận hoặc xếp hàng.</p>
+            }
+        </section>
+
+        <div class="ceo-review-grid">
+            <section class="workspace-card ceo-attention-panel">
+                <div class="ceo-panel-heading"><div><h2>Cần chú ý</h2><p>Những điểm cần theo dõi trong vận hành</p></div><span class="ceo-count">@Model.Attention.Count</span></div>
+                @if (Model.Attention.Count == 0)
+                {
+                    <div class="ceo-state-empty"><span class="ceo-good-mark"><i class="bi bi-check2" aria-hidden="true"></i></span><div><strong>Chưa ghi nhận vấn đề cần chú ý</strong><p>Các kho trong phạm vi hiện không có cảnh báo được liệt kê.</p></div></div>
+                }
+                else
+                {
+                    <div class="ceo-attention-list">
+                        @foreach (var item in Model.Attention)
+                        {
+                            <article class="ceo-attention-item @(item.Tone == "danger" ? "ceo-attention-danger" : item.Tone == "warning" ? "ceo-attention-warning" : "")"><span aria-hidden="true"></span><div><strong>@item.Title</strong><p>@item.Description</p></div></article>
+                        }
+                    </div>
+                }
+            </section>
+            <section class="workspace-card ceo-approvals-panel">
+                <div class="ceo-panel-heading"><div><h2>Chờ CEO duyệt</h2><p>Đề nghị điều chỉnh giảm tồn từ kiểm kê</p></div><span class="ceo-count @(Model.Workload.PendingApprovalCount > 0 ? "ceo-count-active" : "")">@Model.Workload.PendingApprovalCount</span></div>
+                @if (Model.PendingApprovals.Count == 0)
+                {
+                    <div class="ceo-state-empty"><span class="ceo-neutral-mark"><i class="bi bi-clipboard-check" aria-hidden="true"></i></span><div><strong>Không có đề nghị chờ duyệt</strong><p>Các đề nghị mới sẽ xuất hiện tại đây.</p></div></div>
+                }
+                else
+                {
+                    <div class="ceo-approval-list">
+                        @foreach (var item in Model.PendingApprovals)
+                        {
+                            <a class="ceo-approval" asp-controller="CeoStocktakeAdjustment" asp-action="Details" asp-route-id="@item.Id"><div><strong>@item.Code</strong><span>@item.Warehouse · @item.StocktakeCode</span></div><div><b>@N(item.Quantity)</b><small>serial</small></div><i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+                        }
+                    </div>
+                }
+                <a class="ceo-text-link" asp-controller="CeoStocktakeAdjustment" asp-action="Index">Xem danh sách điều chỉnh <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+            </section>
+        </div>
+
+        <section class="workspace-card ceo-activity-panel">
+            <div class="ceo-panel-heading"><div><h2>Hoạt động hoàn tất gần đây</h2><p>Trong khoảng @periodLabel</p></div><span class="ceo-caption">Mới nhất trước</span></div>
+            @if (Model.RecentActivity.Count == 0)
+            {
+                <div class="ceo-activity-empty"><i class="bi bi-clock-history" aria-hidden="true"></i><p>Chưa có phiếu nhập, xuất hoặc nhận trả hoàn tất trong kỳ này.</p></div>
+            }
+            else
+            {
+                <div class="table-wrap"><table class="workspace-table ceo-activity-table"><caption class="visually-hidden">Hoạt động kho hoàn tất trong khoảng thời gian đang chọn</caption><thead><tr><th>Hoạt động</th><th>Mã phiếu</th><th>Kho</th><th class="ceo-numeric">Số serial</th><th>Hoàn tất lúc</th></tr></thead><tbody>
+                    @foreach (var item in Model.RecentActivity)
+                    {
+                        <tr><td><span class="ceo-activity-type">@item.Type</span></td><td class="ceo-document-code">@item.Code</td><td>@item.Warehouse</td><td class="ceo-numeric">@N(item.Quantity)</td><td class="ceo-date-cell">@item.OccurredAt.ToString("dd/MM/yyyy HH:mm")</td></tr>
+                    }
+                </tbody></table></div>
+            }
+        </section>
+    }
+</div>
+
+<style>
+    .ceo-dashboard { display:grid; gap:24px; max-width:1500px; margin:0 auto; min-width:0; }
+    .ceo-dashboard .workspace-card { min-width:0; margin:0; }
+    .ceo-dashboard .ceo-heading { margin:0 0 2px; align-items:center; }
+    .ceo-dashboard .ceo-heading .eyebrow { color:var(--workspace-blue); margin-bottom:10px; }
+    .ceo-dashboard .ceo-heading h1 { font-size:34px; margin-bottom:12px; }
+    .ceo-dashboard .ceo-heading > div { min-width:0; }
+    .ceo-dashboard .ceo-heading .muted { font-size:14px; line-height:1.6; }
+    .ceo-dashboard .ceo-secondary { display:inline-flex; align-items:center; justify-content:center; gap:9px; border:1px solid #d8dce0; border-radius:8px; background:#fff; min-height:42px; padding:10px 15px; text-decoration:none; color:#343b42; font-size:14px; white-space:nowrap; }
+    .ceo-dashboard .ceo-secondary:hover { color:var(--workspace-blue); border-color:#a2c7ee; }
+    .ceo-dashboard .ceo-filter { display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end; padding:18px 22px; }
+    .ceo-dashboard .ceo-filter-field { min-width:180px; display:grid; gap:7px; }
+    .ceo-dashboard .ceo-filter-warehouse { flex:1; max-width:340px; }
+    .ceo-dashboard .ceo-filter-field label { font-size:13px; font-weight:500; color:#6b7178; }
+    .ceo-dashboard .ceo-filter-field select { width:100%; padding:9px 34px 9px 12px; min-height:42px; border:1px solid #d9dde2; border-radius:7px; background:#fff; color:#313740; font:inherit; font-size:14px; }
+    .ceo-dashboard .ceo-filter-submit { min-height:42px; border-radius:7px; padding:9px 17px; gap:8px; font-size:14px; }
+    .ceo-dashboard .ceo-updated { margin-left:auto; display:grid; gap:5px; font-size:12px; color:#767d85; text-align:right; align-self:center; }
+    .ceo-dashboard .ceo-updated strong { color:#4f5862; font-size:13px; font-weight:500; }
+    .ceo-dashboard .ceo-scope-line { display:flex; align-items:center; gap:12px; font-size:13px; margin-bottom:-10px; min-width:0; }
+    .ceo-dashboard .ceo-scope-line strong { font-size:14px; overflow-wrap:anywhere; }
+    .ceo-dashboard .ceo-scope-line > span { color:#7a8188; }
+    .ceo-dashboard .ceo-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; }
+    .ceo-dashboard .ceo-kpi { padding:21px 22px 19px; }
+    .ceo-dashboard .ceo-kpi-label { display:flex; align-items:center; justify-content:space-between; gap:8px; color:#65707a; font-size:13px; font-weight:500; }
+    .ceo-dashboard .ceo-kpi-label > i { font-size:18px; color:#83a7ce; }
+    .ceo-dashboard .ceo-kpi-value { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px; margin:15px 0 12px; font-size:34px; font-weight:700; line-height:1.1; letter-spacing:-.7px; color:#253342; }
+    .ceo-dashboard .ceo-kpi-value > span { font-size:13px; color:#657482; font-weight:400; letter-spacing:0; }
+    .ceo-dashboard .ceo-kpi-note { margin:0; font-size:12px; color:#77818b; line-height:1.7; }
+    .ceo-dashboard .ceo-kpi-incoming { background:#f4f9ff; border-color:#d7e7f8; }
+    .ceo-dashboard .ceo-kpi-incoming .ceo-kpi-value { color:#1469bd; }
+    .ceo-dashboard .ceo-dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; flex-shrink:0; }
+    .ceo-dashboard .ceo-dot-good { background:#46a283; }.ceo-dashboard .ceo-dot-damaged { background:#d6a053; }.ceo-dashboard .ceo-dot-in { background:#147bd1; }.ceo-dashboard .ceo-dot-out { background:#7ebec2; }
+    .ceo-dashboard .ceo-kpi-separator { margin:0 8px; color:#b9bfc4; }
+    .ceo-dashboard .ceo-main-grid { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(300px,1fr); gap:24px; }
+    .ceo-dashboard .ceo-panel-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:20px; }
+    .ceo-dashboard .ceo-panel-heading h2,.ceo-dashboard .ceo-section-heading h2 { font-size:18px; letter-spacing:-.25px; margin:0 0 7px; line-height:1.4; }
+    .ceo-dashboard .ceo-panel-heading p,.ceo-dashboard .ceo-section-heading p { margin:0; color:#657482; font-size:13px; line-height:1.6; }
+    .ceo-dashboard .ceo-caption { color:#657482; font-size:12px; text-align:right; line-height:1.6; }
+    .ceo-dashboard .ceo-panel-icon { color:#7f9cba; font-size:21px; }
+    .ceo-dashboard .ceo-flow-totals { display:flex; flex-wrap:wrap; gap:26px; font-size:13px; color:#6a7681; margin:0 0 18px; }
+    .ceo-dashboard .ceo-flow-totals strong { margin-left:8px; font-size:21px; color:#263b4f; font-weight:600; }
+    .ceo-dashboard .ceo-chart-empty { min-height:176px; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; border:1px dashed #e0e7ee; border-radius:8px; background:linear-gradient(180deg,#fafcfe,#fff); padding:22px; }
+    .ceo-dashboard .ceo-chart-empty > i { font-size:28px; color:#a6bdd3; margin-bottom:11px; }.ceo-dashboard .ceo-chart-empty strong { font-size:14px; font-weight:500; color:#6a7784; }.ceo-dashboard .ceo-chart-empty p { max-width:370px; font-size:12px; color:#98a0a9; margin:8px 0 0; line-height:1.7; }
+    .ceo-dashboard .ceo-chart-scroll { overflow-x:auto; padding-bottom:4px; }.ceo-dashboard .ceo-chart-scroll:focus-visible { outline:2px solid var(--workspace-blue); outline-offset:3px; }
+    .ceo-dashboard .ceo-chart { position:relative; padding-left:34px; padding-right:20px; padding-top:7px; }
+    .ceo-dashboard .ceo-chart-scale { position:absolute; left:0; top:0; bottom:29px; display:flex; flex-direction:column; justify-content:space-between; font-size:12px; color:#657482; }
+    .ceo-dashboard .ceo-chart-plot { display:grid; gap:4px; background:linear-gradient(to top,transparent 49.5%,#eef1f5 49.5%,#eef1f5 50%,transparent 50%,transparent 99%,#eef1f5 99%) 0 0 / 100% 154px no-repeat; }
+    .ceo-dashboard .ceo-chart-column { min-width:0; }.ceo-dashboard .ceo-chart-bars { height:154px; display:flex; align-items:flex-end; justify-content:center; gap:2px; border-bottom:1px solid #e9edf2; }
+    .ceo-dashboard .ceo-chart-bars span { display:block; width:38%; max-width:12px; border-radius:3px 3px 0 0; }.ceo-dashboard .ceo-bar-in { background:#147bd1; }.ceo-dashboard .ceo-bar-out { background:#7ebec2; }
+    .ceo-dashboard .ceo-chart-date { display:block; height:27px; padding-top:9px; font-size:11px; color:#657482; white-space:nowrap; text-align:center; }
+    .ceo-dashboard .ceo-flow-breakdown { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-top:20px; border-top:1px solid #edf0f3; padding-top:16px; }
+    .ceo-dashboard .ceo-flow-breakdown > div { display:grid; gap:8px; }.ceo-dashboard .ceo-flow-breakdown span { font-size:12px; color:#657482; }.ceo-dashboard .ceo-flow-breakdown strong { font-size:16px; color:#475767; font-weight:600; }
+    .ceo-dashboard .ceo-footnote { font-size:12px; color:#657482; line-height:1.7; margin:14px 0 0; }
+    .ceo-dashboard .ceo-work-list > div { display:flex; align-items:center; gap:12px; padding:13px 0; border-bottom:1px solid #eff1f4; }.ceo-dashboard .ceo-work-list > div:first-child { padding-top:0; }
+    .ceo-dashboard .ceo-work-icon { display:grid; place-items:center; width:34px; height:34px; border-radius:8px; color:#6c93b9; background:#f0f5fa; flex-shrink:0; font-size:15px; }
+    .ceo-dashboard .ceo-work-list > div > div { min-width:0; display:grid; gap:5px; }.ceo-dashboard .ceo-work-list strong { font-size:13px; font-weight:500; }.ceo-dashboard .ceo-work-list > div > div > span { font-size:12px; color:#657482; }.ceo-dashboard .ceo-work-list b { margin-left:auto; font-size:22px; color:#3d5165; font-weight:600; }
+    .ceo-dashboard .ceo-work-footer { display:flex; flex-wrap:wrap; gap:8px 14px; margin:16px 0; color:#657482; font-size:12px; line-height:1.6; }.ceo-dashboard .ceo-work-footer strong { margin-left:5px; color:#5b6b79; }
+    .ceo-dashboard .ceo-text-link { display:inline-flex; align-items:center; gap:9px; color:#1473c5; font-size:13px; font-weight:500; text-decoration:none; }.ceo-dashboard .ceo-text-link:hover { text-decoration:underline; text-underline-offset:4px; }
+    .ceo-dashboard .ceo-section-heading { display:flex; justify-content:space-between; gap:16px; margin:3px 0 16px; }
+    .ceo-dashboard .ceo-warehouse-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+    .ceo-dashboard .ceo-warehouse-title { display:flex; justify-content:space-between; gap:14px; align-items:flex-start; }.ceo-dashboard .ceo-warehouse-title > div { min-width:0; }.ceo-dashboard .ceo-warehouse h3 { margin:0 0 7px; font-size:16px; font-weight:600; overflow-wrap:anywhere; }.ceo-dashboard .ceo-warehouse-title p { color:#657482; font-size:12px; margin:0; }
+    .ceo-dashboard .ceo-state { display:inline-block; border-radius:5px; padding:5px 8px; font-size:12px; font-weight:500; white-space:nowrap; }.ceo-dashboard .ceo-state-active { color:#337c65; background:#eef7f2; }.ceo-dashboard .ceo-state-inactive { color:#a97936; background:#fff5e8; }
+    .ceo-dashboard .ceo-warehouse-stock { display:flex; align-items:center; gap:20px; margin:22px 0; padding:16px 0; border-top:1px solid #edf0f3; border-bottom:1px solid #edf0f3; }.ceo-dashboard .ceo-warehouse-stock > div { min-width:130px; display:grid; gap:8px; }.ceo-dashboard .ceo-warehouse-stock > div > span { font-size:12px; color:#657482; }.ceo-dashboard .ceo-warehouse-stock > div > strong { font-size:26px; color:#314960; line-height:1; }.ceo-dashboard .ceo-warehouse-stock small { font-size:12px; margin-left:6px; color:#657482; font-weight:400; }
+    .ceo-dashboard .ceo-warehouse-stock dl { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; margin:0 0 0 auto; flex:1; }.ceo-dashboard .ceo-warehouse-stock dt { font-size:12px; color:#657482; font-weight:400; margin-bottom:8px; }.ceo-dashboard .ceo-warehouse-stock dd { font-size:16px; font-weight:600; margin:0; color:#617182; }.ceo-dashboard .ceo-text-amber { color:#b47b2b!important; }
+    .ceo-dashboard .ceo-capacity-row + .ceo-capacity-row { margin-top:16px; }.ceo-dashboard .ceo-capacity-row > div:first-child { display:flex; justify-content:space-between; align-items:center; font-size:12px; margin-bottom:8px; }.ceo-dashboard .ceo-capacity-row strong { font-size:12px; color:#718396; font-weight:500; }.ceo-dashboard .ceo-capacity-row > p { color:#657482; font-size:12px; margin:6px 0 0; }
+    .ceo-dashboard .ceo-progress { height:6px; background:#eef2f6; border-radius:5px; overflow:hidden; }.ceo-dashboard .ceo-progress > span { display:block; height:100%; background:#4696dd; border-radius:5px; }.ceo-dashboard .ceo-progress-rack > span { background:#75b2b4; }.ceo-dashboard .ceo-progress > .ceo-progress-warning { background:#d4a361; }
+    .ceo-dashboard .ceo-location-flags { display:flex; flex-wrap:wrap; gap:7px; margin-top:15px; }.ceo-dashboard .ceo-location-flags > span { font-size:12px; color:#657482; background:#f4f6f8; padding:4px 7px; border-radius:4px; }.ceo-dashboard .ceo-location-flags .ceo-flag-danger { color:#b34c4a; background:#fdf0ee; }.ceo-dashboard .ceo-location-flags .ceo-flag-warning { color:#a67a39; background:#fff5e7; }
+    .ceo-dashboard .ceo-warehouse-bottom { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; color:#657482; font-size:12px; margin-top:20px; padding-top:15px; border-top:1px solid #edf0f3; }.ceo-dashboard .ceo-warehouse-bottom i { margin-right:5px; }.ceo-dashboard .ceo-warehouse-bottom strong { color:#667b8c; margin-left:5px; }.ceo-dashboard .ceo-lease { margin:12px 0 0; font-size:12px; color:#657482; }.ceo-dashboard .ceo-lease i { margin-right:5px; }
+    .ceo-dashboard .ceo-capacity-note { margin-top:12px; }
+    .ceo-dashboard .ceo-review-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; }
+    .ceo-dashboard .ceo-count { display:grid; place-items:center; min-width:26px; height:25px; border-radius:6px; background:#f0f3f6; color:#8794a0; font-size:12px; padding:0 7px; }.ceo-dashboard .ceo-count-active { color:#a8772d; background:#fff3df; }
+    .ceo-dashboard .ceo-state-empty { display:flex; gap:13px; align-items:flex-start; padding:12px 0 18px; min-height:94px; }.ceo-dashboard .ceo-state-empty > span { width:34px; height:34px; display:grid; place-items:center; border-radius:50%; flex-shrink:0; }.ceo-dashboard .ceo-good-mark { background:#edf6f1; color:#6ba589; }.ceo-dashboard .ceo-neutral-mark { background:#f0f5fa; color:#8da9c4; }.ceo-dashboard .ceo-state-empty strong { font-size:13px; color:#677986; font-weight:500; }.ceo-dashboard .ceo-state-empty p { font-size:12px; color:#657482; line-height:1.7; margin:7px 0 0; }
+    .ceo-dashboard .ceo-attention-list { display:grid; gap:12px; }.ceo-dashboard .ceo-attention-item { display:flex; align-items:flex-start; gap:10px; }.ceo-dashboard .ceo-attention-item > span { width:6px; height:6px; flex-shrink:0; border-radius:50%; background:#82add5; margin-top:5px; }.ceo-dashboard .ceo-attention-warning > span { background:#d0a45d; }.ceo-dashboard .ceo-attention-danger > span { background:#d47e73; }.ceo-dashboard .ceo-attention-item strong { display:block; font-size:13px; font-weight:500; color:#536779; }.ceo-dashboard .ceo-attention-item p { color:#657482; font-size:12px; line-height:1.65; margin:5px 0 0; }
+    .ceo-dashboard .ceo-approval-list { margin-bottom:16px; }.ceo-dashboard .ceo-approval { display:flex; gap:12px; align-items:center; text-decoration:none; padding:12px 0; border-bottom:1px solid #edf0f3; }.ceo-dashboard .ceo-approval:first-child { padding-top:0; }.ceo-dashboard .ceo-approval > div:first-child { display:grid; gap:6px; min-width:0; }.ceo-dashboard .ceo-approval strong { color:#456b8c; font-size:13px; overflow-wrap:anywhere; }.ceo-dashboard .ceo-approval span { font-size:12px; color:#657482; overflow-wrap:anywhere; }.ceo-dashboard .ceo-approval > div:nth-child(2) { margin-left:auto; text-align:right; }.ceo-dashboard .ceo-approval b { font-size:17px; color:#7a8d9d; }.ceo-dashboard .ceo-approval small { display:block; font-size:12px; color:#657482; }.ceo-dashboard .ceo-approval > i { font-size:12px; color:#b0bbc4; }.ceo-dashboard .ceo-approval:hover strong { color:var(--workspace-blue); text-decoration:underline; }
+    .ceo-dashboard .ceo-activity-panel { padding-bottom:8px; }.ceo-dashboard .ceo-activity-table { min-width:640px; font-size:13px; }.ceo-dashboard .ceo-activity-table th { font-size:12px; color:#657482; background:#f8fafb; padding:12px; }.ceo-dashboard .ceo-activity-table td { padding:14px 12px; color:#6f7e8b; vertical-align:middle; }.ceo-dashboard .ceo-activity-table tr:last-child td { border-bottom:0; }.ceo-dashboard .ceo-activity-table .ceo-numeric { text-align:right; font-variant-numeric:tabular-nums; }.ceo-dashboard .ceo-document-code { overflow-wrap:anywhere; font-weight:500; max-width:230px; }.ceo-dashboard .ceo-date-cell { white-space:nowrap; font-size:12px; color:#657482!important; }.ceo-dashboard .ceo-activity-type { font-size:12px; color:#5687ae; background:#f0f6fb; padding:5px 8px; border-radius:5px; white-space:nowrap; }
+    .ceo-dashboard .ceo-activity-empty { display:flex; align-items:center; justify-content:center; gap:10px; color:#657482; padding:26px 12px 34px; }.ceo-dashboard .ceo-activity-empty > i { font-size:22px; color:#b2c1cd; }.ceo-dashboard .ceo-activity-empty p { margin:0; font-size:13px; }
+    .ceo-dashboard .ceo-empty { text-align:center; padding:30px; color:#657482; }.ceo-dashboard .ceo-empty i { font-size:25px; }.ceo-dashboard .ceo-empty p { font-size:14px; margin:12px 0 0; }
+    .ceo-dashboard .ceo-load-error { display:flex; align-items:flex-start; gap:18px; border-color:#efccc6; }.ceo-dashboard .ceo-load-error > i { font-size:25px; color:#bf6c5c; }.ceo-dashboard .ceo-load-error h2 { font-size:18px; margin:0 0 9px; }.ceo-dashboard .ceo-load-error p { font-size:14px; color:#7c6863; }.ceo-dashboard .ceo-load-error a { font-size:14px; }
+    .ceo-dashboard select:focus-visible,.ceo-dashboard .ceo-secondary:focus-visible,.ceo-dashboard a:focus-visible { outline:2px solid var(--workspace-blue); outline-offset:3px; }
+    @@media(max-width:1200px) { .ceo-dashboard .ceo-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }.ceo-dashboard .ceo-main-grid { grid-template-columns:minmax(0,1.4fr) minmax(280px,1fr); }.ceo-dashboard .ceo-warehouse-stock > div { min-width:105px; }.ceo-dashboard .ceo-warehouse-stock dl { gap:10px; } }
+    @@media(max-width:960px) { .ceo-dashboard .ceo-main-grid,.ceo-dashboard .ceo-review-grid { grid-template-columns:1fr; }.ceo-dashboard .ceo-filter-warehouse { max-width:none; }.ceo-dashboard .ceo-updated { width:100%; text-align:left; display:flex; gap:7px; }.ceo-dashboard .ceo-warehouse-grid { grid-template-columns:1fr; } }
+    @@media(max-width:600px) { .ceo-dashboard { gap:20px; }.ceo-dashboard .ceo-heading { align-items:flex-start; }.ceo-dashboard .ceo-heading h1 { font-size:28px; }.ceo-dashboard .ceo-heading .muted { font-size:13px; }.ceo-dashboard .ceo-filter { padding:16px; gap:13px; }.ceo-dashboard .ceo-filter-field { min-width:0; width:100%; flex:auto; }.ceo-dashboard .ceo-filter-field select { font-size:16px; }.ceo-dashboard .ceo-filter-submit { width:100%; }.ceo-dashboard .ceo-kpis { gap:10px; }.ceo-dashboard .ceo-kpi { padding:16px 13px; }.ceo-dashboard .ceo-kpi-label { font-size:12px; align-items:flex-start; }.ceo-dashboard .ceo-kpi-label > i { font-size:14px; }.ceo-dashboard .ceo-kpi-value { font-size:28px; gap:5px; }.ceo-dashboard .ceo-kpi-value > span,.ceo-dashboard .ceo-kpi-note { font-size:12px; }.ceo-dashboard .ceo-kpi-separator { margin:0 4px; }.ceo-dashboard .ceo-scope-line { flex-wrap:wrap; gap:5px 10px; }.ceo-dashboard .ceo-scope-line > span { font-size:12px; }.ceo-dashboard .ceo-panel-heading { gap:10px; }.ceo-dashboard .ceo-caption { font-size:12px; }.ceo-dashboard .ceo-flow-breakdown { grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }.ceo-dashboard .ceo-warehouse-title { flex-wrap:wrap; gap:10px; }.ceo-dashboard .ceo-warehouse-stock { gap:12px; }.ceo-dashboard .ceo-warehouse-stock > div { min-width:90px; }.ceo-dashboard .ceo-warehouse-stock > div > strong { font-size:24px; }.ceo-dashboard .ceo-warehouse-stock dl { gap:8px; }.ceo-dashboard .ceo-section-heading { flex-wrap:wrap; gap:4px; }.ceo-dashboard .ceo-activity-empty { text-align:center; align-items:flex-start; }.ceo-dashboard .ceo-activity-empty p { line-height:1.7; } }
+</style>
